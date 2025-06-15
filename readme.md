@@ -8,7 +8,7 @@ A simple LLM chat frontend using Node.js, Express, React, and Ollama.
 - **TypeScript-only** codebase across server and client.
 - **React + Redux Toolkit** for state management.
 - **Tailwind CSS** for utility-first styling.
-- **Local persistence** via IndexedDB (Dexie) or optional SQLite + Prisma.
+- **Local persistence** via IndexedDB (Dexie) or optional SQLite + Prisma or something TBD.
 - Ready for streaming responses, authentication, and multi-chat sessions.
 
 ## Prerequisites
