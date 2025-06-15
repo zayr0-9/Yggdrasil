@@ -1,5 +1,6 @@
 # Root-level
 /node_modules
+ygg-chat/node_modules/
 /.env
 .DS_Store
 npm-debug.log*
