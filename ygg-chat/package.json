@@ -1,24 +1,24 @@
 {
   "name": "ygg-chat",
+  "private": true,
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "build": "npm run build --workspace=client",
+    "start": "npm run start --workspace=server"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
   "version": "1.0.0",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "keywords": [],
   "author": "0",
   "license": "MIT",
-  "description": "",
-  "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.5.0",
-    "express": "^5.1.0",
-    "zod": "^3.25.64"
-  },
-  "devDependencies": {
-    "@types/express": "^5.0.3",
-    "@types/node": "^24.0.1",
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.8.3"
-  }
+  "description": ""
 }
