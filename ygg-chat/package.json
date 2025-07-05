@@ -1,24 +1,21 @@
+
 {
   "name": "ygg-chat",
+  "version": "1.0.0",
+  "description": "Full stack LLM frontend",
   "private": true,
   "workspaces": [
+    "client/ygg-chat-r",
     "server",
-    "client"
+    "shared"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:server": "npm run dev --workspace=server",
+    "dev": "npm run dev --workspace=server & npm run dev --workspace=client",
     "dev:client": "npm run dev --workspace=client",
+    "dev:server": "npm run dev --workspace=server",
     "build": "npm run build --workspace=client",
-    "start": "npm run start --workspace=server"
+    "install:all": "npm install"
   },
-  "devDependencies": {
-    "concurrently": "^8.2.2"
-  },
-  "version": "1.0.0",
-  "main": "index.js",
-  "keywords": [],
-  "author": "0",
-  "license": "MIT",
-  "description": ""
+  "devDependencies": {},
+  "dependencies": {}
 }

@@ -13,7 +13,7 @@ import { validateEnv } from './utils/validateEnv';
 dotenv.config();
 
 // Validate environment configuration
-validateEnv();
+// validateEnv();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
