@@ -1,5 +1,6 @@
 export { Button } from './Button/button'
 export { TextField } from './TextField/TextField'
 export { TextArea } from './TextArea/TextArea'
+export { ChatMessage } from './ChatMessage/ChatMessage'
 // export { ChatInputWithSend } from './components/ChatInputWithSend/ChatInputWithSend'
 // export { MessageList } from './components/MessageList/MessageList'

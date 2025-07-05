@@ -20,7 +20,7 @@
 
 //   async getChatHistory(chatId: string): Promise<ChatMessage[]> {
 //     const response = await fetch(`${API_BASE_URL}/api/chat/${chatId}`);
-    
+
 //     if (!response.ok) {
 //       throw new Error('Failed to load chat history');
 //     }

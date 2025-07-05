@@ -22,8 +22,8 @@ interface TextAreaProps {
 
 export const TextArea: React.FC<TextAreaProps> = ({
   label,
-  placeholder = "Type your message...",
-  value = "",
+  placeholder = 'Type your message...',
+  value = '',
   onChange,
   onKeyDown,
   state = 'default',
@@ -35,6 +35,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
   // maxRows = 10,
   autoFocus = false,
   showCharCount = false,
+  ...rest
 }) => {
   const id = useId()
   const errorId = `${id}-error`
@@ -56,14 +57,14 @@ export const TextArea: React.FC<TextAreaProps> = ({
     if (textarea) {
       // Reset height to auto to get the correct scrollHeight
       textarea.style.height = 'auto'
-      
+
       // Calculate the number of lines
       const lineHeight = 24 // Approximate line height in pixels
       const minHeight = minRows * lineHeight + 16 // 16px for padding
-      
+
       const scrollHeight = textarea.scrollHeight
       const newHeight = Math.max(scrollHeight, minHeight)
-      
+
       textarea.style.height = `${newHeight}px`
     }
   }
@@ -78,7 +79,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
     adjustHeight()
   }, [])
 
-  const baseStyles = `${width} px-4 py-3 rounded-xl border transition-all duration-200 resize-none overflow-hidden`
+  const baseStyles = `${width} ${rest} px-4 py-3 rounded-xl border transition-all duration-200 resize-none overflow-hidden`
   const labelClasses = state === 'disabled' ? 'opacity-40' : ''
 
   const stateStyles = {
@@ -95,7 +96,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
         </label>
       )}
 
-      <div className="relative">
+      <div className='relative'>
         <textarea
           ref={textareaRef}
           id={id}
@@ -113,10 +114,10 @@ export const TextArea: React.FC<TextAreaProps> = ({
             minHeight: `${minRows * 24 + 16}px`,
           }}
         />
-        
+
         {/* Character count indicator */}
         {showCharCount && maxLength && (
-          <div className="absolute bottom-2 right-3 text-xs text-gray-500">
+          <div className='absolute bottom-2 right-3 text-xs text-gray-500'>
             {value.length}/{maxLength}
           </div>
         )}
