@@ -1,12 +1,18 @@
 // src/pages/ComponentShowcase.tsx
 import React, { useState } from 'react';
-import { Button } from '../components/buttons/button';
-import { TextField } from '../components/textField/TextField';
+import { Button, TextField } from '../components';
 
 export const ComponentShowcase: React.FC = () => {
   // State to demonstrate controlled components
   const [textValue, setTextValue] = useState('');
-  const [emailValue, setEmailValue] = useState('');
+  const [emailValue, setEmailValue] = useState(''); 
+//   const [message, setMessage] = useState('')
+//   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+//   if (e.key === 'Enter' && !e.shiftKey) {
+//     e.preventDefault()
+//     // Handle send logic here or call your button component
+//   }
+// }
   
   // Handler for button clicks to show interactivity
   const handleButtonClick = (variant: string) => {
@@ -15,6 +21,7 @@ export const ComponentShowcase: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
+     
       <div className="max-w-4xl mx-auto px-4">
         {/* Page Header */}
         <div className="mb-12 text-center">

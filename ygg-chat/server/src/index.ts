@@ -5,7 +5,6 @@ import morgan from 'morgan';
 import compression from 'compression';
 
 import dotenv from 'dotenv';
-import { chatRouter } from './routes/chat';
 import { errorHandler } from './middleware/errorHandler';
 import { validateEnv } from './utils/validateEnv';
 
@@ -32,7 +31,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // API routes
-app.use('/api/chat', chatRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
