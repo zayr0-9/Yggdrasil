@@ -32,7 +32,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
   width = 'w-full',
   className = '',
   minRows = 1,
-  maxRows = 100,
+  // maxRows = 10,
   autoFocus = false,
   showCharCount = false,
 }) => {
@@ -60,10 +60,9 @@ export const TextArea: React.FC<TextAreaProps> = ({
       // Calculate the number of lines
       const lineHeight = 24 // Approximate line height in pixels
       const minHeight = minRows * lineHeight + 16 // 16px for padding
-      const maxHeight = maxRows * lineHeight + 16
       
       const scrollHeight = textarea.scrollHeight
-      const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight)
+      const newHeight = Math.max(scrollHeight, minHeight)
       
       textarea.style.height = `${newHeight}px`
     }
@@ -79,7 +78,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
     adjustHeight()
   }, [])
 
-  const baseStyles = `px-4 py-3 rounded-xl border transition-all duration-200 resize-none overflow-hidden ${width}`
+  const baseStyles = `${width} px-4 py-3 rounded-xl border transition-all duration-200 resize-none overflow-hidden`
   const labelClasses = state === 'disabled' ? 'opacity-40' : ''
 
   const stateStyles = {
@@ -112,8 +111,6 @@ export const TextArea: React.FC<TextAreaProps> = ({
           autoFocus={autoFocus}
           style={{
             minHeight: `${minRows * 24 + 16}px`,
-            maxHeight: `${maxRows * 24 + 16}px`,
-            overflowY: value.split('\n').length > maxRows ? 'auto' : 'hidden'
           }}
         />
         
