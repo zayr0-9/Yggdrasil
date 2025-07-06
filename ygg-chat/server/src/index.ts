@@ -60,6 +60,7 @@ import cors from 'cors'
 import express from 'express'
 import { initializeDatabase } from './database/db'
 import chatRoutes from './routes/chat'
+import { modelService } from './utils/modelService'
 
 const app = express()
 app.use(cors())
@@ -67,4 +68,8 @@ app.use(express.json())
 app.use('/api', chatRoutes)
 
 initializeDatabase()
-app.listen(3001, () => console.log('Server on :3001'))
+;(async () => {
+  await modelService.getAvailableModels() // Force cache population
+  console.log('Models discovered:', await modelService.getAvailableModels())
+  app.listen(3001, () => console.log('Server on :3001'))
+})()

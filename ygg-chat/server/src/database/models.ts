@@ -1,3 +1,4 @@
+import { modelService } from '../utils/modelService'
 import { statements } from './db'
 
 export interface User {
@@ -39,8 +40,9 @@ export class UserService {
 }
 
 export class ConversationService {
-  static create(userId: number, title?: string, modelName = 'gemma3:4b'): Conversation {
-    const result = statements.createConversation.run(userId, title, modelName)
+  static async create(userId: number, title?: string, modelName?: string): Promise<Conversation> {
+    const selectedModel = modelName || (await modelService.getDefaultModel())
+    const result = statements.createConversation.run(userId, title, selectedModel)
     return statements.getConversationById.get(result.lastInsertRowid) as Conversation
   }
 
@@ -59,6 +61,7 @@ export class ConversationService {
   static touch(id: number): void {
     statements.updateConversationTimestamp.run(id)
   }
+
   static delete(id: number): void {
     statements.deleteConversation.run(id)
   }

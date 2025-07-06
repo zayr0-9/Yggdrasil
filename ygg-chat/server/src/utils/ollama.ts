@@ -1,5 +1,6 @@
 // server/src/utils/ollama.ts
 import { Message } from '../database/models'
+import { modelService } from './modelService'
 
 interface OllamaMessage {
   role: string
@@ -8,13 +9,27 @@ interface OllamaMessage {
 
 export async function generateResponse(
   messages: Message[],
-  model: string = 'gemma3:4b',
-  onChunk: (chunk: string) => void
+  onChunk: (chunk: string) => void,
+  model?: string
 ): Promise<void> {
+  // Use provided model or get default
+  const selectedModel = model || (await modelService.getDefaultModel())
+
+  console.log('Using model:', selectedModel)
+
   const ollamaMessages: OllamaMessage[] = messages.map(msg => ({
     role: msg.role,
     content: msg.content,
   }))
+
+  console.log(
+    'Sending to ollama:',
+    JSON.stringify({
+      model: selectedModel,
+      messages: ollamaMessages,
+      stream: true,
+    })
+  )
 
   const response = await fetch('http://localhost:11434/api/chat', {
     method: 'POST',
@@ -22,7 +37,7 @@ export async function generateResponse(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model,
+      model: selectedModel,
       messages: ollamaMessages,
       stream: true,
     }),

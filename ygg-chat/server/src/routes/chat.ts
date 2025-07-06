@@ -2,6 +2,7 @@
 import express from 'express'
 import { ConversationService, MessageService, UserService } from '../database/models'
 import { asyncHandler } from '../utils/asyncHandler'
+import { modelService } from '../utils/modelService'
 import { generateResponse } from '../utils/ollama'
 
 const router = express.Router()
@@ -9,10 +10,17 @@ const router = express.Router()
 router.get(
   '/models',
   asyncHandler(async (req, res) => {
-    const response = await fetch('http://localhost:11434/api/tags')
-    const data = (await response.json()) as { models: { name: string }[] }
-    const models = data.models.map((m: any) => m.name)
-    res.json({ models, default: models[0] || null })
+    const data = await modelService.getAvailableModels()
+    res.json(data)
+  })
+)
+
+// Force refresh models cache
+router.post(
+  '/models/refresh',
+  asyncHandler(async (req, res) => {
+    const data = await modelService.refreshModels()
+    res.json(data)
   })
 )
 
@@ -55,7 +63,7 @@ router.post(
       return res.status(400).json({ error: 'userId required' })
     }
 
-    const conversation = ConversationService.create(userId, title, modelName)
+    const conversation = await ConversationService.create(userId, title, modelName)
     res.json(conversation)
   })
 )
@@ -75,7 +83,7 @@ router.post(
   '/conversations/:id/messages',
   asyncHandler(async (req, res) => {
     const conversationId = parseInt(req.params.id)
-    const { content, modelName = 'gemma3:4b' } = req.body
+    const { content, modelName } = req.body
 
     if (!content) {
       return res.status(400).json({ error: 'Message content required' })
@@ -86,6 +94,9 @@ router.post(
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' })
     }
+
+    // Use conversation's model or provided model or default
+    const selectedModel = modelName || conversation.model_name || (await modelService.getDefaultModel())
 
     // Save user message
     const userMessage = MessageService.create(conversationId, 'user', content)
@@ -109,10 +120,14 @@ router.post(
       let assistantContent = ''
 
       // Stream AI response
-      await generateResponse(messages, modelName, chunk => {
-        assistantContent += chunk
-        res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`)
-      })
+      await generateResponse(
+        messages,
+        chunk => {
+          assistantContent += chunk
+          res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`)
+        },
+        selectedModel
+      )
 
       // Save complete assistant message
       const assistantMessage = MessageService.create(conversationId, 'assistant', assistantContent)
