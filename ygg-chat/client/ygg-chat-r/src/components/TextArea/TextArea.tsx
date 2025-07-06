@@ -1,7 +1,7 @@
-import React, { useId, useRef, useEffect } from 'react'
+import React, { useEffect, useId, useRef } from 'react'
 
 type textAreaState = 'default' | 'error' | 'disabled'
-type textAreaWidth = 'w-1/6' | 'w-1/4' | 'w-1/2' | 'w-3/4' | 'w-3/5' | 'w-5/6' | 'w-full'
+type textAreaWidth = 'w-1/6' | 'w-1/4' | 'w-1/2' | 'w-3/4' | 'w-3/5' | 'w-5/6' | 'w-full' | 'max-w-3xl'
 
 interface TextAreaProps {
   label?: string
@@ -29,7 +29,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
   state = 'default',
   errorMessage,
   maxLength = 2000,
-  width = 'w-full',
+  width = 'max-w-3xl',
   className = '',
   minRows = 1,
   // maxRows = 10,
@@ -79,7 +79,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
     adjustHeight()
   }, [])
 
-  const baseStyles = `${width} ${rest} px-4 py-3 rounded-xl border transition-all duration-200 resize-none overflow-hidden`
+  const baseStyles = `${width} px-4 py-3 rounded-xl border transition-all duration-200 overflow-hidden`
   const labelClasses = state === 'disabled' ? 'opacity-40' : ''
 
   const stateStyles = {
@@ -113,6 +113,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
           style={{
             minHeight: `${minRows * 24 + 16}px`,
           }}
+          {...rest}
         />
 
         {/* Character count indicator */}

@@ -17,34 +17,149 @@ const HomePage: React.FC = () => {
 
   return (
     <div className='min-h-screen bg-gray-900 p-4'>
-      {/* Test if Tailwind is working */}
-      <div className='bg-red-500 text-white p-4 mb-4 rounded'>
-        Tailwind Test - This should be red background with white text
+      <h1 className='text-2xl text-left  px-155 py-5 text-white mb-4'>Ygg Chat</h1>
+      <div className='w-1/2 mx-auto rounded-lg p-4 outline outline-1 outline-gray-700'>
+        <div>
+          <ChatMessage
+            id='msg-1'
+            role='assistant'
+            content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
+            timestamp={new Date()}
+            onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
+            onDelete={id => console.log('Delete:', id)}
+            onCopy={content => console.log('Copied:', content)}
+            width='w-3/5'
+            className=''
+          />
+        </div>
+        <div className='px-10 flex justify-end'>
+          <ChatMessage
+            id='msg-1'
+            role='user'
+            content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
+            timestamp={new Date()}
+            onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
+            onDelete={id => console.log('Delete:', id)}
+            onCopy={content => console.log('Copied:', content)}
+            width='w-3/5'
+          />
+        </div>
+        <div>
+          <ChatMessage
+            id='msg-1'
+            role='assistant'
+            content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
+            timestamp={new Date()}
+            onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
+            onDelete={id => console.log('Delete:', id)}
+            onCopy={content => console.log('Copied:', content)}
+            width='w-3/5'
+            className=''
+          />
+        </div>
+        <div className='px-10 flex justify-end'>
+          <ChatMessage
+            id='msg-1'
+            role='user'
+            content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
+            timestamp={new Date()}
+            onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
+            onDelete={id => console.log('Delete:', id)}
+            onCopy={content => console.log('Copied:', content)}
+            width='w-3/5'
+          />
+        </div>
+        <div>
+          <ChatMessage
+            id='msg-1'
+            role='assistant'
+            content='Hello, how are you?'
+            timestamp={new Date()}
+            onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
+            onDelete={id => console.log('Delete:', id)}
+            onCopy={content => console.log('Copied:', content)}
+            width='w-3/5'
+            className=''
+          />
+        </div>
+        <div className='px-10 flex justify-end'>
+          <ChatMessage
+            id='msg-1'
+            role='user'
+            content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod te'
+            timestamp={new Date()}
+            onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
+            onDelete={id => console.log('Delete:', id)}
+            onCopy={content => console.log('Copied:', content)}
+            width='w-3/5'
+          />
+        </div>
+        <div>
+          <ChatMessage
+            id='msg-1'
+            role='assistant'
+            content='Hello, how are you?'
+            timestamp={new Date()}
+            onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
+            onDelete={id => console.log('Delete:', id)}
+            onCopy={content => console.log('Copied:', content)}
+            width='w-3/5'
+            className=''
+          />
+        </div>
+        <div className='px-10 flex justify-end'>
+          <ChatMessage
+            id='msg-1'
+            role='user'
+            content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod te'
+            timestamp={new Date()}
+            onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
+            onDelete={id => console.log('Delete:', id)}
+            onCopy={content => console.log('Copied:', content)}
+            width='w-3/5'
+          />
+        </div>
+        <div>
+          <ChatMessage
+            id='msg-1'
+            role='assistant'
+            content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
+            timestamp={new Date()}
+            onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
+            onDelete={id => console.log('Delete:', id)}
+            onCopy={content => console.log('Copied:', content)}
+            width='w-3/5'
+            className=''
+          />
+        </div>
+        <div className='px-10 flex justify-end'>
+          <ChatMessage
+            id='msg-1'
+            role='user'
+            content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
+            timestamp={new Date()}
+            onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
+            onDelete={id => console.log('Delete:', id)}
+            onCopy={content => console.log('Copied:', content)}
+            width='w-3/5'
+          />
+        </div>
+        <div className='mb-4 px-10 py-8 mr-0 ml-auto rounded-lg'>
+          {/* <p className='text-gray-300 text-sm mb-2'>w-full width:</p> */}
+          <TextArea
+            value={message}
+            onChange={setMessage}
+            onKeyDown={handleKeyDown}
+            placeholder='Type your message...'
+            minRows={1}
+            // maxRows={60}
+            width='w-full'
+            showCharCount={true}
+            className='shadow-xl/30'
+            // resize='vertical'
+          />
+        </div>
       </div>
-      <div className='mb-4'>
-        <p className='text-gray-300 text-sm mb-2'>w-full width:</p>
-        <TextArea
-          value={message}
-          onChange={setMessage}
-          onKeyDown={handleKeyDown}
-          placeholder='Type your message...'
-          minRows={1}
-          // maxRows={60}
-          width='w-full'
-          showCharCount={true}
-          // resize='vertical'
-        />
-      </div>
-
-      <ChatMessage
-        id='msg-1'
-        role='user'
-        content='Hello, how are you?'
-        timestamp={new Date()}
-        onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
-        onDelete={id => console.log('Delete:', id)}
-        onCopy={content => console.log('Copied:', content)}
-      />
     </div>
   )
 }

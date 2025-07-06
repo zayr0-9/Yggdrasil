@@ -2,6 +2,16 @@ import React, { useState } from 'react'
 import { TextArea } from '../TextArea/TextArea'
 
 type MessageRole = 'user' | 'assistant' | 'system'
+// Updated to use valid Tailwind classes
+type ChatMessageWidth =
+  | 'max-w-sm'
+  | 'max-w-md'
+  | 'max-w-lg'
+  | 'max-w-xl'
+  | 'max-w-2xl'
+  | 'max-w-3xl'
+  | 'w-full'
+  | 'w-3/5'
 
 interface ChatMessageProps {
   id: string
@@ -12,6 +22,8 @@ interface ChatMessageProps {
   onDelete?: (id: string) => void
   onCopy?: (content: string) => void
   isEditing?: boolean
+  width: ChatMessageWidth
+  className?: string
 }
 
 interface MessageActionsProps {
@@ -110,6 +122,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   onDelete,
   onCopy,
   isEditing = false,
+  width = 'w-3/5',
 }) => {
   const [editingState, setEditingState] = useState(isEditing)
   const [editContent, setEditContent] = useState(content)
@@ -185,7 +198,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   }
 
   return (
-    <div className={`group rounded-lg p-4 mb-4 ${styles.container} transition-all duration-200 hover:bg-opacity-80`}>
+    <div
+      className={`group rounded-lg p-4 mb-4 ${styles.container} ${width} transition-all duration-200 hover:bg-opacity-80`}
+    >
       {/* Header with role and actions */}
       <div className='flex items-center justify-between mb-3'>
         <div className='flex items-center gap-2'>
@@ -204,7 +219,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       </div>
 
       {/* Message content */}
-      <div className='text-gray-100'>
+      <div className='text-gray-100 w-full'>
         {editingState ? (
           <TextArea
             value={editContent}
@@ -213,6 +228,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             minRows={2}
             maxLength={2000}
             autoFocus
+            width='w-full'
             onKeyDown={e => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault()
@@ -224,7 +240,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             }}
           />
         ) : (
-          <div className='whitespace-pre-wrap leading-relaxed'>{content}</div>
+          <div className='whitespace-pre-wrap leading-relaxed w-full'>{content}</div>
         )}
       </div>
 

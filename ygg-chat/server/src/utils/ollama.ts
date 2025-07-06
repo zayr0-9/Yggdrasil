@@ -1,48 +1,64 @@
+// server/src/utils/ollama.ts
+import { Message } from '../database/models'
+
 interface OllamaMessage {
-  role: 'user' | 'assistant' | 'system'
+  role: string
   content: string
 }
 
-interface OllamaResponse {
-  model: string
-  created_at: string
-  message: {
-    role: string
-    content: string
-  }
-  done: boolean
-}
+export async function generateResponse(
+  messages: Message[],
+  model: string = 'gemma3:4b',
+  onChunk: (chunk: string) => void
+): Promise<void> {
+  const ollamaMessages: OllamaMessage[] = messages.map(msg => ({
+    role: msg.role,
+    content: msg.content,
+  }))
 
-export async function callOllama(messages: OllamaMessage[], model?: string): Promise<string> {
-  const baseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434'
-  const defaultModel = model || process.env.OLLAMA_DEFAULT_MODEL || 'llama3.2:3b'
+  const response = await fetch('http://localhost:11434/api/chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      messages: ollamaMessages,
+      stream: true,
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Ollama API error: ${response.status}`)
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    throw new Error('No response body')
+  }
+
+  const decoder = new TextDecoder()
 
   try {
-    const response = await fetch(`${baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: defaultModel,
-        messages,
-        stream: false,
-      }),
-    })
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
 
-    if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`)
+      const chunk = decoder.decode(value)
+      const lines = chunk.split('\n').filter(line => line.trim())
+
+      for (const line of lines) {
+        try {
+          const data = JSON.parse(line)
+          if (data.message?.content) {
+            onChunk(data.message.content)
+          }
+        } catch (e) {
+          // Skip invalid JSON lines
+        }
+      }
     }
-
-    // FIX: Type assertion for unknown response
-    const data = (await response.json()) as OllamaResponse
-
-    // Additional validation for runtime safety
-    if (!data.message?.content) {
-      throw new Error('Invalid response format from Ollama API')
-    }
-
-    return data.message.content
-  } catch (error) {
-    console.error('Ollama API call failed:', error)
-    throw new Error('Failed to get response from Ollama')
+  } finally {
+    reader.releaseLock()
   }
 }
