@@ -1,9 +1,13 @@
 // server/src/test-db.ts
 import { ConversationService, MessageService, UserService } from './database/models'
 
-const user = UserService.create('testuser')
-const conv = ConversationService.create(user.id, 'Test Chat')
-MessageService.create(conv.id, 'user', 'Hello')
-MessageService.create(conv.id, 'assistant', 'Hi there!')
+async function main() {
+  const user = await UserService.create('testuser')
+  const conv = await ConversationService.create(user.id, 'Test Chat')
+  await MessageService.create(conv.id, 'user', 'Hello')
+  await MessageService.create(conv.id, 'assistant', 'Hi there!')
 
-console.log('Messages:', MessageService.getByConversation(conv.id))
+  console.log('Messages:', await MessageService.getByConversation(conv.id))
+}
+
+main()
