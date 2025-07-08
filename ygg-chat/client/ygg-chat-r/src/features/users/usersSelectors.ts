@@ -24,5 +24,5 @@ export const selectUsername = createSelector([selectUsersState], state => state?
 export const selectUserStatus = createSelector([selectUsersState], state => ({
   loading: state?.loading || false,
   error: state?.error || null,
-  isAuthenticated: !!state?.currentUser,
+  isAuthenticated: !!state?.currentUser, //just checks if currentUser exists
 }))

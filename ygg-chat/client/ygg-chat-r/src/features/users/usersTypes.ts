@@ -9,7 +9,7 @@ export interface User {
 export interface UserState {
   currentUser: User | null
   loading: boolean
-  error: string | null
+  error: string | null //or could split into error Boolean and errorMessage
 }
 
 export interface LoginUserPayload {
