@@ -2,6 +2,7 @@
 import React, { useState } from 'react'
 import './App.css'
 import { clearUser, loginUser, selectCurrentUser, selectUserStatus } from './features/users'
+import { deleteUser } from './features/users/usersActions'
 import { useAppDispatch, useAppSelector } from './hooks/redux'
 
 // Create a simple homepage component
@@ -199,6 +200,12 @@ function UserTest() {
     setUsername('')
   }
 
+  const handleDelete = async () => {
+    if (currentUser?.id) {
+      dispatch(deleteUser(currentUser.id))
+    }
+  }
+
   return (
     <div style={{ padding: '20px', maxWidth: '500px', margin: '0 auto' }}>
       <h1>Yggdrasil User Test</h1>
@@ -279,6 +286,20 @@ function UserTest() {
             }}
           >
             Logout
+          </button>
+          <button
+            onClick={handleDelete}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#dc3545',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              marginLeft: '10px',
+            }}
+          >
+            Delete User
           </button>
         </div>
       )}

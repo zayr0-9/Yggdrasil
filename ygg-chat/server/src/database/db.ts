@@ -62,8 +62,12 @@ function initializeStatements() {
   statements = {
     // Users
     createUser: db.prepare('INSERT INTO users (username) VALUES (?)'),
+    getAllUsers: db.prepare('SELECT * FROM users ORDER BY created_at DESC'),
+
     getUserById: db.prepare('SELECT * FROM users WHERE id = ?'),
     getUserByUsername: db.prepare('SELECT * FROM users WHERE username = ?'),
+    updateUser: db.prepare('UPDATE users SET username = ? WHERE id = ?'),
+    deleteUser: db.prepare('DELETE FROM users WHERE id = ?'),
 
     // Conversations
     createConversation: db.prepare('INSERT INTO conversations (user_id, title, model_name) VALUES (?, ?, ?)'),
@@ -74,11 +78,13 @@ function initializeStatements() {
     ),
     updateConversationTimestamp: db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?'),
     deleteConversation: db.prepare('DELETE FROM conversations WHERE id = ?'),
+    deleteConversationsByUser: db.prepare('DELETE FROM conversations WHERE user_id = ?'),
 
     // Messages
     createMessage: db.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)'),
     getMessagesByConversation: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'),
     getLastMessage: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1'),
+    deleteMessagesByConversation: db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
   }
 }
 

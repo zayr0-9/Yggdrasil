@@ -37,6 +37,19 @@ export class UserService {
   static getByUsername(username: string): User | undefined {
     return statements.getUserByUsername.get(username) as User | undefined
   }
+  // NEW METHODS
+  static getAll(): User[] {
+    return statements.getAllUsers.all() as User[]
+  }
+
+  static update(id: number, username: string): User | undefined {
+    statements.updateUser.run(username, id)
+    return statements.getUserById.get(id) as User | undefined
+  }
+
+  static delete(id: number): void {
+    statements.deleteUser.run(id)
+  }
 }
 
 export class ConversationService {
@@ -65,6 +78,9 @@ export class ConversationService {
   static delete(id: number): void {
     statements.deleteConversation.run(id)
   }
+  static deleteByUser(userId: number): void {
+    statements.deleteConversationsByUser.run(userId)
+  }
 }
 
 export class MessageService {
@@ -81,5 +97,9 @@ export class MessageService {
 
   static getLastMessage(conversationId: number): Message | undefined {
     return statements.getLastMessage.get(conversationId) as Message | undefined
+  }
+
+  static deleteByConversation(conversationId: number): void {
+    statements.deleteMessagesByConversation.run(conversationId)
   }
 }
