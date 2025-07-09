@@ -1,4 +1,3 @@
-export { clearError, clearUser, setUser } from './usersSlice'
 // import { ErrorResponse } from '@shared/types'
 import { createAsyncThunk } from '@reduxjs/toolkit'
 import { saveUserToStorage } from '../../helpers/storageHandler'
@@ -35,3 +34,5 @@ export const deleteUser = createAsyncThunk<void, number>('users/deleteUser', asy
   const response = await fetch(`/api/users/${userId}`, { method: 'DELETE' })
   if (!response.ok) throw new Error('Delete failed')
 })
+
+export { clearError, clearUser, setUser } from './usersSlice'

@@ -1,216 +1,158 @@
-// src/App.tsx - Debug version
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import './App.css'
-import { clearUser, loginUser, selectCurrentUser, selectUserStatus } from './features/users'
-import { deleteUser } from './features/users/usersActions'
+import {
+  // Chat actions
+  chatActions,
+  fetchModels,
+  selectCanSend,
+  selectMessageInput,
+  // Chat selectors
+  selectModels,
+  selectSelectedModel,
+  selectSendingState,
+  selectStreamState,
+  sendMessage,
+} from './features/chats'
 import { useAppDispatch, useAppSelector } from './hooks/redux'
 
-// Create a simple homepage component
-// const HomePage: React.FC = () => {
-//   const [message, setMessage] = useState('')
-//   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-//     if (e.key === 'Enter' && !e.shiftKey) {
-//       e.preventDefault()
-//       // Handle send logic here or call your button component
-//     }
-//   }
-
-//   return (
-//     <div className='min-h-screen bg-gray-900 p-4'>
-//       <h1 className='text-2xl text-left  px-155 py-5 text-white mb-4'>Ygg Chat</h1>
-//       <div className='w-1/2 mx-auto rounded-lg p-4 outline outline-1 outline-gray-700'>
-//         <div>
-//           <ChatMessage
-//             id='msg-1'
-//             role='assistant'
-//             content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
-//             timestamp={new Date()}
-//             onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
-//             onDelete={id => console.log('Delete:', id)}
-//             onCopy={content => console.log('Copied:', content)}
-//             width='w-3/5'
-//             className=''
-//           />
-//         </div>
-//         <div className='px-10 flex justify-end'>
-//           <ChatMessage
-//             id='msg-1'
-//             role='user'
-//             content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
-//             timestamp={new Date()}
-//             onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
-//             onDelete={id => console.log('Delete:', id)}
-//             onCopy={content => console.log('Copied:', content)}
-//             width='w-3/5'
-//           />
-//         </div>
-//         <div>
-//           <ChatMessage
-//             id='msg-1'
-//             role='assistant'
-//             content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
-//             timestamp={new Date()}
-//             onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
-//             onDelete={id => console.log('Delete:', id)}
-//             onCopy={content => console.log('Copied:', content)}
-//             width='w-3/5'
-//             className=''
-//           />
-//         </div>
-//         <div className='px-10 flex justify-end'>
-//           <ChatMessage
-//             id='msg-1'
-//             role='user'
-//             content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
-//             timestamp={new Date()}
-//             onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
-//             onDelete={id => console.log('Delete:', id)}
-//             onCopy={content => console.log('Copied:', content)}
-//             width='w-3/5'
-//           />
-//         </div>
-//         <div>
-//           <ChatMessage
-//             id='msg-1'
-//             role='assistant'
-//             content='Hello, how are you?'
-//             timestamp={new Date()}
-//             onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
-//             onDelete={id => console.log('Delete:', id)}
-//             onCopy={content => console.log('Copied:', content)}
-//             width='w-3/5'
-//             className=''
-//           />
-//         </div>
-//         <div className='px-10 flex justify-end'>
-//           <ChatMessage
-//             id='msg-1'
-//             role='user'
-//             content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod te'
-//             timestamp={new Date()}
-//             onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
-//             onDelete={id => console.log('Delete:', id)}
-//             onCopy={content => console.log('Copied:', content)}
-//             width='w-3/5'
-//           />
-//         </div>
-//         <div>
-//           <ChatMessage
-//             id='msg-1'
-//             role='assistant'
-//             content='Hello, how are you?'
-//             timestamp={new Date()}
-//             onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
-//             onDelete={id => console.log('Delete:', id)}
-//             onCopy={content => console.log('Copied:', content)}
-//             width='w-3/5'
-//             className=''
-//           />
-//         </div>
-//         <div className='px-10 flex justify-end'>
-//           <ChatMessage
-//             id='msg-1'
-//             role='user'
-//             content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod te'
-//             timestamp={new Date()}
-//             onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
-//             onDelete={id => console.log('Delete:', id)}
-//             onCopy={content => console.log('Copied:', content)}
-//             width='w-3/5'
-//           />
-//         </div>
-//         <div>
-//           <ChatMessage
-//             id='msg-1'
-//             role='assistant'
-//             content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
-//             timestamp={new Date()}
-//             onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
-//             onDelete={id => console.log('Delete:', id)}
-//             onCopy={content => console.log('Copied:', content)}
-//             width='w-3/5'
-//             className=''
-//           />
-//         </div>
-//         <div className='px-10 flex justify-end'>
-//           <ChatMessage
-//             id='msg-1'
-//             role='user'
-//             content='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
-//             timestamp={new Date()}
-//             onEdit={(id, newContent) => console.log('Edit:', id, newContent)}
-//             onDelete={id => console.log('Delete:', id)}
-//             onCopy={content => console.log('Copied:', content)}
-//             width='w-3/5'
-//           />
-//         </div>
-//         <div className='mb-4 px-10 py-8 mr-0 ml-auto rounded-lg'>
-//           {/* <p className='text-gray-300 text-sm mb-2'>w-full width:</p> */}
-//           <TextArea
-//             value={message}
-//             onChange={setMessage}
-//             onKeyDown={handleKeyDown}
-//             placeholder='Type your message...'
-//             minRows={1}
-//             // maxRows={60}
-//             width='w-full'
-//             showCharCount={true}
-//             className='shadow-xl/30'
-//             // resize='vertical'
-//           />
-//         </div>
-//       </div>
-//     </div>
-//   )
-// }
-
-// // Main App component that sets up routing
-// function App() {
-//   return (
-//     <BrowserRouter>
-//       <div className='App'>
-//         <Routes>
-//           <Route path='/' element={<HomePage />} />
-//           <Route path='/components' element={<ComponentShowcase />} />
-//         </Routes>
-//       </div>
-//     </BrowserRouter>
-//   )
-// }
-// export default App
-
-//test for user features
-
-function UserTest() {
+function ChatTest() {
   const dispatch = useAppDispatch()
-  const currentUser = useAppSelector(selectCurrentUser)
-  const { loading, error, isAuthenticated } = useAppSelector(selectUserStatus)
 
-  const [username, setUsername] = useState('')
+  // Chat selectors
+  const models = useAppSelector(selectModels)
+  const selectedModel = useAppSelector(selectSelectedModel)
+  const messageInput = useAppSelector(selectMessageInput)
+  const canSend = useAppSelector(selectCanSend)
+  const sendingState = useAppSelector(selectSendingState)
+  const streamState = useAppSelector(selectStreamState)
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (username.trim()) {
-      dispatch(loginUser(username.trim()))
+  // Local state for test
+  const [testConversationId, setTestConversationId] = useState<number | null>(null)
+  const [testMessages, setTestMessages] = useState<any[]>([])
+  const [testUserId] = useState(1) // Mock user ID
+
+  // Load models on mount
+  useEffect(() => {
+    dispatch(fetchModels(true))
+  }, [dispatch])
+
+  // Create or get conversation on mount
+  useEffect(() => {
+    const initializeConversation = async () => {
+      try {
+        // First, create a test user if needed
+        const userResponse = await fetch('http://localhost:3001/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: 'test-user' }),
+        })
+
+        if (!userResponse.ok) {
+          console.error('Failed to create user')
+          return
+        }
+
+        const user = await userResponse.json()
+
+        // Create a conversation for this user
+        const convResponse = await fetch('http://localhost:3001/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            title: 'Test Conversation',
+            modelName: selectedModel,
+          }),
+        })
+
+        if (!convResponse.ok) {
+          console.error('Failed to create conversation')
+          return
+        }
+
+        const conversation = await convResponse.json()
+        setTestConversationId(conversation.id)
+        console.log('Created test conversation:', conversation)
+      } catch (error) {
+        console.error('Failed to initialize conversation:', error)
+      }
+    }
+
+    if (!testConversationId) {
+      initializeConversation()
+    }
+  }, [selectedModel, testConversationId])
+
+  // Handle input changes
+  const handleInputChange = (content: string) => {
+    dispatch(chatActions.inputChanged({ content }))
+  }
+
+  // Handle model selection
+  const handleModelSelect = (modelName: string) => {
+    dispatch(chatActions.modelSelected({ modelName, persist: true }))
+  }
+
+  // Handle sending message
+  const handleSend = () => {
+    if (canSend && testConversationId) {
+      // Add user message to local test messages
+      const userMessage = {
+        id: Date.now(),
+        role: 'user',
+        content: messageInput.content,
+        timestamp: new Date().toISOString(),
+      }
+      setTestMessages(prev => [...prev, userMessage])
+
+      // Send message
+      dispatch(
+        sendMessage({
+          conversationId: testConversationId,
+          input: messageInput,
+        })
+      )
+    } else if (!testConversationId) {
+      console.error('No conversation ID available')
     }
   }
 
-  const handleLogout = () => {
-    dispatch(clearUser())
-    setUsername('')
-  }
-
-  const handleDelete = async () => {
-    if (currentUser?.id) {
-      dispatch(deleteUser(currentUser.id))
+  // Handle key press
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
     }
   }
+
+  // Refresh models
+  const handleRefreshModels = () => {
+    dispatch(fetchModels(true))
+  }
+
+  // Update test messages when streaming completes
+  useEffect(() => {
+    if (!streamState.active && streamState.messageId && streamState.buffer) {
+      // Prevent duplicate assistant messages
+      const alreadyExists = testMessages.some(msg => msg.id === streamState.messageId && msg.role === 'assistant')
+      if (!alreadyExists) {
+        const assistantMessage = {
+          id: streamState.messageId,
+          role: 'assistant',
+          content: streamState.buffer,
+          timestamp: new Date().toISOString(),
+        }
+        setTestMessages(prev => [...prev, assistantMessage])
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streamState.active, streamState.messageId, streamState.buffer])
 
   return (
-    <div style={{ padding: '20px', maxWidth: '500px', margin: '0 auto' }}>
-      <h1>Yggdrasil User Test</h1>
+    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+      <h1>Yggdrasil Chat Test</h1>
 
-      {/* Current State Display */}
+      {/* Chat State Display */}
       <div
         style={{
           background: '#f5f5f5',
@@ -218,106 +160,219 @@ function UserTest() {
           marginBottom: '20px',
           borderRadius: '5px',
           fontFamily: 'monospace',
+          fontSize: '12px',
         }}
       >
-        <h3>Current State:</h3>
+        <h3>Chat State:</h3>
         <p>
-          <strong>Authenticated:</strong> {isAuthenticated ? 'Yes' : 'No'}
+          <strong>Models Available:</strong> {models.length}
         </p>
         <p>
-          <strong>Loading:</strong> {loading ? 'Yes' : 'No'}
+          <strong>Selected Model:</strong> {selectedModel || 'None'}
         </p>
         <p>
-          <strong>Error:</strong> {error || 'None'}
+          <strong>Conversation ID:</strong> {testConversationId || 'Creating...'}
         </p>
         <p>
-          <strong>User:</strong> {currentUser ? JSON.stringify(currentUser, null, 2) : 'None'}
+          <strong>Can Send:</strong> {canSend && testConversationId ? 'Yes' : 'No'}
         </p>
+        <p>
+          <strong>Sending:</strong> {sendingState.sending ? 'Yes' : 'No'}
+        </p>
+        <p>
+          <strong>Streaming:</strong> {sendingState.streaming ? 'Yes' : 'No'}
+        </p>
+        <p>
+          <strong>Stream Active:</strong> {streamState.active ? 'Yes' : 'No'}
+        </p>
+        <p>
+          <strong>Stream Buffer:</strong> {streamState.buffer ? `"${streamState.buffer.slice(0, 50)}..."` : 'Empty'}
+        </p>
+        <p>
+          <strong>Input Length:</strong> {messageInput.content.length}
+        </p>
+        {sendingState.error && (
+          <p style={{ color: 'red' }}>
+            <strong>Error:</strong> {sendingState.error}
+          </p>
+        )}
       </div>
 
-      {/* Login Form */}
-      {!isAuthenticated ? (
-        <form onSubmit={handleLogin} style={{ marginBottom: '20px' }}>
-          <div style={{ marginBottom: '10px' }}>
-            <label htmlFor='username'>Username:</label>
-            <input
-              id='username'
-              type='text'
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              disabled={loading}
-              style={{
-                marginLeft: '10px',
-                padding: '5px',
-                width: '200px',
-              }}
-              placeholder='Enter username'
-            />
-          </div>
+      {/* Model Selection */}
+      <div style={{ marginBottom: '20px' }}>
+        <h3>Model Selection:</h3>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
           <button
-            type='submit'
-            disabled={loading || !username.trim()}
+            onClick={handleRefreshModels}
             style={{
-              padding: '8px 16px',
-              backgroundColor: loading ? '#ccc' : '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {loading ? 'Logging in...' : 'Login'}
-          </button>
-        </form>
-      ) : (
-        <div style={{ marginBottom: '20px' }}>
-          <p>
-            Welcome, <strong>{currentUser?.username}</strong>!
-          </p>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#dc3545',
+              padding: '5px 10px',
+              backgroundColor: '#28a745',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer',
             }}
           >
-            Logout
+            Refresh Models
           </button>
-          <button
-            onClick={handleDelete}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#dc3545',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginLeft: '10px',
-            }}
-          >
-            Delete User
-          </button>
+          <span>Available: {models.length} models</span>
         </div>
-      )}
 
-      {/* Error Display */}
-      {error && (
+        <select
+          value={selectedModel || ''}
+          onChange={e => handleModelSelect(e.target.value)}
+          style={{ padding: '5px', width: '300px' }}
+          disabled={models.length === 0}
+        >
+          <option value=''>Select a model...</option>
+          {models.map(model => (
+            <option key={model} value={model}>
+              {model}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Test Messages Display */}
+      <div style={{ marginBottom: '20px' }}>
+        <h3>Test Messages:</h3>
         <div
           style={{
-            background: '#f8d7da',
-            color: '#721c24',
+            border: '1px solid #ddd',
+            height: '200px',
+            overflowY: 'auto',
             padding: '10px',
-            borderRadius: '4px',
-            marginBottom: '20px',
+            backgroundColor: '#fafafa',
           }}
         >
-          <strong>Error:</strong> {error}
+          {testMessages.length === 0 ? (
+            <p style={{ color: '#666' }}>No messages yet...</p>
+          ) : (
+            testMessages.map(msg => (
+              <div key={msg.id} style={{ marginBottom: '10px' }}>
+                <strong>{msg.role}:</strong> {msg.content}
+              </div>
+            ))
+          )}
+
+          {/* Show streaming content */}
+          {streamState.active && streamState.buffer && (
+            <div style={{ marginBottom: '10px', fontStyle: 'italic', color: '#007bff' }}>
+              <strong>assistant (streaming):</strong> {streamState.buffer}
+            </div>
+          )}
         </div>
-      )}
+      </div>
+
+      {/* Message Input */}
+      <div style={{ marginBottom: '20px' }}>
+        <h3>Send Message:</h3>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <textarea
+            value={messageInput.content}
+            onChange={e => handleInputChange(e.target.value)}
+            onKeyDown={handleKeyPress}
+            placeholder='Type your message...'
+            disabled={sendingState.sending}
+            style={{
+              flex: 1,
+              padding: '10px',
+              minHeight: '80px',
+              borderRadius: '4px',
+              border: '1px solid #ddd',
+              resize: 'vertical',
+            }}
+          />
+          <button
+            onClick={handleSend}
+            disabled={!canSend || !testConversationId}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: canSend && testConversationId ? '#007bff' : '#ccc',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: canSend && testConversationId ? 'pointer' : 'not-allowed',
+              alignSelf: 'flex-start',
+            }}
+          >
+            {!testConversationId
+              ? 'Creating conversation...'
+              : sendingState.streaming
+                ? 'Streaming...'
+                : sendingState.sending
+                  ? 'Sending...'
+                  : 'Send'}
+          </button>
+        </div>
+        {messageInput.content.length > 0 && (
+          <small style={{ color: '#666' }}>
+            Characters: {messageInput.content.length} | Press Enter to send, Shift+Enter for new line
+          </small>
+        )}
+      </div>
+
+      {/* Test Actions */}
+      <div style={{ marginBottom: '20px' }}>
+        <h3>Test Actions:</h3>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => handleInputChange('Hello, how are you?')}
+            style={{
+              padding: '5px 10px',
+              backgroundColor: '#6c757d',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            Set Test Message
+          </button>
+          <button
+            onClick={() => dispatch(chatActions.inputCleared())}
+            style={{
+              padding: '5px 10px',
+              backgroundColor: '#dc3545',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            Clear Input
+          </button>
+          <button
+            onClick={() => setTestMessages([])}
+            style={{
+              padding: '5px 10px',
+              backgroundColor: '#ffc107',
+              color: 'black',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            Clear Messages
+          </button>
+          <button
+            onClick={() => {
+              setTestConversationId(null)
+              setTestMessages([])
+            }}
+            style={{
+              padding: '5px 10px',
+              backgroundColor: '#17a2b8',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            New Conversation
+          </button>
+        </div>
+      </div>
 
       {/* Test Instructions */}
       <div
@@ -331,20 +386,26 @@ function UserTest() {
       >
         <h4>Test Instructions:</h4>
         <ol>
-          <li>Make sure your server is running on :3001</li>
-          <li>Enter any username and click Login</li>
-          <li>Check that user data appears in Current State</li>
-          <li>Refresh the page - user should persist (localStorage)</li>
-          <li>Click Logout to clear user</li>
-          <li>Try the same username again - should get same user ID</li>
+          <li>Make sure your server is running on localhost:3001</li>
+          <li>Make sure Ollama is running on localhost:11434</li>
+          <li>Click "Refresh Models" to load available models from Ollama</li>
+          <li>Select a model from the dropdown</li>
+          <li>Type a message in the textarea</li>
+          <li>Click Send or press Enter to send</li>
+          <li>Watch the streaming response in the messages area</li>
+          <li>Check the Chat State panel for real-time state updates</li>
         </ol>
+        <p>
+          <strong>Note:</strong> This tests the chat Redux logic without requiring actual conversation management.
+        </p>
       </div>
     </div>
   )
 }
 
+// Main App component
 function App() {
-  return <UserTest />
+  return <ChatTest />
 }
 
 export default App
