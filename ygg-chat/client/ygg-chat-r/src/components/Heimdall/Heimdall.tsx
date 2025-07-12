@@ -391,8 +391,8 @@ export const Heimdall: React.FC<HeimdallProps> = ({ chatData = sampleChatData, c
     { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
   )
 
-  const svgWidth = bounds.maxX - bounds.minX + 100
-  const svgHeight = bounds.maxY - bounds.minY + 100
+  //   const svgWidth = bounds.maxX - bounds.minX + 100
+  //   const svgHeight = bounds.maxY - bounds.minY + 100
   const offsetX = -bounds.minX + 50
   const offsetY = -bounds.minY + 50
 
@@ -449,7 +449,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({ chatData = sampleChatData, c
 
   const renderConnections = (): JSX.Element[] => {
     const connections: JSX.Element[] = []
-    const cornerRadius = 10
+    // const cornerRadius = 10
 
     Object.values(positions).forEach(({ x, y, node }) => {
       if (node.children && node.children.length > 0) {
@@ -506,6 +506,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({ chatData = sampleChatData, c
 
             // Create branches for each child
             node.children.forEach((child, index) => {
+              index
               const childPos = positions[child.id]
               if (childPos) {
                 const path = `

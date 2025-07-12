@@ -53,6 +53,7 @@ router.get(
   })
 )
 
+//get all users
 router.get(
   '/users/',
   asyncHandler(async (req, res) => {
@@ -170,8 +171,12 @@ router.post(
     // Use conversation's model or provided model or default
     const selectedModel = modelName || conversation.model_name || (await modelService.getDefaultModel())
 
-    // Save user message
-    const userMessage = MessageService.create(conversationId, 'user', content)
+    // Get the last message to determine parent ID
+    const lastMessage = MessageService.getLastMessage(conversationId)
+    const parentId = lastMessage ? lastMessage.id : null
+
+    // Save user message with proper parent ID
+    const userMessage = MessageService.create(conversationId, 'user', content, parentId)
 
     // Setup SSE headers
     res.writeHead(200, {
@@ -201,8 +206,8 @@ router.post(
         selectedModel
       )
 
-      // Save complete assistant message
-      const assistantMessage = MessageService.create(conversationId, 'assistant', assistantContent)
+      // Save complete assistant message with user message as parent
+      const assistantMessage = MessageService.create(conversationId, 'assistant', assistantContent, userMessage.id)
 
       // Send completion event
       res.write(
@@ -229,7 +234,6 @@ router.post(
     res.end()
   })
 )
-
 // Delete conversation
 router.delete(
   '/conversations/:id',

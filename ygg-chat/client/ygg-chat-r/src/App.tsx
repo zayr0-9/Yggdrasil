@@ -30,7 +30,7 @@ function ChatTest() {
   // Local state for test
   const [testConversationId, setTestConversationId] = useState<number | null>(null)
   const [testMessages, setTestMessages] = useState<any[]>([])
-  const [testUserId] = useState(1) // Mock user ID
+  // const [testUserId] = useState(1) // Mock user ID
 
   // Load models on mount
   useEffect(() => {

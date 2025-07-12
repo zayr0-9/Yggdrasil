@@ -116,6 +116,7 @@ export const chatSlice = createSlice({
       //   state.streaming.messageId = action.payload.messageId
       state.streaming.active = false
       state.streaming.buffer = ''
+      action
     },
 
     // UI - minimal

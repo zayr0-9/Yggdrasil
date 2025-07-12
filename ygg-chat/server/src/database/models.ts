@@ -19,9 +19,25 @@ export interface Conversation {
 export interface Message {
   id: number
   conversation_id: number
+  parent_id: number | null
   role: 'user' | 'assistant' | 'system'
   content: string
   created_at: string
+}
+
+// Extended interfaces for tree and search results
+export interface MessageTreeNode extends Message {
+  depth: number
+  path: string
+}
+
+export interface SearchResult extends Message {
+  highlighted: string
+  conversation_title?: string
+}
+
+export interface SearchResultWithSnippet extends Message {
+  snippet: string
 }
 
 export class UserService {
@@ -37,7 +53,7 @@ export class UserService {
   static getByUsername(username: string): User | undefined {
     return statements.getUserByUsername.get(username) as User | undefined
   }
-  // NEW METHODS
+
   static getAll(): User[] {
     return statements.getAllUsers.all() as User[]
   }
@@ -78,21 +94,38 @@ export class ConversationService {
   static delete(id: number): void {
     statements.deleteConversation.run(id)
   }
+
   static deleteByUser(userId: number): void {
     statements.deleteConversationsByUser.run(userId)
   }
 }
 
 export class MessageService {
-  static create(conversationId: number, role: Message['role'], content: string): Message {
-    const result = statements.createMessage.run(conversationId, role, content)
+  // Updated to include parent_id parameter
+  static create(
+    conversationId: number,
+    role: Message['role'],
+    content: string,
+    parentId: number | null = null
+  ): Message {
+    const result = statements.createMessage.run(conversationId, parentId, role, content)
     // Update conversation timestamp
     statements.updateConversationTimestamp.run(conversationId)
-    return statements.getMessagesByConversation.all(conversationId).pop() as Message
+    // Get the created message by ID instead of using pop()
+    return statements.getMessageById.get(result.lastInsertRowid) as Message
+  }
+
+  static getById(id: number): Message | undefined {
+    return statements.getMessageById.get(id) as Message | undefined
   }
 
   static getByConversation(conversationId: number): Message[] {
     return statements.getMessagesByConversation.all(conversationId) as Message[]
+  }
+
+  // Get the complete message tree for a conversation
+  static getMessageTree(conversationId: number): MessageTreeNode[] {
+    return statements.getMessageTree.all(conversationId) as MessageTreeNode[]
   }
 
   static getLastMessage(conversationId: number): Message | undefined {
@@ -102,4 +135,74 @@ export class MessageService {
   static deleteByConversation(conversationId: number): void {
     statements.deleteMessagesByConversation.run(conversationId)
   }
+
+  // Full Text Search methods
+  static searchInConversation(query: string, conversationId: number): SearchResult[] {
+    return statements.searchMessages.all(query, conversationId) as SearchResult[]
+  }
+
+  static searchAllUserMessages(query: string, userId: number, limit: number = 50): SearchResult[] {
+    return statements.searchAllUserMessages.all(query, userId) as SearchResult[]
+  }
+
+  static searchWithSnippets(query: string, conversationId: number): SearchResultWithSnippet[] {
+    return statements.searchMessagesWithSnippet.all(query, conversationId) as SearchResultWithSnippet[]
+  }
+
+  static searchAllUserMessagesPaginated(
+    query: string,
+    userId: number,
+    limit: number = 50,
+    offset: number = 0
+  ): SearchResult[] {
+    return statements.searchAllUserMessagesPaginated.all(query, userId, limit, offset) as SearchResult[]
+  }
 }
+
+// Helper function to build a tree structure from flat message array
+export function buildMessageTree(messages: MessageTreeNode[]): MessageTreeNode | null {
+  const messageMap = new Map<number, MessageTreeNode & { children: MessageTreeNode[] }>()
+  const roots: (MessageTreeNode & { children: MessageTreeNode[] })[] = []
+
+  // First pass: create all nodes with children array
+  messages.forEach(msg => {
+    messageMap.set(msg.id, { ...msg, children: [] })
+  })
+
+  // Second pass: build tree structure
+  messages.forEach(msg => {
+    const node = messageMap.get(msg.id)!
+    if (msg.parent_id === null) {
+      roots.push(node)
+    } else {
+      const parent = messageMap.get(msg.parent_id)
+      if (parent) {
+        parent.children.push(node)
+      }
+    }
+  })
+
+  // Return the first root (assuming single root per conversation)
+  return roots[0] || null
+}
+
+// Convert tree structure to the format expected by Heimdall component
+export interface ChatNode {
+  id: string
+  message: string
+  sender: 'user' | 'assistant'
+  children: ChatNode[]
+}
+
+// export function convertToHeimdallFormat(root: MessageTreeNode & { children: MessageTreeNode[] }): ChatNode {
+//   const convert = (node: MessageTreeNode & { children: MessageTreeNode[] }): ChatNode => {
+//     return {
+//       id: node.id.toString(),
+//       message: node.content,
+//       sender: node.role === 'user' ? 'user' : 'assistant',
+//       children: node.children.map(convert),
+//     }
+//   }
+
+//   return convert(root)
+// }
