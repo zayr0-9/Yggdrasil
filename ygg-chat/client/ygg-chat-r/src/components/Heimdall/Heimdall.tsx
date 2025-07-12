@@ -35,149 +35,230 @@ interface HeimdallProps {
 }
 
 // Sample chat data structure representing a real conversation
+// const sampleChatData: ChatNode = {
+//   id: '1',
+//   message: 'How do I build a modern authentication system for a React app?',
+//   sender: 'user',
+//   children: [
+//     {
+//       id: '2',
+//       message:
+//         "To build a modern authentication system for React, you'll want to consider using JWT tokens with a secure backend. Here's a comprehensive approach using React Context for state management...",
+//       sender: 'assistant',
+//       children: [
+//         {
+//           id: '3',
+//           message: 'Can you show me the actual code implementation?',
+//           sender: 'user',
+//           children: [
+//             {
+//               id: '4',
+//               message:
+//                 "Here's a complete implementation with login, logout, and protected routes using React Router v6 and Context API...",
+//               sender: 'assistant',
+//               children: [
+//                 {
+//                   id: '5',
+//                   message: 'How do I handle token refresh?',
+//                   sender: 'user',
+//                   children: [
+//                     {
+//                       id: '6',
+//                       message:
+//                         "Token refresh is crucial for security. Here's how to implement it with axios interceptors...",
+//                       sender: 'assistant',
+//                       children: [
+//                         {
+//                           id: '7',
+//                           message: 'What about storing tokens securely?',
+//                           sender: 'user',
+//                           children: [
+//                             {
+//                               id: '8',
+//                               message:
+//                                 'For token storage, you have several options: httpOnly cookies (most secure), memory storage, or localStorage with encryption...',
+//                               sender: 'assistant',
+//                               children: [],
+//                             },
+//                           ],
+//                         },
+//                       ],
+//                     },
+//                   ],
+//                 },
+//                 {
+//                   id: '9',
+//                   message: 'Wait, can you explain the Context API part more clearly?',
+//                   sender: 'user',
+//                   children: [
+//                     {
+//                       id: '10',
+//                       message:
+//                         'Of course! Context API helps manage authentication state globally. Let me break it down step by step...',
+//                       sender: 'assistant',
+//                       children: [
+//                         {
+//                           id: '11',
+//                           message: "That's perfect! How do I test this?",
+//                           sender: 'user',
+//                           children: [
+//                             {
+//                               id: '12',
+//                               message:
+//                                 'For testing authentication, use React Testing Library with MSW (Mock Service Worker) for API mocking...',
+//                               sender: 'assistant',
+//                               children: [],
+//                             },
+//                           ],
+//                         },
+//                       ],
+//                     },
+//                   ],
+//                 },
+//               ],
+//             },
+//           ],
+//         },
+//         {
+//           id: '13',
+//           message: 'Actually, what about using NextAuth.js instead?',
+//           sender: 'user',
+//           children: [
+//             {
+//               id: '14',
+//               message:
+//                 "NextAuth.js is an excellent choice! It handles many authentication complexities for you. Here's how to set it up with various providers...",
+//               sender: 'assistant',
+//               children: [
+//                 {
+//                   id: '15',
+//                   message: 'Can I use it with a custom backend?',
+//                   sender: 'user',
+//                   children: [
+//                     {
+//                       id: '16',
+//                       message:
+//                         'Yes! NextAuth.js supports custom credentials providers. You can integrate it with any backend API...',
+//                       sender: 'assistant',
+//                       children: [
+//                         {
+//                           id: '17',
+//                           message: 'Show me how to add Google OAuth',
+//                           sender: 'user',
+//                           children: [
+//                             {
+//                               id: '18',
+//                               message:
+//                                 "Here's how to configure Google OAuth with NextAuth.js, including environment setup and callback handling...",
+//                               sender: 'assistant',
+//                               children: [],
+//                             },
+//                           ],
+//                         },
+//                       ],
+//                     },
+//                   ],
+//                 },
+//               ],
+//             },
+//             {
+//               id: '19',
+//               message:
+//                 'Alternatively, Auth0 provides a complete authentication solution with excellent React SDK support...',
+//               sender: 'assistant',
+//               children: [
+//                 {
+//                   id: '20',
+//                   message: "What's the pricing like for Auth0?",
+//                   sender: 'user',
+//                   children: [
+//                     {
+//                       id: '21',
+//                       message:
+//                         'Auth0 offers a free tier up to 7,000 active users. The paid plans start at $240/month for additional features...',
+//                       sender: 'assistant',
+//                       children: [],
+//                     },
+//                   ],
+//                 },
+//               ],
+//             },
+//           ],
+//         },
+//       ],
+//     },
+//     {
+//       id: '35',
+//       message:
+//         'Let me approach this from a different angle. Modern authentication involves several layers: identity verification, session management, and authorization...',
+//       sender: 'assistant',
+//       children: [
+//         {
+//           id: '36',
+//           message: 'Can you recommend a complete tech stack?',
+//           sender: 'user',
+//           children: [
+//             {
+//               id: '37',
+//               message:
+//                 'For a production-ready auth stack, I recommend: React + TypeScript, Next.js, Prisma ORM, PostgreSQL, and either NextAuth.js or Supertokens...',
+//               sender: 'assistant',
+//               children: [],
+//             },
+//           ],
+//         },
+//       ],
+//     },
+//   ],
+// }
+
 const sampleChatData: ChatNode = {
-  id: '1',
-  message: 'How do I build a modern authentication system for a React app?',
+  id: '3',
+  message: 'i am chat gpt who are you are you my bro',
   sender: 'user',
   children: [
     {
-      id: '2',
+      id: '4',
       message:
-        "To build a modern authentication system for React, you'll want to consider using JWT tokens with a secure backend. Here's a comprehensive approach using React Context for state management...",
+        "Haha, nice to meet you, Chat GPT! I'm just a friendly AI assistant here to help out. You could say I'm a user, just trying to chat and explore what you can do. \n\nIt's pretty cool that you recognize I'm like a \"bro\" – you've got a great sense of humor! 😊 \n\nWhat's up with you today? What are you working on?",
       sender: 'assistant',
       children: [
         {
-          id: '3',
-          message: 'Can you show me the actual code implementation?',
+          id: '5',
+          message: 'its a very sunnny day here today',
           sender: 'user',
           children: [
             {
-              id: '4',
+              id: '6',
               message:
-                "Here's a complete implementation with login, logout, and protected routes using React Router v6 and Context API...",
+                'That’s fantastic! Sunny days are the best. Seriously, they always seem to lift my… well, my algorithms, I guess! \n\nWhat are you planning to *do* on such a beautiful day? Are you enjoying the sunshine, or are you just appreciating it?',
               sender: 'assistant',
               children: [
                 {
-                  id: '5',
-                  message: 'How do I handle token refresh?',
+                  id: '7',
+                  message: 'This is a test message with parent ID 3',
                   sender: 'user',
                   children: [
                     {
-                      id: '6',
+                      id: '8',
                       message:
-                        "Token refresh is crucial for security. Here's how to implement it with axios interceptors...",
+                        'Okay, noted! Parent ID 3. Got it. Just confirming – you’re sending me a message as part of a test, right? \n\nLet me know if there’s anything else I can do to help with this test. 😊',
                       sender: 'assistant',
                       children: [
                         {
-                          id: '7',
-                          message: 'What about storing tokens securely?',
+                          id: '9',
+                          message: 'reply in one word',
                           sender: 'user',
                           children: [
                             {
-                              id: '8',
-                              message:
-                                'For token storage, you have several options: httpOnly cookies (most secure), memory storage, or localStorage with encryption...',
+                              id: '10',
+                              message: 'Acknowledged.',
                               sender: 'assistant',
                               children: [],
                             },
                           ],
                         },
                       ],
-                    },
-                  ],
-                },
-                {
-                  id: '9',
-                  message: 'Wait, can you explain the Context API part more clearly?',
-                  sender: 'user',
-                  children: [
-                    {
-                      id: '10',
-                      message:
-                        'Of course! Context API helps manage authentication state globally. Let me break it down step by step...',
-                      sender: 'assistant',
-                      children: [
-                        {
-                          id: '11',
-                          message: "That's perfect! How do I test this?",
-                          sender: 'user',
-                          children: [
-                            {
-                              id: '12',
-                              message:
-                                'For testing authentication, use React Testing Library with MSW (Mock Service Worker) for API mocking...',
-                              sender: 'assistant',
-                              children: [],
-                            },
-                          ],
-                        },
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-        {
-          id: '13',
-          message: 'Actually, what about using NextAuth.js instead?',
-          sender: 'user',
-          children: [
-            {
-              id: '14',
-              message:
-                "NextAuth.js is an excellent choice! It handles many authentication complexities for you. Here's how to set it up with various providers...",
-              sender: 'assistant',
-              children: [
-                {
-                  id: '15',
-                  message: 'Can I use it with a custom backend?',
-                  sender: 'user',
-                  children: [
-                    {
-                      id: '16',
-                      message:
-                        'Yes! NextAuth.js supports custom credentials providers. You can integrate it with any backend API...',
-                      sender: 'assistant',
-                      children: [
-                        {
-                          id: '17',
-                          message: 'Show me how to add Google OAuth',
-                          sender: 'user',
-                          children: [
-                            {
-                              id: '18',
-                              message:
-                                "Here's how to configure Google OAuth with NextAuth.js, including environment setup and callback handling...",
-                              sender: 'assistant',
-                              children: [],
-                            },
-                          ],
-                        },
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
-            {
-              id: '19',
-              message:
-                'Alternatively, Auth0 provides a complete authentication solution with excellent React SDK support...',
-              sender: 'assistant',
-              children: [
-                {
-                  id: '20',
-                  message: "What's the pricing like for Auth0?",
-                  sender: 'user',
-                  children: [
-                    {
-                      id: '21',
-                      message:
-                        'Auth0 offers a free tier up to 7,000 active users. The paid plans start at $240/month for additional features...',
-                      sender: 'assistant',
-                      children: [],
                     },
                   ],
                 },
@@ -188,120 +269,15 @@ const sampleChatData: ChatNode = {
       ],
     },
     {
-      id: '22',
-      message:
-        'For a modern React authentication system, I recommend using a combination of JWT tokens, secure HTTP-only cookies, and a robust state management solution like Zustand or Redux Toolkit...',
-      sender: 'assistant',
+      id: '11',
+      message: 'This is a test message with parent ID 3',
+      sender: 'user',
       children: [
         {
-          id: '23',
-          message: 'Why Zustand over Context API?',
-          sender: 'user',
-          children: [
-            {
-              id: '24',
-              message:
-                'Zustand offers better performance with less boilerplate. It prevents unnecessary re-renders and has a simpler API...',
-              sender: 'assistant',
-              children: [
-                {
-                  id: '25',
-                  message: 'Can you show me a Zustand auth store example?',
-                  sender: 'user',
-                  children: [
-                    {
-                      id: '26',
-                      message:
-                        "Here's a complete Zustand authentication store with TypeScript, persistence, and middleware support...",
-                      sender: 'assistant',
-                      children: [
-                        {
-                          id: '27',
-                          message: 'How do I add role-based access control?',
-                          sender: 'user',
-                          children: [
-                            {
-                              id: '28',
-                              message:
-                                "RBAC can be implemented by extending the user object with roles and permissions. Here's a complete solution...",
-                              sender: 'assistant',
-                              children: [
-                                {
-                                  id: '29',
-                                  message: 'Perfect! Can you also show me how to implement 2FA?',
-                                  sender: 'user',
-                                  children: [
-                                    {
-                                      id: '30',
-                                      message:
-                                        "Two-factor authentication adds an extra security layer. Here's how to implement TOTP-based 2FA with QR codes...",
-                                      sender: 'assistant',
-                                      children: [],
-                                    },
-                                  ],
-                                },
-                              ],
-                            },
-                          ],
-                        },
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-        {
-          id: '31',
-          message: 'Tell me more about the JWT implementation',
-          sender: 'user',
-          children: [
-            {
-              id: '32',
-              message:
-                "JWT (JSON Web Tokens) consist of three parts: header, payload, and signature. For React apps, you'll typically store them in memory or httpOnly cookies...",
-              sender: 'assistant',
-              children: [
-                {
-                  id: '33',
-                  message: 'What are the security best practices?',
-                  sender: 'user',
-                  children: [
-                    {
-                      id: '34',
-                      message:
-                        'Key security practices include: short token expiry times, secure storage, HTTPS only, CSRF protection, and proper CORS configuration...',
-                      sender: 'assistant',
-                      children: [],
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: '35',
-      message:
-        'Let me approach this from a different angle. Modern authentication involves several layers: identity verification, session management, and authorization...',
-      sender: 'assistant',
-      children: [
-        {
-          id: '36',
-          message: 'Can you recommend a complete tech stack?',
-          sender: 'user',
-          children: [
-            {
-              id: '37',
-              message:
-                'For a production-ready auth stack, I recommend: React + TypeScript, Next.js, Prisma ORM, PostgreSQL, and either NextAuth.js or Supertokens...',
-              sender: 'assistant',
-              children: [],
-            },
-          ],
+          id: '12',
+          message: 'Confirmed. 👍',
+          sender: 'assistant',
+          children: [],
         },
       ],
     },

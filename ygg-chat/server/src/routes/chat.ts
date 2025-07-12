@@ -2,9 +2,9 @@
 import express from 'express'
 import { ConversationService, MessageService, UserService } from '../database/models'
 import { asyncHandler } from '../utils/asyncHandler'
+import { convertMessagesToHeimdall } from '../utils/heimdallConverter'
 import { modelService } from '../utils/modelService'
 import { generateResponse } from '../utils/ollama'
-
 const router = express.Router()
 
 router.get(
@@ -151,12 +151,29 @@ router.get(
   })
 )
 
+router.get(
+  '/conversations/:id/messages/tree',
+  asyncHandler(async (req, res) => {
+    const conversationId = parseInt(req.params.id)
+    const messages = MessageService.getByConversation(conversationId)
+
+    // Optional: Debug the tree structure in development
+    // if (process.env.NODE_ENV === 'development') {
+    //   debugMessageTree(messages)
+    // }
+
+    const treeData = convertMessagesToHeimdall(messages)
+    res.json(treeData)
+  })
+)
+
+// Send message with streaming response
 // Send message with streaming response
 router.post(
   '/conversations/:id/messages',
   asyncHandler(async (req, res) => {
     const conversationId = parseInt(req.params.id)
-    const { content, modelName } = req.body
+    const { content, modelName, parentId: requestedParentId } = req.body
 
     if (!content) {
       return res.status(400).json({ error: 'Message content required' })
@@ -171,9 +188,14 @@ router.post(
     // Use conversation's model or provided model or default
     const selectedModel = modelName || conversation.model_name || (await modelService.getDefaultModel())
 
-    // Get the last message to determine parent ID
-    const lastMessage = MessageService.getLastMessage(conversationId)
-    const parentId = lastMessage ? lastMessage.id : null
+    // Determine parent ID: use requested parentId if provided, otherwise get last message
+    let parentId: number | null = null
+    if (requestedParentId !== undefined) {
+      parentId = requestedParentId
+    } else {
+      const lastMessage = MessageService.getLastMessage(conversationId)
+      parentId = lastMessage ? lastMessage.id : null
+    }
 
     // Save user message with proper parent ID
     const userMessage = MessageService.create(conversationId, 'user', content, parentId)
