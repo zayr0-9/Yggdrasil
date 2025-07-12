@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import './App.css'
+import { Heimdall } from './components'
 import {
   // Chat actions
   chatActions,
@@ -149,255 +150,260 @@ function ChatTest() {
   }, [streamState.active, streamState.messageId, streamState.buffer])
 
   return (
-    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      <h1>Yggdrasil Chat Test</h1>
+    <div className='flex'>
+      <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }} className=''>
+        <h1>Ygg Chat</h1>
 
-      {/* Chat State Display */}
-      <div
-        style={{
-          background: '#f5f5f5',
-          padding: '15px',
-          marginBottom: '20px',
-          borderRadius: '5px',
-          fontFamily: 'monospace',
-          fontSize: '12px',
-        }}
-      >
-        <h3>Chat State:</h3>
-        <p>
-          <strong>Models Available:</strong> {models.length}
-        </p>
-        <p>
-          <strong>Selected Model:</strong> {selectedModel || 'None'}
-        </p>
-        <p>
-          <strong>Conversation ID:</strong> {testConversationId || 'Creating...'}
-        </p>
-        <p>
-          <strong>Can Send:</strong> {canSend && testConversationId ? 'Yes' : 'No'}
-        </p>
-        <p>
-          <strong>Sending:</strong> {sendingState.sending ? 'Yes' : 'No'}
-        </p>
-        <p>
-          <strong>Streaming:</strong> {sendingState.streaming ? 'Yes' : 'No'}
-        </p>
-        <p>
-          <strong>Stream Active:</strong> {streamState.active ? 'Yes' : 'No'}
-        </p>
-        <p>
-          <strong>Stream Buffer:</strong> {streamState.buffer ? `"${streamState.buffer.slice(0, 50)}..."` : 'Empty'}
-        </p>
-        <p>
-          <strong>Input Length:</strong> {messageInput.content.length}
-        </p>
-        {sendingState.error && (
-          <p style={{ color: 'red' }}>
-            <strong>Error:</strong> {sendingState.error}
-          </p>
-        )}
-      </div>
-
-      {/* Model Selection */}
-      <div style={{ marginBottom: '20px' }}>
-        <h3>Model Selection:</h3>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
-          <button
-            onClick={handleRefreshModels}
-            style={{
-              padding: '5px 10px',
-              backgroundColor: '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            Refresh Models
-          </button>
-          <span>Available: {models.length} models</span>
-        </div>
-
-        <select
-          value={selectedModel || ''}
-          onChange={e => handleModelSelect(e.target.value)}
-          style={{ padding: '5px', width: '300px' }}
-          disabled={models.length === 0}
-        >
-          <option value=''>Select a model...</option>
-          {models.map(model => (
-            <option key={model} value={model}>
-              {model}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Test Messages Display */}
-      <div style={{ marginBottom: '20px' }}>
-        <h3>Test Messages:</h3>
+        {/* Chat State Display */}
         <div
           style={{
-            border: '1px solid #ddd',
-            height: '200px',
-            overflowY: 'auto',
-            padding: '10px',
-            backgroundColor: '#fafafa',
+            background: '#f5f5f5',
+            padding: '15px',
+            marginBottom: '20px',
+            borderRadius: '5px',
+            fontFamily: 'monospace',
+            fontSize: '12px',
           }}
         >
-          {testMessages.length === 0 ? (
-            <p style={{ color: '#666' }}>No messages yet...</p>
-          ) : (
-            testMessages.map(msg => (
-              <div key={msg.id} style={{ marginBottom: '10px' }}>
-                <strong>{msg.role}:</strong> {msg.content}
-              </div>
-            ))
-          )}
-
-          {/* Show streaming content */}
-          {streamState.active && streamState.buffer && (
-            <div style={{ marginBottom: '10px', fontStyle: 'italic', color: '#007bff' }}>
-              <strong>assistant (streaming):</strong> {streamState.buffer}
-            </div>
+          <h3>Chat State:</h3>
+          <p>
+            <strong>Models Available:</strong> {models.length}
+          </p>
+          <p>
+            <strong>Selected Model:</strong> {selectedModel || 'None'}
+          </p>
+          <p>
+            <strong>Conversation ID:</strong> {testConversationId || 'Creating...'}
+          </p>
+          <p>
+            <strong>Can Send:</strong> {canSend && testConversationId ? 'Yes' : 'No'}
+          </p>
+          <p>
+            <strong>Sending:</strong> {sendingState.sending ? 'Yes' : 'No'}
+          </p>
+          <p>
+            <strong>Streaming:</strong> {sendingState.streaming ? 'Yes' : 'No'}
+          </p>
+          <p>
+            <strong>Stream Active:</strong> {streamState.active ? 'Yes' : 'No'}
+          </p>
+          <p>
+            <strong>Stream Buffer:</strong> {streamState.buffer ? `"${streamState.buffer.slice(0, 50)}..."` : 'Empty'}
+          </p>
+          <p>
+            <strong>Input Length:</strong> {messageInput.content.length}
+          </p>
+          {sendingState.error && (
+            <p style={{ color: 'red' }}>
+              <strong>Error:</strong> {sendingState.error}
+            </p>
           )}
         </div>
-      </div>
 
-      {/* Message Input */}
-      <div style={{ marginBottom: '20px' }}>
-        <h3>Send Message:</h3>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <textarea
-            value={messageInput.content}
-            onChange={e => handleInputChange(e.target.value)}
-            onKeyDown={handleKeyPress}
-            placeholder='Type your message...'
-            disabled={sendingState.sending}
+        {/* Model Selection */}
+        <div style={{ marginBottom: '20px' }}>
+          <h3>Model Selection:</h3>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
+            <button
+              onClick={handleRefreshModels}
+              style={{
+                padding: '5px 10px',
+                backgroundColor: '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Refresh Models
+            </button>
+            <span>Available: {models.length} models</span>
+          </div>
+
+          <select
+            value={selectedModel || ''}
+            onChange={e => handleModelSelect(e.target.value)}
+            style={{ padding: '5px', width: '300px' }}
+            disabled={models.length === 0}
+          >
+            <option value=''>Select a model...</option>
+            {models.map(model => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Test Messages Display */}
+        <div style={{ marginBottom: '20px' }}>
+          <h3>Test Messages:</h3>
+          <div
             style={{
-              flex: 1,
-              padding: '10px',
-              minHeight: '80px',
-              borderRadius: '4px',
               border: '1px solid #ddd',
-              resize: 'vertical',
-            }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!canSend || !testConversationId}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: canSend && testConversationId ? '#007bff' : '#ccc',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: canSend && testConversationId ? 'pointer' : 'not-allowed',
-              alignSelf: 'flex-start',
+              height: '200px',
+              overflowY: 'auto',
+              padding: '10px',
+              backgroundColor: '#fafafa',
             }}
           >
-            {!testConversationId
-              ? 'Creating conversation...'
-              : sendingState.streaming
-                ? 'Streaming...'
-                : sendingState.sending
-                  ? 'Sending...'
-                  : 'Send'}
-          </button>
-        </div>
-        {messageInput.content.length > 0 && (
-          <small style={{ color: '#666' }}>
-            Characters: {messageInput.content.length} | Press Enter to send, Shift+Enter for new line
-          </small>
-        )}
-      </div>
+            {testMessages.length === 0 ? (
+              <p style={{ color: '#666' }}>No messages yet...</p>
+            ) : (
+              testMessages.map(msg => (
+                <div key={msg.id} style={{ marginBottom: '10px' }}>
+                  <strong>{msg.role}:</strong> {msg.content}
+                </div>
+              ))
+            )}
 
-      {/* Test Actions */}
-      <div style={{ marginBottom: '20px' }}>
-        <h3>Test Actions:</h3>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => handleInputChange('Hello, how are you?')}
-            style={{
-              padding: '5px 10px',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            Set Test Message
-          </button>
-          <button
-            onClick={() => dispatch(chatActions.inputCleared())}
-            style={{
-              padding: '5px 10px',
-              backgroundColor: '#dc3545',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            Clear Input
-          </button>
-          <button
-            onClick={() => setTestMessages([])}
-            style={{
-              padding: '5px 10px',
-              backgroundColor: '#ffc107',
-              color: 'black',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            Clear Messages
-          </button>
-          <button
-            onClick={() => {
-              setTestConversationId(null)
-              setTestMessages([])
-            }}
-            style={{
-              padding: '5px 10px',
-              backgroundColor: '#17a2b8',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            New Conversation
-          </button>
+            {/* Show streaming content */}
+            {streamState.active && streamState.buffer && (
+              <div style={{ marginBottom: '10px', fontStyle: 'italic', color: '#007bff' }}>
+                <strong>assistant (streaming):</strong> {streamState.buffer}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Message Input */}
+        <div style={{ marginBottom: '20px' }}>
+          <h3>Send Message:</h3>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <textarea
+              value={messageInput.content}
+              onChange={e => handleInputChange(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder='Type your message...'
+              disabled={sendingState.sending}
+              style={{
+                flex: 1,
+                padding: '10px',
+                minHeight: '80px',
+                borderRadius: '4px',
+                border: '1px solid #ddd',
+                resize: 'vertical',
+              }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!canSend || !testConversationId}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: canSend && testConversationId ? '#007bff' : '#ccc',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: canSend && testConversationId ? 'pointer' : 'not-allowed',
+                alignSelf: 'flex-start',
+              }}
+            >
+              {!testConversationId
+                ? 'Creating conversation...'
+                : sendingState.streaming
+                  ? 'Streaming...'
+                  : sendingState.sending
+                    ? 'Sending...'
+                    : 'Send'}
+            </button>
+          </div>
+          {messageInput.content.length > 0 && (
+            <small style={{ color: '#666' }}>
+              Characters: {messageInput.content.length} | Press Enter to send, Shift+Enter for new line
+            </small>
+          )}
+        </div>
+
+        {/* Test Actions */}
+        <div style={{ marginBottom: '20px' }}>
+          <h3>Test Actions:</h3>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => handleInputChange('Hello, how are you?')}
+              style={{
+                padding: '5px 10px',
+                backgroundColor: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Set Test Message
+            </button>
+            <button
+              onClick={() => dispatch(chatActions.inputCleared())}
+              style={{
+                padding: '5px 10px',
+                backgroundColor: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Clear Input
+            </button>
+            <button
+              onClick={() => setTestMessages([])}
+              style={{
+                padding: '5px 10px',
+                backgroundColor: '#ffc107',
+                color: 'black',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Clear Messages
+            </button>
+            <button
+              onClick={() => {
+                setTestConversationId(null)
+                setTestMessages([])
+              }}
+              style={{
+                padding: '5px 10px',
+                backgroundColor: '#17a2b8',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              New Conversation
+            </button>
+          </div>
+        </div>
+
+        {/* Test Instructions */}
+        <div
+          style={{
+            background: '#d1ecf1',
+            color: '#0c5460',
+            padding: '15px',
+            borderRadius: '4px',
+            fontSize: '14px',
+          }}
+        >
+          <h4>Test Instructions:</h4>
+          <ol>
+            <li>Make sure your server is running on localhost:3001</li>
+            <li>Make sure Ollama is running on localhost:11434</li>
+            <li>Click "Refresh Models" to load available models from Ollama</li>
+            <li>Select a model from the dropdown</li>
+            <li>Type a message in the textarea</li>
+            <li>Click Send or press Enter to send</li>
+            <li>Watch the streaming response in the messages area</li>
+            <li>Check the Chat State panel for real-time state updates</li>
+          </ol>
+          <p>
+            <strong>Note:</strong> This tests the chat Redux logic without requiring actual conversation management.
+          </p>
         </div>
       </div>
-
-      {/* Test Instructions */}
-      <div
-        style={{
-          background: '#d1ecf1',
-          color: '#0c5460',
-          padding: '15px',
-          borderRadius: '4px',
-          fontSize: '14px',
-        }}
-      >
-        <h4>Test Instructions:</h4>
-        <ol>
-          <li>Make sure your server is running on localhost:3001</li>
-          <li>Make sure Ollama is running on localhost:11434</li>
-          <li>Click "Refresh Models" to load available models from Ollama</li>
-          <li>Select a model from the dropdown</li>
-          <li>Type a message in the textarea</li>
-          <li>Click Send or press Enter to send</li>
-          <li>Watch the streaming response in the messages area</li>
-          <li>Check the Chat State panel for real-time state updates</li>
-        </ol>
-        <p>
-          <strong>Note:</strong> This tests the chat Redux logic without requiring actual conversation management.
-        </p>
+      <div className='grow-1'>
+        <Heimdall></Heimdall>
       </div>
     </div>
   )

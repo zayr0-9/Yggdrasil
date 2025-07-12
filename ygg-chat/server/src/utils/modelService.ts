@@ -1,4 +1,3 @@
-// server/src/utils/modelService.ts
 interface OllamaModel {
   name: string
 }
@@ -7,10 +6,11 @@ interface OllamaResponse {
   models: OllamaModel[]
 }
 
+const defaultModel: string = 'llama2 (default, is your server working?)'
 class ModelService {
   private static instance: ModelService
   private cachedModels: string[] = []
-  private defaultModel: string = 'llama2' // ultimate fallback
+  private defaultModel: string = defaultModel // ultimate fallback
   private lastFetch: number = 0
   private readonly CACHE_TTL = 60000 // 1 minute cache
 
@@ -26,7 +26,7 @@ class ModelService {
   async getAvailableModels(): Promise<{ models: string[]; default: string }> {
     const now = Date.now()
 
-    // Return cached if valid
+    // Return cached if valid, quit function
     if (this.cachedModels.length > 0 && now - this.lastFetch < this.CACHE_TTL) {
       return {
         models: this.cachedModels,
@@ -35,17 +35,21 @@ class ModelService {
     }
 
     try {
+      //local ollama server replace with your own
+      //need to import this from an easily editable json or front end
       const response = await fetch('http://localhost:11434/api/tags', {
         signal: AbortSignal.timeout(5000), // 5s timeout
       })
-
+      //error, quit function
       if (!response.ok) {
         throw new Error(`Ollama API error: ${response.status}`)
       }
 
-      const data = (await response.json()) as OllamaResponse
+      const data = (await response.json()) as OllamaResponse //string[]
+      //returns name for each field, makes list liek ["llama2", "codellama", "mistral"]
       const models = data.models.map(m => m.name)
 
+      //no models, quit function
       if (models.length === 0) {
         throw new Error('No models available')
       }
@@ -72,8 +76,8 @@ class ModelService {
 
       // Ultimate fallback
       return {
-        models: ['llama2'],
-        default: 'llama2',
+        models: [defaultModel],
+        default: defaultModel,
       }
     }
   }
@@ -91,4 +95,19 @@ class ModelService {
   }
 }
 
+//future extension
+interface OpenAIModel {
+  name: string
+}
+
+interface OpenAiResponse {
+  models: OpenAIModel[]
+}
+
+//class OpenAiModelService {}
+
+//we dont export the whole class, we stick to singleton patter
+//anyone who imports modelService, get access to getInstance function only
+//getInstance function returns existing ModelService instance if one already exists
+//{return ModelService.instance}
 export const modelService = ModelService.getInstance()
