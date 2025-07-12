@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express'
+import { NextFunction, Request, Response } from 'express'
 import { ZodError } from 'zod'
 import { ErrorResponse } from '../../../shared/types'
 
@@ -7,9 +7,8 @@ export function errorHandler(err: Error, req: Request, res: Response<ErrorRespon
 
   if (err instanceof ZodError) {
     res.status(400).json({
-      error: 'Validation error',
-      code: 'VALIDATION_ERROR',
-      details: err.errors,
+      error: true,
+      message: err.message || 'VALIDATION_ERROR', // wonder if its better to send error.errs whole as a detail prop
     })
     return
   }
@@ -17,7 +16,7 @@ export function errorHandler(err: Error, req: Request, res: Response<ErrorRespon
   const statusCode = 'statusCode' in err && typeof err.statusCode === 'number' ? err.statusCode : 500
 
   res.status(statusCode).json({
-    error: err.message || 'Internal server error',
-    code: 'INTERNAL_ERROR',
+    error: true,
+    message: err.message || 'INTERNAL_ERROR',
   })
 }

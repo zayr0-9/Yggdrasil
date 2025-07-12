@@ -2,7 +2,6 @@ export * from './usersActions'
 export * from './usersSelectors'
 export { default as usersReducer } from './usersSlice'
 export * from './usersTypes'
-
 // Re-export for convenience
 export {
   selectCurrentUser,

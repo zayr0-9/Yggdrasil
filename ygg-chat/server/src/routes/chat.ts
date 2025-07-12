@@ -53,6 +53,78 @@ router.get(
   })
 )
 
+router.get(
+  '/users/',
+  asyncHandler(async (req, res) => {
+    const users = UserService.getAll()
+    res.json(users)
+  })
+)
+
+// Get specific user
+router.get(
+  '/users/:id',
+  asyncHandler(async (req, res) => {
+    const userId = parseInt(req.params.id)
+    const user = UserService.getById(userId)
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    res.json(user)
+  })
+)
+
+// Update user
+router.put(
+  '/users/:id',
+  asyncHandler(async (req, res) => {
+    const userId = parseInt(req.params.id)
+    const { username } = req.body
+
+    if (!username) {
+      return res.status(400).json({ error: 'Username required' })
+    }
+
+    const user = UserService.update(userId, username)
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    res.json(user)
+  })
+)
+
+// Delete user (cascade delete conversations and messages)
+router.delete(
+  '/users/:id',
+  asyncHandler(async (req, res) => {
+    const userId = parseInt(req.params.id)
+
+    const user = UserService.getById(userId)
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    // Get user conversations for cascade delete
+    const conversations = ConversationService.getByUser(userId)
+
+    // Delete all messages in all conversations
+    conversations.forEach(conv => {
+      MessageService.deleteByConversation(conv.id)
+    })
+
+    // Delete all user conversations
+    ConversationService.deleteByUser(userId)
+
+    // Delete user
+    UserService.delete(userId)
+
+    res.json({ message: 'User and all associated data deleted' })
+  })
+)
+
 // Create conversation
 router.post(
   '/conversations',
