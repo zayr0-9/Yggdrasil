@@ -43,6 +43,7 @@ coverage/
 /server/*.log
 /server/.cache
 /server/tsconfig.tsbuildinfo
+/server/src/data/yggdrasil.db
 
 # Client app
 /web/node_modules/
