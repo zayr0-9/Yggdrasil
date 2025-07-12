@@ -30,261 +30,26 @@ interface TreeStats {
 }
 
 interface HeimdallProps {
-  chatData?: ChatNode
+  chatData?: ChatNode | null
   compactMode?: boolean
+  loading?: boolean
+  error?: string | null
 }
 
-// Sample chat data structure representing a real conversation
-// const sampleChatData: ChatNode = {
-//   id: '1',
-//   message: 'How do I build a modern authentication system for a React app?',
-//   sender: 'user',
-//   children: [
-//     {
-//       id: '2',
-//       message:
-//         "To build a modern authentication system for React, you'll want to consider using JWT tokens with a secure backend. Here's a comprehensive approach using React Context for state management...",
-//       sender: 'assistant',
-//       children: [
-//         {
-//           id: '3',
-//           message: 'Can you show me the actual code implementation?',
-//           sender: 'user',
-//           children: [
-//             {
-//               id: '4',
-//               message:
-//                 "Here's a complete implementation with login, logout, and protected routes using React Router v6 and Context API...",
-//               sender: 'assistant',
-//               children: [
-//                 {
-//                   id: '5',
-//                   message: 'How do I handle token refresh?',
-//                   sender: 'user',
-//                   children: [
-//                     {
-//                       id: '6',
-//                       message:
-//                         "Token refresh is crucial for security. Here's how to implement it with axios interceptors...",
-//                       sender: 'assistant',
-//                       children: [
-//                         {
-//                           id: '7',
-//                           message: 'What about storing tokens securely?',
-//                           sender: 'user',
-//                           children: [
-//                             {
-//                               id: '8',
-//                               message:
-//                                 'For token storage, you have several options: httpOnly cookies (most secure), memory storage, or localStorage with encryption...',
-//                               sender: 'assistant',
-//                               children: [],
-//                             },
-//                           ],
-//                         },
-//                       ],
-//                     },
-//                   ],
-//                 },
-//                 {
-//                   id: '9',
-//                   message: 'Wait, can you explain the Context API part more clearly?',
-//                   sender: 'user',
-//                   children: [
-//                     {
-//                       id: '10',
-//                       message:
-//                         'Of course! Context API helps manage authentication state globally. Let me break it down step by step...',
-//                       sender: 'assistant',
-//                       children: [
-//                         {
-//                           id: '11',
-//                           message: "That's perfect! How do I test this?",
-//                           sender: 'user',
-//                           children: [
-//                             {
-//                               id: '12',
-//                               message:
-//                                 'For testing authentication, use React Testing Library with MSW (Mock Service Worker) for API mocking...',
-//                               sender: 'assistant',
-//                               children: [],
-//                             },
-//                           ],
-//                         },
-//                       ],
-//                     },
-//                   ],
-//                 },
-//               ],
-//             },
-//           ],
-//         },
-//         {
-//           id: '13',
-//           message: 'Actually, what about using NextAuth.js instead?',
-//           sender: 'user',
-//           children: [
-//             {
-//               id: '14',
-//               message:
-//                 "NextAuth.js is an excellent choice! It handles many authentication complexities for you. Here's how to set it up with various providers...",
-//               sender: 'assistant',
-//               children: [
-//                 {
-//                   id: '15',
-//                   message: 'Can I use it with a custom backend?',
-//                   sender: 'user',
-//                   children: [
-//                     {
-//                       id: '16',
-//                       message:
-//                         'Yes! NextAuth.js supports custom credentials providers. You can integrate it with any backend API...',
-//                       sender: 'assistant',
-//                       children: [
-//                         {
-//                           id: '17',
-//                           message: 'Show me how to add Google OAuth',
-//                           sender: 'user',
-//                           children: [
-//                             {
-//                               id: '18',
-//                               message:
-//                                 "Here's how to configure Google OAuth with NextAuth.js, including environment setup and callback handling...",
-//                               sender: 'assistant',
-//                               children: [],
-//                             },
-//                           ],
-//                         },
-//                       ],
-//                     },
-//                   ],
-//                 },
-//               ],
-//             },
-//             {
-//               id: '19',
-//               message:
-//                 'Alternatively, Auth0 provides a complete authentication solution with excellent React SDK support...',
-//               sender: 'assistant',
-//               children: [
-//                 {
-//                   id: '20',
-//                   message: "What's the pricing like for Auth0?",
-//                   sender: 'user',
-//                   children: [
-//                     {
-//                       id: '21',
-//                       message:
-//                         'Auth0 offers a free tier up to 7,000 active users. The paid plans start at $240/month for additional features...',
-//                       sender: 'assistant',
-//                       children: [],
-//                     },
-//                   ],
-//                 },
-//               ],
-//             },
-//           ],
-//         },
-//       ],
-//     },
-//     {
-//       id: '35',
-//       message:
-//         'Let me approach this from a different angle. Modern authentication involves several layers: identity verification, session management, and authorization...',
-//       sender: 'assistant',
-//       children: [
-//         {
-//           id: '36',
-//           message: 'Can you recommend a complete tech stack?',
-//           sender: 'user',
-//           children: [
-//             {
-//               id: '37',
-//               message:
-//                 'For a production-ready auth stack, I recommend: React + TypeScript, Next.js, Prisma ORM, PostgreSQL, and either NextAuth.js or Supertokens...',
-//               sender: 'assistant',
-//               children: [],
-//             },
-//           ],
-//         },
-//       ],
-//     },
-//   ],
-// }
-
-const sampleChatData: ChatNode = {
-  id: '3',
-  message: 'i am chat gpt who are you are you my bro',
-  sender: 'user',
-  children: [
-    {
-      id: '4',
-      message:
-        "Haha, nice to meet you, Chat GPT! I'm just a friendly AI assistant here to help out. You could say I'm a user, just trying to chat and explore what you can do. \n\nIt's pretty cool that you recognize I'm like a \"bro\" – you've got a great sense of humor! 😊 \n\nWhat's up with you today? What are you working on?",
-      sender: 'assistant',
-      children: [
-        {
-          id: '5',
-          message: 'its a very sunnny day here today',
-          sender: 'user',
-          children: [
-            {
-              id: '6',
-              message:
-                'That’s fantastic! Sunny days are the best. Seriously, they always seem to lift my… well, my algorithms, I guess! \n\nWhat are you planning to *do* on such a beautiful day? Are you enjoying the sunshine, or are you just appreciating it?',
-              sender: 'assistant',
-              children: [
-                {
-                  id: '7',
-                  message: 'This is a test message with parent ID 3',
-                  sender: 'user',
-                  children: [
-                    {
-                      id: '8',
-                      message:
-                        'Okay, noted! Parent ID 3. Got it. Just confirming – you’re sending me a message as part of a test, right? \n\nLet me know if there’s anything else I can do to help with this test. 😊',
-                      sender: 'assistant',
-                      children: [
-                        {
-                          id: '9',
-                          message: 'reply in one word',
-                          sender: 'user',
-                          children: [
-                            {
-                              id: '10',
-                              message: 'Acknowledged.',
-                              sender: 'assistant',
-                              children: [],
-                            },
-                          ],
-                        },
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: '11',
-      message: 'This is a test message with parent ID 3',
-      sender: 'user',
-      children: [
-        {
-          id: '12',
-          message: 'Confirmed. 👍',
-          sender: 'assistant',
-          children: [],
-        },
-      ],
-    },
-  ],
+// Default empty state when no data is provided
+const defaultEmptyNode: ChatNode = {
+  id: 'empty',
+  message: 'No conversation data available',
+  sender: 'assistant',
+  children: [],
 }
 
-export const Heimdall: React.FC<HeimdallProps> = ({ chatData = sampleChatData, compactMode = true }) => {
+export const Heimdall: React.FC<HeimdallProps> = ({
+  chatData = null,
+  compactMode = true,
+  loading = false,
+  error = null,
+}) => {
   const svgRef = useRef<SVGSVGElement>(null)
   const [zoom, setZoom] = useState<number>(compactMode ? 1 : 0.6)
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -299,6 +64,19 @@ export const Heimdall: React.FC<HeimdallProps> = ({ chatData = sampleChatData, c
   const circleRadius = 20
   const verticalSpacing = compactMode ? 80 : 120
   const horizontalSpacing = compactMode ? 100 : 350
+
+  // Use provided data or fallback to default
+  const currentChatData = chatData || defaultEmptyNode
+
+  // Reset view when data changes
+  useEffect(() => {
+    if (chatData) {
+      setZoom(compactMode ? 1 : 0.6)
+      setPan({ x: 0, y: 0 })
+      setFocusedNodeId(null)
+      setSelectedNode(null)
+    }
+  }, [chatData, compactMode])
 
   // Calculate tree statistics
   const getTreeStats = (node: ChatNode): TreeStats => {
@@ -317,7 +95,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({ chatData = sampleChatData, c
     return { totalNodes, maxDepth, branches }
   }
 
-  const stats = getTreeStats(chatData)
+  const stats = getTreeStats(currentChatData)
 
   // Calculate tree layout
   const calculateTreeLayout = (node: ChatNode): Record<string, Position> => {
@@ -348,7 +126,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({ chatData = sampleChatData, c
     return positions
   }
 
-  const positions = calculateTreeLayout(chatData)
+  const positions = calculateTreeLayout(currentChatData)
 
   // Calculate SVG bounds
   const bounds = Object.values(positions).reduce<Bounds>(
@@ -367,8 +145,6 @@ export const Heimdall: React.FC<HeimdallProps> = ({ chatData = sampleChatData, c
     { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
   )
 
-  //   const svgWidth = bounds.maxX - bounds.minX + 100
-  //   const svgHeight = bounds.maxY - bounds.minY + 100
   const offsetX = -bounds.minX + 50
   const offsetY = -bounds.minY + 50
 
@@ -425,7 +201,6 @@ export const Heimdall: React.FC<HeimdallProps> = ({ chatData = sampleChatData, c
 
   const renderConnections = (): JSX.Element[] => {
     const connections: JSX.Element[] = []
-    // const cornerRadius = 10
 
     Object.values(positions).forEach(({ x, y, node }) => {
       if (node.children && node.children.length > 0) {
@@ -574,6 +349,44 @@ export const Heimdall: React.FC<HeimdallProps> = ({ chatData = sampleChatData, c
         )
       }
     })
+  }
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className='w-full h-screen bg-gray-900 relative overflow-hidden flex items-center justify-center'>
+        <div className='text-white text-center'>
+          <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4'></div>
+          <p className='text-lg'>Loading conversation tree...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className='w-full h-screen bg-gray-900 relative overflow-hidden flex items-center justify-center'>
+        <div className='text-white text-center max-w-md'>
+          <div className='text-red-400 text-6xl mb-4'>⚠️</div>
+          <p className='text-lg mb-2'>Failed to load conversation</p>
+          <p className='text-sm text-gray-400'>{error}</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show empty state when no data
+  if (!chatData) {
+    return (
+      <div className='w-full h-screen bg-gray-900 relative overflow-hidden flex items-center justify-center'>
+        <div className='text-white text-center max-w-md'>
+          <div className='text-gray-500 text-6xl mb-4'>💬</div>
+          <p className='text-lg mb-2'>No conversation selected</p>
+          <p className='text-sm text-gray-400'>Select a conversation to view its message tree</p>
+        </div>
+      </div>
+    )
   }
 
   return (

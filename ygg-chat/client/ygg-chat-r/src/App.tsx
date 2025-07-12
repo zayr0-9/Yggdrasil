@@ -18,7 +18,12 @@ import { useAppDispatch, useAppSelector } from './hooks/redux'
 
 function ChatTest() {
   const dispatch = useAppDispatch()
-
+  interface ChatNode {
+    id: string
+    message: string
+    sender: 'user' | 'assistant'
+    children: ChatNode[]
+  }
   // Chat selectors
   const models = useAppSelector(selectModels)
   const selectedModel = useAppSelector(selectSelectedModel)
@@ -28,10 +33,37 @@ function ChatTest() {
   const streamState = useAppSelector(selectStreamState)
 
   // Local state for test
-  const [testConversationId, setTestConversationId] = useState<number | null>(null)
+  const [testConversationId, setTestConversationId] = useState<number | null>(8)
   const [testMessages, setTestMessages] = useState<any[]>([])
   // const [testUserId] = useState(1) // Mock user ID
+  const [heimdallData, setHeimdallData] = useState<ChatNode | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
+  const fetchTreeData = async (conversationId: number) => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/conversations/${conversationId}/messages/tree`)
+      if (!response.ok) throw new Error('Failed to fetch conversation tree')
+
+      const treeData = await response.json()
+      setHeimdallData(treeData)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error')
+      setHeimdallData(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Use effect to fetch when conversation changes
+  useEffect(() => {
+    if (testConversationId) {
+      fetchTreeData(testConversationId)
+    }
+  }, [testConversationId])
   // Load models on mount
   useEffect(() => {
     dispatch(fetchModels(true))
@@ -403,7 +435,7 @@ function ChatTest() {
         </div>
       </div>
       <div className='grow-1'>
-        <Heimdall></Heimdall>
+        <Heimdall chatData={heimdallData} loading={loading} error={error} compactMode={true} />
       </div>
     </div>
   )
