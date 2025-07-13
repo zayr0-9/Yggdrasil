@@ -24,6 +24,7 @@ function ChatTest() {
     sender: 'user' | 'assistant'
     children: ChatNode[]
   }
+
   // Chat selectors
   const models = useAppSelector(selectModels)
   const selectedModel = useAppSelector(selectSelectedModel)
@@ -33,37 +34,48 @@ function ChatTest() {
   const streamState = useAppSelector(selectStreamState)
 
   // Local state for test
-  const [testConversationId, setTestConversationId] = useState<number | null>(8)
+  const [testConversationId, setTestConversationId] = useState<number | null>(null)
   const [testMessages, setTestMessages] = useState<any[]>([])
-  // const [testUserId] = useState(1) // Mock user ID
   const [heimdallData, setHeimdallData] = useState<ChatNode | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const fetchTreeData = async (conversationId: number) => {
+    console.log('🌳 fetchTreeData: Starting fetch for conversation:', conversationId)
     setLoading(true)
     setError(null)
 
     try {
       const response = await fetch(`http://localhost:3001/api/conversations/${conversationId}/messages/tree`)
-      if (!response.ok) throw new Error('Failed to fetch conversation tree')
+      console.log('🌳 fetchTreeData: Response status:', response.status)
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch conversation tree: ${response.status} ${response.statusText}`)
+      }
 
       const treeData = await response.json()
+      console.log('🌳 fetchTreeData: Tree data received:', treeData)
       setHeimdallData(treeData)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      console.error('🌳 fetchTreeData: Error:', errorMessage)
+      setError(errorMessage)
       setHeimdallData(null)
     } finally {
       setLoading(false)
+      console.log('🌳 fetchTreeData: Fetch complete')
     }
   }
 
   // Use effect to fetch when conversation changes
   useEffect(() => {
+    console.log('🔄 Conversation ID changed:', testConversationId)
     if (testConversationId) {
+      console.log('🔄 Triggering initial fetchTreeData for conversation:', testConversationId)
       fetchTreeData(testConversationId)
     }
   }, [testConversationId])
+
   // Load models on mount
   useEffect(() => {
     dispatch(fetchModels(true))
@@ -81,7 +93,7 @@ function ChatTest() {
         })
 
         if (!userResponse.ok) {
-          console.error('Failed to create user')
+          console.error('Failed to create user:', userResponse.status)
           return
         }
 
@@ -99,13 +111,13 @@ function ChatTest() {
         })
 
         if (!convResponse.ok) {
-          console.error('Failed to create conversation')
+          console.error('Failed to create conversation:', convResponse.status)
           return
         }
 
         const conversation = await convResponse.json()
+        console.log('💬 Conversation created with ID:', conversation.id)
         setTestConversationId(conversation.id)
-        console.log('Created test conversation:', conversation)
       } catch (error) {
         console.error('Failed to initialize conversation:', error)
       }
@@ -145,8 +157,14 @@ function ChatTest() {
           input: messageInput,
         })
       )
+
+      // Backup: Try to refresh tree after a longer delay as fallback
+      setTimeout(() => {
+        console.log('🌳 Backup tree refresh after 3 seconds for conversation:', testConversationId)
+        fetchTreeData(testConversationId)
+      }, 3000)
     } else if (!testConversationId) {
-      console.error('No conversation ID available')
+      console.error('📤 No conversation ID available')
     }
   }
 
@@ -168,6 +186,7 @@ function ChatTest() {
     if (!streamState.active && streamState.messageId && streamState.buffer) {
       // Prevent duplicate assistant messages
       const alreadyExists = testMessages.some(msg => msg.id === streamState.messageId && msg.role === 'assistant')
+
       if (!alreadyExists) {
         const assistantMessage = {
           id: streamState.messageId,
@@ -177,9 +196,18 @@ function ChatTest() {
         }
         setTestMessages(prev => [...prev, assistantMessage])
       }
+
+      // 🔧 FIX: Refresh tree data when response is complete
+      if (testConversationId) {
+        console.log('🌳 Stream complete, refreshing tree data for conversation:', testConversationId)
+        // Add small delay to ensure message is fully saved
+        setTimeout(() => {
+          fetchTreeData(testConversationId)
+        }, 500)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streamState.active, streamState.messageId, streamState.buffer])
+  }, [streamState.active, streamState.messageId, streamState.buffer, testConversationId])
 
   return (
     <div className='flex'>
@@ -225,9 +253,20 @@ function ChatTest() {
           <p>
             <strong>Input Length:</strong> {messageInput.content.length}
           </p>
+          <p>
+            <strong>Heimdall Data:</strong> {heimdallData ? 'Loaded' : 'Null'}
+          </p>
+          <p>
+            <strong>Tree Loading:</strong> {loading ? 'Yes' : 'No'}
+          </p>
           {sendingState.error && (
             <p style={{ color: 'red' }}>
               <strong>Error:</strong> {sendingState.error}
+            </p>
+          )}
+          {error && (
+            <p style={{ color: 'red' }}>
+              <strong>Tree Error:</strong> {error}
             </p>
           )}
         </div>
@@ -391,8 +430,10 @@ function ChatTest() {
             </button>
             <button
               onClick={() => {
+                console.log('🆕 New conversation - clearing state')
                 setTestConversationId(null)
                 setTestMessages([])
+                setHeimdallData(null)
               }}
               style={{
                 padding: '5px 10px',
@@ -404,6 +445,26 @@ function ChatTest() {
               }}
             >
               New Conversation
+            </button>
+            <button
+              onClick={() => {
+                if (testConversationId) {
+                  console.log('🔄 Manual tree refresh for conversation:', testConversationId)
+                  fetchTreeData(testConversationId)
+                } else {
+                  console.warn('🔄 Cannot refresh - no conversation ID')
+                }
+              }}
+              style={{
+                padding: '5px 10px',
+                backgroundColor: '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Refresh Tree
             </button>
           </div>
         </div>
@@ -428,6 +489,7 @@ function ChatTest() {
             <li>Click Send or press Enter to send</li>
             <li>Watch the streaming response in the messages area</li>
             <li>Check the Chat State panel for real-time state updates</li>
+            <li>Open browser console to see detailed logs</li>
           </ol>
           <p>
             <strong>Note:</strong> This tests the chat Redux logic without requiring actual conversation management.

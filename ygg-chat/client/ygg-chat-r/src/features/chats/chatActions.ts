@@ -1,37 +1,51 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
 import type { RootState } from '../../store/store'
+import { apiCall, createStreamingRequest } from '../../utils/api'
 import { chatActions } from './chatSlice'
 import { ModelsResponse, SendMessagePayload } from './chatTypes'
-
 // TODO: Import when conversations feature is available
 // import { conversationActions } from '../conversations'
+
+/*
+The Complete Toolkit: ThunkAPI Object
+When you create an async thunk, the second parameter receives what's called the ThunkAPI object.
+This is like a toolbox that Redux Toolkit hands you, containing everything you need to interact with the Redux ecosystem 
+during async operations.
+typescriptconst myAsyncThunk = createAsyncThunk(
+  'feature/actionName',
+  async (arg, thunkAPI) => {
+    // thunkAPI contains all the utilities
+    const { dispatch, getState, rejectWithValue, fulfillWithValue, signal, extra } = thunkAPI
+  }
+)
+*/
 
 // API base URL - configure based on environment
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
 // Utility function for API calls
-const apiCall = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-    ...options,
-  })
+// const apiCall = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
+//   const response = await fetch(`${API_BASE}${endpoint}`, {
+//     headers: {
+//       'Content-Type': 'application/json',
+//       ...options?.headers,
+//     },
+//     ...options,
+//   })
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`)
-  }
+//   if (!response.ok) {
+//     const errorText = await response.text()
+//     throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`)
+//   }
 
-  return response.json()
-}
+//   return response.json()
+// }
 
 // Model operations - cached and optimized
 export const fetchModels = createAsyncThunk(
   'chat/fetchModels',
   async (force: boolean = false, { getState, dispatch, rejectWithValue }) => {
-    const state = getState() as RootState
+    const state = getState() as RootState //ensure state is same type as store for the whole website
     const lastRefresh = state.chat.models.lastRefresh
 
     // Skip if recently refreshed (30 seconds cache)
@@ -41,6 +55,14 @@ export const fetchModels = createAsyncThunk(
         default: state.chat.models.default || state.chat.models.available[0],
       }
     }
+    /* 
+    Redux operates on a principle called "unidirectional data flow," 
+    which means state changes must flow through a specific pathway. 
+    You cannot directly modify the Redux store state like you would 
+    with regular JavaScript objects. Instead, you must send actions 
+    through the dispatch function, which then forwards them to the 
+    appropriate reducers.
+    */
 
     dispatch(chatActions.modelsLoadingStarted())
 
@@ -78,7 +100,7 @@ export const sendMessage = createAsyncThunk(
         throw new Error('No model selected')
       }
 
-      const response = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
+      const response = await createStreamingRequest(`/conversations/${conversationId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
