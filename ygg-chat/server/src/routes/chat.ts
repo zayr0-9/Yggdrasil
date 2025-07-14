@@ -168,12 +168,11 @@ router.get(
 )
 
 // Send message with streaming response
-// Send message with streaming response
 router.post(
   '/conversations/:id/messages',
   asyncHandler(async (req, res) => {
     const conversationId = parseInt(req.params.id)
-    const { content, modelName, parentId: requestedParentId } = req.body
+    const { content, modelName, parentId: requestedParentId, childrenId: childrenId } = req.body
 
     if (!content) {
       return res.status(400).json({ error: 'Message content required' })
@@ -198,7 +197,7 @@ router.post(
     }
 
     // Save user message with proper parent ID
-    const userMessage = MessageService.create(conversationId, 'user', content, parentId)
+    const userMessage = MessageService.create(conversationId, 'user', content, parentId, childrenId)
 
     // Setup SSE headers
     res.writeHead(200, {
@@ -229,7 +228,13 @@ router.post(
       )
 
       // Save complete assistant message with user message as parent
-      const assistantMessage = MessageService.create(conversationId, 'assistant', assistantContent, userMessage.id)
+      const assistantMessage = MessageService.create(
+        conversationId,
+        'assistant',
+        assistantContent,
+        userMessage.id,
+        childrenId
+      )
 
       // Send completion event
       res.write(

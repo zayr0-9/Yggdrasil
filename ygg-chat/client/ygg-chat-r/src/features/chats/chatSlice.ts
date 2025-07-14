@@ -18,7 +18,9 @@ const initialState: ChatState = {
     },
     sending: false,
     validationError: null,
+    draftMessage: null,
   },
+  // activeChat:{},
   streaming: {
     active: false,
     buffer: '',
@@ -27,6 +29,13 @@ const initialState: ChatState = {
   },
   ui: {
     modelSelectorOpen: false,
+  },
+  conversation: {
+    currentConversationId: null,
+    currentPath: [],
+    messages: [],
+    bookmarked: [],
+    excludedMessages: [],
   },
 }
 

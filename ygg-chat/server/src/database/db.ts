@@ -33,12 +33,13 @@ export function initializeDatabase() {
     )
   `)
 
-  // Messages table with parent_id for branching support
+  // Messages table with hybrid parent_id + children_ids design
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       conversation_id INTEGER NOT NULL,
       parent_id INTEGER,
+      children_ids TEXT DEFAULT '[]',
       role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
       content TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -62,6 +63,23 @@ export function initializeDatabase() {
       message_id UNINDEXED,
       tokenize = 'porter unicode61'
     )
+  `)
+
+  // Triggers to maintain children_ids integrity
+  db.exec(`
+    CREATE TRIGGER messages_children_insert AFTER INSERT ON messages 
+    WHEN NEW.parent_id IS NOT NULL
+    BEGIN
+      UPDATE messages 
+      SET children_ids = (
+        SELECT CASE 
+          WHEN children_ids = '[]' OR children_ids = '' THEN '[' || NEW.id || ']'
+          ELSE SUBSTR(children_ids, 1, LENGTH(children_ids)-1) || ',' || NEW.id || ']'
+        END
+        FROM messages WHERE id = NEW.parent_id
+      )
+      WHERE id = NEW.parent_id;
+    END;
   `)
 
   // Triggers to keep FTS table in sync with messages table
@@ -114,31 +132,18 @@ function initializeStatements() {
     deleteConversationsByUser: db.prepare('DELETE FROM conversations WHERE user_id = ?'),
 
     // Messages - Core operations
-    createMessage: db.prepare('INSERT INTO messages (conversation_id, parent_id, role, content) VALUES (?, ?, ?, ?)'),
+    createMessage: db.prepare(
+      'INSERT INTO messages (conversation_id, parent_id, role, content, children_ids) VALUES (?, ?, ?, ?, ?)'
+    ),
     getMessageById: db.prepare('SELECT * FROM messages WHERE id = ?'),
     getMessagesByConversation: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'),
     getLastMessage: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1'),
     deleteMessagesByConversation: db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
 
-    // Messages - Tree operations
-    getMessageTree: db.prepare(`
-      WITH RECURSIVE message_tree AS ( 
-        SELECT id, conversation_id, parent_id, role, content, created_at, 
-               0 as depth, 
-               CAST(id AS TEXT) as path 
-        FROM messages 
-        WHERE conversation_id = ? AND parent_id IS NULL 
-        
-        UNION ALL 
-        
-        SELECT m.id, m.conversation_id, m.parent_id, m.role, m.content, m.created_at, 
-               mt.depth + 1 as depth,
-               mt.path || ',' || CAST(m.id AS TEXT) as path 
-        FROM messages m 
-        INNER JOIN message_tree mt ON m.parent_id = mt.id
-      ) 
-      SELECT * FROM message_tree ORDER BY path
-    `),
+    // Messages - Optimized branch operations using children_ids
+
+    // Messages - Tree operations (simplified with children_ids)
+    getMessageTree: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'),
 
     // Full Text Search operations
     searchMessages: db.prepare(`

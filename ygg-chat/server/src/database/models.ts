@@ -20,17 +20,13 @@ export interface Message {
   id: number
   conversation_id: number
   parent_id: number | null
+  children_ids: string // JSON array of child message IDs
   role: 'user' | 'assistant' | 'system'
   content: string
   created_at: string
 }
 
-// Extended interfaces for tree and search results
-export interface MessageTreeNode extends Message {
-  depth: number
-  path: string
-}
-
+// Search result interfaces
 export interface SearchResult extends Message {
   highlighted: string
   conversation_title?: string
@@ -101,17 +97,15 @@ export class ConversationService {
 }
 
 export class MessageService {
-  // Updated to include parent_id parameter
   static create(
     conversationId: number,
     role: Message['role'],
     content: string,
-    parentId: number | null = null
+    parentId: number | null = null,
+    children: []
   ): Message {
-    const result = statements.createMessage.run(conversationId, parentId, role, content)
-    // Update conversation timestamp
+    const result = statements.createMessage.run(conversationId, parentId, role, content, '[]')
     statements.updateConversationTimestamp.run(conversationId)
-    // Get the created message by ID instead of using pop()
     return statements.getMessageById.get(result.lastInsertRowid) as Message
   }
 
@@ -123,9 +117,9 @@ export class MessageService {
     return statements.getMessagesByConversation.all(conversationId) as Message[]
   }
 
-  // Get the complete message tree for a conversation
-  static getMessageTree(conversationId: number): MessageTreeNode[] {
-    return statements.getMessageTree.all(conversationId) as MessageTreeNode[]
+  // Simple tree fetch - let frontend handle tree logic
+  static getMessageTree(conversationId: number): Message[] {
+    return statements.getMessageTree.all(conversationId) as Message[]
   }
 
   static getLastMessage(conversationId: number): Message | undefined {
@@ -159,34 +153,7 @@ export class MessageService {
   }
 }
 
-// Helper function to build a tree structure from flat message array
-export function buildMessageTree(messages: MessageTreeNode[]): MessageTreeNode | null {
-  const messageMap = new Map<number, MessageTreeNode & { children: MessageTreeNode[] }>()
-  const roots: (MessageTreeNode & { children: MessageTreeNode[] })[] = []
-
-  // First pass: create all nodes with children array
-  messages.forEach(msg => {
-    messageMap.set(msg.id, { ...msg, children: [] })
-  })
-
-  // Second pass: build tree structure
-  messages.forEach(msg => {
-    const node = messageMap.get(msg.id)!
-    if (msg.parent_id === null) {
-      roots.push(node)
-    } else {
-      const parent = messageMap.get(msg.parent_id)
-      if (parent) {
-        parent.children.push(node)
-      }
-    }
-  })
-
-  // Return the first root (assuming single root per conversation)
-  return roots[0] || null
-}
-
-// Convert tree structure to the format expected by Heimdall component
+// Heimdall tree format
 export interface ChatNode {
   id: string
   message: string
@@ -194,15 +161,39 @@ export interface ChatNode {
   children: ChatNode[]
 }
 
-// export function convertToHeimdallFormat(root: MessageTreeNode & { children: MessageTreeNode[] }): ChatNode {
-//   const convert = (node: MessageTreeNode & { children: MessageTreeNode[] }): ChatNode => {
-//     return {
-//       id: node.id.toString(),
-//       message: node.content,
-//       sender: node.role === 'user' ? 'user' : 'assistant',
-//       children: node.children.map(convert),
-//     }
-//   }
+// Build tree structure from flat message array with children_ids
+export function buildMessageTree(messages: Message[]): ChatNode | null {
+  const messageMap = new Map<number, ChatNode>()
 
-//   return convert(root)
-// }
+  // Create nodes
+  messages.forEach(msg => {
+    messageMap.set(msg.id, {
+      id: msg.id.toString(),
+      message: msg.content,
+      sender: msg.role as 'user' | 'assistant',
+      children: [],
+    })
+  })
+
+  let root: ChatNode | null = null
+
+  // Build tree using children_ids
+  messages.forEach(msg => {
+    const node = messageMap.get(msg.id)!
+
+    if (msg.parent_id === null) {
+      root = node
+    }
+
+    // Add children using children_ids array
+    const childIds: number[] = JSON.parse(msg.children_ids || '[]')
+    childIds.forEach(childId => {
+      const childNode = messageMap.get(childId)
+      if (childNode) {
+        node.children.push(childNode)
+      }
+    })
+  })
+
+  return root
+}

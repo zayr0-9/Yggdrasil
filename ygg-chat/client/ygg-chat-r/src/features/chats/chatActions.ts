@@ -82,6 +82,8 @@ export const fetchModels = createAsyncThunk(
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
   async ({ conversationId, input }: SendMessagePayload, { dispatch, getState, rejectWithValue, signal }) => {
+    //async ({ conversationId, input, parentId, childrenId }: SendMessagePayload, { dispatch, getState, rejectWithValue, signal }) => {
+
     dispatch(chatActions.sendingStarted())
 
     let controller: AbortController | undefined
@@ -94,6 +96,8 @@ export const sendMessage = createAsyncThunk(
 
       // Get the current selected model or use the override
       const state = getState() as RootState
+      // const parentId //store current parentID in root state
+      // const childrenId //store and get childrenID from root state
       const modelName = input.modelOverride || state.chat.models.selected || state.chat.models.default
 
       if (!modelName) {
@@ -107,6 +111,8 @@ export const sendMessage = createAsyncThunk(
           content: input.content.trim(),
           modelName: modelName,
           systemPrompt: input.systemPrompt,
+          // parentId: parentId,
+          // childrenId: childrenId
         }),
         signal: controller.signal,
       })
@@ -198,3 +204,20 @@ export const selectModel = createAsyncThunk('chat/selectModel', async (modelName
   dispatch(chatActions.modelSelected({ modelName, persist: true }))
   return modelName
 })
+
+// export const fetchMessageTree = createAsyncThunk(
+//   'chat/fetchMessageTree',
+//   async (conversationId: number, { dispatch, rejectWithValue }) => {
+//     dispatch(chatActions.messageTreeLoadingStarted())
+
+//     try {
+//       const treeData = await apiCall<any>(`/conversations/${conversationId}/messages/tree`)
+//       dispatch(chatActions.messageTreeLoaded({ conversationId, treeData }))
+//       return treeData
+//     } catch (error) {
+//       const message = error instanceof Error ? error.message : 'Failed to fetch message tree'
+//       dispatch(chatActions.messageTreeError(message))
+//       return rejectWithValue(message)
+//     }
+//   }
+// )

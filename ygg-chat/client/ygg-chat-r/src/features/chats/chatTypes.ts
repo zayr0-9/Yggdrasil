@@ -5,6 +5,11 @@ export interface Message {
   role: 'user' | 'assistant'
   content: string
   timestamp: string
+  //media: Blob or path to file
+  pastedContext: string[]
+  artifacts: string[]
+  //should write a function which extracts text content
+  //when user drags and drops it on the input component
 }
 
 // Stream-specific types
@@ -43,6 +48,15 @@ export interface CompositionState {
   input: MessageInput
   sending: boolean
   validationError: string | null
+  draftMessage: String | null
+}
+
+export interface ConversationState {
+  currentConversationId: number | null
+  currentPath: number[] // Array of message IDs forming current branch
+  messages: Message[] // Linear messages in current path order
+  bookmarked: number[] //each index contains id of a message selected
+  excludedMessages: number[] //id of each message which are NOT to be sent for chat,
 }
 
 // Core chat state - ONLY chat concerns
@@ -53,12 +67,15 @@ export interface ChatState {
   ui: {
     modelSelectorOpen: boolean
   }
+  conversation: ConversationState
 }
 
 // Action payloads
 export interface SendMessagePayload {
   conversationId: number
   input: MessageInput
+  // parentId: number
+  // childrenId: number[]
 }
 
 export interface ModelSelectionPayload {
