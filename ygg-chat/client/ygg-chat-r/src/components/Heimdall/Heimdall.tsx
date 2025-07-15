@@ -184,8 +184,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     setIsDragging(false)
   }
 
-  const handleWheel = (e: WheelEvent<SVGSVGElement>): void => {
+  const handleWheel = (e: WheelEvent<HTMLDivElement>): void => {
     e.preventDefault()
+    e.stopPropagation()
     const delta = e.deltaY > 0 ? 0.9 : 1.1
     setZoom(prev => Math.max(0.1, Math.min(3, prev * delta)))
   }
@@ -390,7 +391,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   }
 
   return (
-    <div className='w-full h-screen bg-gray-900 relative overflow-hidden'>
+    <div className='w-full h-screen bg-gray-900 relative overflow-hidden' onWheel={handleWheel}>
       <div className='absolute top-4 left-4 z-10 flex gap-2'>
         <button
           onClick={zoomIn}
@@ -445,7 +446,6 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
         onClick={(e: MouseEvent<SVGSVGElement>) => {
           const target = e.target as SVGElement
           if (target === e.currentTarget || target.tagName === 'svg') {

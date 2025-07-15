@@ -2,7 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit'
 import type { RootState } from '../../store/store'
 import { apiCall, createStreamingRequest } from '../../utils/api'
 import { chatActions } from './chatSlice'
-import { ModelsResponse, SendMessagePayload } from './chatTypes'
+import { Message, ModelsResponse, SendMessagePayload } from './chatTypes'
 // TODO: Import when conversations feature is available
 // import { conversationActions } from '../conversations'
 
@@ -21,7 +21,7 @@ typescriptconst myAsyncThunk = createAsyncThunk(
 */
 
 // API base URL - configure based on environment
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+// const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
 // Utility function for API calls
 // const apiCall = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
@@ -82,37 +82,33 @@ export const fetchModels = createAsyncThunk(
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
   async ({ conversationId, input }: SendMessagePayload, { dispatch, getState, rejectWithValue, signal }) => {
-    //async ({ conversationId, input, parentId, childrenId }: SendMessagePayload, { dispatch, getState, rejectWithValue, signal }) => {
-
     dispatch(chatActions.sendingStarted())
 
     let controller: AbortController | undefined
 
     try {
       controller = new AbortController()
-
-      // Combine signals for cancellation
       signal.addEventListener('abort', () => controller?.abort())
 
-      // Get the current selected model or use the override
       const state = getState() as RootState
-      // const parentId //store current parentID in root state
-      // const childrenId //store and get childrenID from root state
+      const currentMessages = state.chat.conversation.messages
       const modelName = input.modelOverride || state.chat.models.selected || state.chat.models.default
 
       if (!modelName) {
         throw new Error('No model selected')
       }
-
+      console.log(currentMessages)
       const response = await createStreamingRequest(`/conversations/${conversationId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          messages: currentMessages.map(m => ({
+            role: m.role,
+            content: m.content,
+          })),
           content: input.content.trim(),
           modelName: modelName,
           systemPrompt: input.systemPrompt,
-          // parentId: parentId,
-          // childrenId: childrenId
         }),
         signal: controller.signal,
       })
@@ -142,27 +138,20 @@ export const sendMessage = createAsyncThunk(
             try {
               const chunk = JSON.parse(line.slice(6))
 
-              // Handle user message
               if (chunk.type === 'user_message' && chunk.message) {
                 userMessage = chunk.message
-                // TODO: Uncomment when conversations feature is available
-                // dispatch(conversationActions.messageAdded(chunk.message))
+                dispatch(chatActions.messageAdded(chunk.message)) // UNCOMMENT AND FIX
               }
 
-              // Handle streaming chunks
               dispatch(chatActions.streamChunkReceived(chunk))
 
               if (chunk.type === 'complete' && chunk.message) {
                 messageId = chunk.message.id
-                // Add the assistant message to conversations
-                // TODO: Uncomment when conversations feature is available
-                // dispatch(conversationActions.messageAdded(chunk.message))
               } else if (chunk.type === 'error') {
                 throw new Error(chunk.error || 'Stream error')
               }
             } catch (parseError) {
               console.warn('Failed to parse chunk:', line, parseError)
-              // Skip malformed chunks
             }
           }
         }
@@ -191,7 +180,6 @@ export const sendMessage = createAsyncThunk(
     }
   }
 )
-
 // Model selection with persistence
 export const selectModel = createAsyncThunk('chat/selectModel', async (modelName: string, { dispatch, getState }) => {
   const state = getState() as RootState
@@ -204,6 +192,35 @@ export const selectModel = createAsyncThunk('chat/selectModel', async (modelName
   dispatch(chatActions.modelSelected({ modelName, persist: true }))
   return modelName
 })
+
+export const updateMessage = createAsyncThunk(
+  'chat/updateMessage',
+  async ({ id, content }: { id: number; content: string }, { dispatch, rejectWithValue }) => {
+    try {
+      const updated = await apiCall<Message>(`/messages/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ content }),
+      })
+      dispatch(chatActions.messageUpdated({ id, content }))
+      return updated
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Update failed')
+    }
+  }
+)
+
+export const deleteMessage = createAsyncThunk(
+  'chat/deleteMessage',
+  async (id: number, { dispatch, rejectWithValue }) => {
+    try {
+      await apiCall(`/messages/${id}`, { method: 'DELETE' })
+      dispatch(chatActions.messageDeleted(id))
+      return id
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Delete failed')
+    }
+  }
+)
 
 // export const fetchMessageTree = createAsyncThunk(
 //   'chat/fetchMessageTree',

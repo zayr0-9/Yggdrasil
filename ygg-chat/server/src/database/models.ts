@@ -130,6 +130,16 @@ export class MessageService {
     statements.deleteMessagesByConversation.run(conversationId)
   }
 
+  static update(id: number, content: string): Message | undefined {
+    statements.updateMessage.run(content, id)
+    return statements.getMessageById.get(id) as Message | undefined
+  }
+
+  static delete(id: number): boolean {
+    const result = statements.deleteMessage.run(id)
+    return result.changes > 0
+  }
+
   // Full Text Search methods
   static searchInConversation(query: string, conversationId: number): SearchResult[] {
     return statements.searchMessages.all(query, conversationId) as SearchResult[]

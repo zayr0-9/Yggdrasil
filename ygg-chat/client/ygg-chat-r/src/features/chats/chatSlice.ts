@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import { ChatState, MessageInput, ModelSelectionPayload, ModelsResponse, StreamChunk } from './chatTypes'
+import { ChatState, Message, MessageInput, ModelSelectionPayload, ModelsResponse, StreamChunk } from './chatTypes'
 
 const initialState: ChatState = {
   models: {
@@ -122,15 +122,58 @@ export const chatSlice = createSlice({
     },
 
     streamCompleted: (state, action: PayloadAction<{ messageId: number }>) => {
-      //   state.streaming.messageId = action.payload.messageId
+      state.streaming.messageId = action.payload.messageId
+
+      // Store assistant message immediately
+      if (state.streaming.buffer && state.conversation.currentConversationId) {
+        const assistantMessage = {
+          id: action.payload.messageId,
+          conversation_id: state.conversation.currentConversationId,
+          role: 'assistant' as const,
+          content: state.streaming.buffer,
+          timestamp: new Date().toISOString(),
+          pastedContext: [],
+          artifacts: [],
+        }
+        state.conversation.messages.push(assistantMessage)
+      }
+
       state.streaming.active = false
       state.streaming.buffer = ''
-      action
     },
 
     // UI - minimal
     modelSelectorToggled: state => {
       state.ui.modelSelectorOpen = !state.ui.modelSelectorOpen
+    },
+    conversationSet: (state, action: PayloadAction<number>) => {
+      state.conversation.currentConversationId = action.payload
+      state.conversation.messages = []
+      state.conversation.currentPath = []
+    },
+
+    conversationCleared: state => {
+      state.conversation.currentConversationId = null
+      state.conversation.messages = []
+      state.conversation.currentPath = []
+    },
+
+    messageAdded: (state, action: PayloadAction<Message>) => {
+      state.conversation.messages.push(action.payload)
+    },
+
+    messagesCleared: state => {
+      state.conversation.messages = []
+    },
+    messageUpdated: (state, action: PayloadAction<{ id: number; content: string }>) => {
+      const message = state.conversation.messages.find(m => m.id === action.payload.id)
+      if (message) {
+        message.content = action.payload.content
+      }
+    },
+
+    messageDeleted: (state, action: PayloadAction<number>) => {
+      state.conversation.messages = state.conversation.messages.filter(m => m.id !== action.payload)
     },
   },
 })

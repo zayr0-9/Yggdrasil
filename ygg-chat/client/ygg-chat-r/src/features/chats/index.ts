@@ -16,14 +16,20 @@ export type {
 export { chatActions, default as chatReducer } from './chatSlice'
 
 // Async actions
-export { fetchModels, selectModel, sendMessage } from './chatActions'
+export { deleteMessage, fetchModels, selectModel, sendMessage, updateMessage } from './chatActions'
 
 // Selectors - grouped by feature
 export {
+  selectBookmarkedMessages,
   // Combined selectors
   selectCanSend,
+  selectConversationMessages,
+  selectConversationState,
+  selectCurrentConversationId,
+  selectCurrentPath,
   selectDefaultModel,
   selectEffectiveModel,
+  selectExcludedMessages,
   selectInputContent,
   selectInputValid,
   selectIsModelAvailable,

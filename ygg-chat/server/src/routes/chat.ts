@@ -261,6 +261,34 @@ router.post(
     res.end()
   })
 )
+
+router.put(
+  '/messages/:id',
+  asyncHandler(async (req, res) => {
+    const messageId = parseInt(req.params.id)
+    const { content } = req.body
+
+    if (!content) return res.status(400).json({ error: 'Content required' })
+
+    const updated = MessageService.update(messageId, content)
+    if (!updated) return res.status(404).json({ error: 'Message not found' })
+
+    res.json(updated)
+  })
+)
+
+router.delete(
+  '/messages/:id',
+  asyncHandler(async (req, res) => {
+    const messageId = parseInt(req.params.id)
+
+    const deleted = MessageService.delete(messageId)
+    if (!deleted) return res.status(404).json({ error: 'Message not found' })
+
+    res.json({ success: true })
+  })
+)
+
 // Delete conversation
 router.delete(
   '/conversations/:id',

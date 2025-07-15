@@ -76,3 +76,28 @@ export const selectModelState = createSelector(
     hasModels: available.length > 0,
   })
 )
+
+// Conversation selectors
+export const selectConversationState = createSelector([selectChatState], chat => chat.conversation)
+
+export const selectCurrentConversationId = createSelector(
+  [selectConversationState],
+  conversation => conversation.currentConversationId
+)
+
+export const selectConversationMessages = createSelector(
+  [selectConversationState],
+  conversation => conversation.messages
+)
+
+export const selectCurrentPath = createSelector([selectConversationState], conversation => conversation.currentPath)
+
+export const selectBookmarkedMessages = createSelector(
+  [selectConversationState],
+  conversation => conversation.bookmarked
+)
+
+export const selectExcludedMessages = createSelector(
+  [selectConversationState],
+  conversation => conversation.excludedMessages
+)
