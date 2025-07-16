@@ -44,6 +44,7 @@ function ChatTest() {
   const [heimdallData, setHeimdallData] = React.useState<ChatNode | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const [compactMode, setCompactMode] = React.useState<boolean>(false)
 
   const fetchTreeData = async (conversationId: number) => {
     console.log('🌳 fetchTreeData: Starting fetch for conversation:', conversationId)
@@ -80,6 +81,12 @@ function ChatTest() {
       fetchTreeData(currentConversationId)
     }
   }, [currentConversationId])
+
+  //refresh tree when new message added
+  useEffect(() => {
+    console.log('messages refreshed')
+    fetchTreeData(currentConversationId)
+  }, [conversationMessages])
 
   // Load models on mount
   useEffect(() => {
@@ -167,10 +174,10 @@ function ChatTest() {
       )
 
       // Refresh tree after delay
-      setTimeout(() => {
-        console.log('🌳 Backup tree refresh after 3 seconds for conversation:', currentConversationId)
-        fetchTreeData(currentConversationId)
-      }, 3000)
+      // setTimeout(() => {
+      //   console.log('🌳 Backup tree refresh after 3 seconds for conversation:', currentConversationId)
+      //   fetchTreeData(currentConversationId)
+      // }, 15000)
     } else if (!currentConversationId) {
       console.error('📤 No conversation ID available')
     }
@@ -249,6 +256,23 @@ function ChatTest() {
             <Button variant='primary' size='small' onClick={handleRefreshModels}>
               Refresh Models
             </Button>
+            <Button
+              onClick={() => {
+                setCompactMode(!compactMode)
+              }}
+            >
+              {' '}
+              change mode
+            </Button>
+            {/* <Button
+              onClick={() => {
+                setCompactMode('false')
+              }}
+            >
+              {' '}
+              expanded mode
+            </Button> */}
+
             <span className='text-gray-300 text-sm'>Available: {models.length} models</span>
           </div>
 
@@ -450,7 +474,7 @@ function ChatTest() {
       </div>
 
       <div className='flex-1 min-w-0'>
-        <Heimdall chatData={heimdallData} loading={loading} error={error} compactMode={true} />
+        <Heimdall chatData={heimdallData} loading={loading} error={error} compactMode={compactMode} />
       </div>
     </div>
   )
@@ -462,3 +486,5 @@ function App() {
 }
 
 export default App
+
+//id|conversation_id|parent_id|children_ids|role|content|created_at

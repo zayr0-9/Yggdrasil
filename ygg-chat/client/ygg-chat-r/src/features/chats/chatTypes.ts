@@ -8,6 +8,7 @@ export interface Message {
   //media: Blob or path to file
   pastedContext: string[]
   artifacts: string[]
+  parent_id?: number
   //should write a function which extracts text content
   //when user drags and drops it on the input component
 }

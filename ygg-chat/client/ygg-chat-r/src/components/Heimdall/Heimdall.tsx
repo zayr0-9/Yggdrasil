@@ -1,6 +1,6 @@
 import { Move, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import type { JSX } from 'react'
-import React, { MouseEvent, useEffect, useRef, useState, WheelEvent } from 'react'
+import React, { MouseEvent, useEffect, useRef, useState } from 'react'
 
 // Type definitions
 interface ChatNode {
@@ -51,6 +51,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   error = null,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState<number>(compactMode ? 1 : 0.6)
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState<boolean>(false)
@@ -69,14 +70,14 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const currentChatData = chatData || defaultEmptyNode
 
   // Reset view when data changes
-  useEffect(() => {
-    if (chatData) {
-      setZoom(compactMode ? 1 : 0.6)
-      setPan({ x: 0, y: 0 })
-      setFocusedNodeId(null)
-      setSelectedNode(null)
-    }
-  }, [chatData, compactMode])
+  // useEffect(() => {
+  //   if (chatData) {
+  //     setZoom(compactMode ? 1 : 0.6)
+  //     setPan({ x: 0, y: 0 })
+  //     setFocusedNodeId(null)
+  //     setSelectedNode(null)
+  //   }
+  // }, [chatData, compactMode])
 
   // Calculate tree statistics
   const getTreeStats = (node: ChatNode): TreeStats => {
@@ -161,6 +162,29 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     return () => window.removeEventListener('resize', updateDimensions)
   }, [])
 
+  // Prevent body scroll when mouse is over the component
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const handleWheel = (e: globalThis.WheelEvent) => {
+      // Prevent default scrolling behavior
+      e.preventDefault()
+      e.stopPropagation()
+
+      // Handle zoom
+      const delta = e.deltaY > 0 ? 0.9 : 1.1
+      setZoom(prev => Math.max(0.1, Math.min(3, prev * delta)))
+    }
+
+    // Add wheel listener with passive: false to allow preventDefault
+    container.addEventListener('wheel', handleWheel, { passive: false })
+
+    return () => {
+      container.removeEventListener('wheel', handleWheel)
+    }
+  }, [])
+
   const handleMouseDown = (e: MouseEvent<SVGSVGElement>): void => {
     // Don't start dragging if clicking on a node
     const target = e.target as SVGElement
@@ -182,13 +206,6 @@ export const Heimdall: React.FC<HeimdallProps> = ({
 
   const handleMouseUp = (): void => {
     setIsDragging(false)
-  }
-
-  const handleWheel = (e: WheelEvent<HTMLDivElement>): void => {
-    e.preventDefault()
-    e.stopPropagation()
-    const delta = e.deltaY > 0 ? 0.9 : 1.1
-    setZoom(prev => Math.max(0.1, Math.min(3, prev * delta)))
   }
 
   const resetView = (): void => {
@@ -355,7 +372,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   // Show loading state
   if (loading) {
     return (
-      <div className='w-full h-screen bg-gray-900 relative overflow-hidden flex items-center justify-center'>
+      <div
+        ref={containerRef}
+        className='w-full h-screen bg-gray-900 relative overflow-hidden flex items-center justify-center'
+      >
         <div className='text-white text-center'>
           <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4'></div>
           <p className='text-lg'>Loading conversation tree...</p>
@@ -367,7 +387,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   // Show error state
   if (error) {
     return (
-      <div className='w-full h-screen bg-gray-900 relative overflow-hidden flex items-center justify-center'>
+      <div
+        ref={containerRef}
+        className='w-full h-screen bg-gray-900 relative overflow-hidden flex items-center justify-center'
+      >
         <div className='text-white text-center max-w-md'>
           <div className='text-red-400 text-6xl mb-4'>⚠️</div>
           <p className='text-lg mb-2'>Failed to load conversation</p>
@@ -380,7 +403,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   // Show empty state when no data
   if (!chatData) {
     return (
-      <div className='w-full h-screen bg-gray-900 relative overflow-hidden flex items-center justify-center'>
+      <div
+        ref={containerRef}
+        className='w-full h-screen bg-gray-900 relative overflow-hidden flex items-center justify-center'
+      >
         <div className='text-white text-center max-w-md'>
           <div className='text-gray-500 text-6xl mb-4'>💬</div>
           <p className='text-lg mb-2'>No conversation selected</p>
@@ -391,7 +417,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   }
 
   return (
-    <div className='w-full h-screen bg-gray-900 relative overflow-hidden' onWheel={handleWheel}>
+    <div ref={containerRef} className='w-full h-screen bg-gray-900 relative overflow-hidden'>
       <div className='absolute top-4 left-4 z-10 flex gap-2'>
         <button
           onClick={zoomIn}
