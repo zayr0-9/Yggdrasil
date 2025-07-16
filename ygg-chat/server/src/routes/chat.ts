@@ -195,8 +195,7 @@ router.post(
       const lastMessage = MessageService.getLastMessage(conversationId)
       parentId = lastMessage ? lastMessage.id : null
     }
-    const lastMessage = MessageService.getLastMessage(conversationId)
-    parentId = lastMessage ? lastMessage.id : null
+
     // Save user message with proper parent ID
     const userMessage = MessageService.create(conversationId, 'user', content, parentId, childrenId)
 

@@ -44,7 +44,7 @@ export function initializeDatabase() {
       content TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
-      FOREIGN KEY (parent_id) REFERENCES messages(id) ON DELETE SET NULL
+      FOREIGN KEY (parent_id) REFERENCES messages(id) ON DELETE CASCADE
     )
   `)
 

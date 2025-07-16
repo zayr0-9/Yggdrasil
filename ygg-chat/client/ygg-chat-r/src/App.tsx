@@ -153,18 +153,6 @@ function ChatTest() {
   // Handle sending message
   const handleSend = () => {
     if (canSend && currentConversationId) {
-      // Add user message to Redux store
-      // const userMessage = {
-      //   id: Date.now(),
-      //   conversation_id: currentConversationId,
-      //   role: 'user' as const,
-      //   content: messageInput.content,
-      //   timestamp: new Date().toISOString(),
-      //   pastedContext: [],
-      //   artifacts: [],
-      // }
-      // dispatch(chatActions.messageAdded(userMessage))
-
       // Send message
       dispatch(
         sendMessage({
@@ -172,12 +160,6 @@ function ChatTest() {
           input: messageInput,
         })
       )
-
-      // Refresh tree after delay
-      // setTimeout(() => {
-      //   console.log('🌳 Backup tree refresh after 3 seconds for conversation:', currentConversationId)
-      //   fetchTreeData(currentConversationId)
-      // }, 15000)
     } else if (!currentConversationId) {
       console.error('📤 No conversation ID available')
     }
