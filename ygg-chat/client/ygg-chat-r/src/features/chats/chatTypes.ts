@@ -9,6 +9,7 @@ export interface Message {
   pastedContext: string[]
   artifacts: string[]
   parent_id?: number
+  children_ids: number[]
   //should write a function which extracts text content
   //when user drags and drops it on the input component
 }

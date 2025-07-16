@@ -134,6 +134,8 @@ export const chatSlice = createSlice({
           timestamp: new Date().toISOString(),
           pastedContext: [],
           artifacts: [],
+          parentId: state.conversation.messages.at(-1)?.id,
+          children_ids: [],
         }
         state.conversation.messages.push(assistantMessage)
       }

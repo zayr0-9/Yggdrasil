@@ -97,7 +97,7 @@ export const sendMessage = createAsyncThunk(
       if (!modelName) {
         throw new Error('No model selected')
       }
-      console.log(currentMessages)
+      console.log('last currentMessage - ', currentMessages?.at(-1)?.id)
       const response = await createStreamingRequest(`/conversations/${conversationId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -108,6 +108,7 @@ export const sendMessage = createAsyncThunk(
           })),
           content: input.content.trim(),
           modelName: modelName,
+          parentId: currentMessages?.at(-1)?.id,
           systemPrompt: input.systemPrompt,
         }),
         signal: controller.signal,

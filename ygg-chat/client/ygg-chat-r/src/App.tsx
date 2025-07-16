@@ -207,6 +207,8 @@ function ChatTest() {
           timestamp: new Date().toISOString(),
           pastedContext: [],
           artifacts: [],
+          parentId: null,
+          children_ids: [],
         }
         dispatch(chatActions.messageAdded(assistantMessage))
       }
