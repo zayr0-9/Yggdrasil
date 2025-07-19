@@ -2,7 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit'
 import type { RootState } from '../../store/store'
 import { apiCall, createStreamingRequest } from '../../utils/api'
 import { chatActions } from './chatSlice'
-import { Message, ModelsResponse, SendMessagePayload } from './chatTypes'
+import { Message, ModelsResponse, SendMessagePayload, EditMessagePayload, BranchMessagePayload } from './chatTypes'
 // TODO: Import when conversations feature is available
 // import { conversationActions } from '../conversations'
 
@@ -91,7 +91,7 @@ export const sendMessage = createAsyncThunk(
       signal.addEventListener('abort', () => controller?.abort())
 
       const state = getState() as RootState
-      const currentMessages = state.chat.conversation.messages
+      const { messages: currentMessages, currentPath } = state.chat.conversation
       const modelName = input.modelOverride || state.chat.models.selected || state.chat.models.default
 
       if (!modelName) {
@@ -108,7 +108,7 @@ export const sendMessage = createAsyncThunk(
           })),
           content: input.content.trim(),
           modelName: modelName,
-          parentId: currentMessages?.at(-1)?.id,
+          parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
           systemPrompt: input.systemPrompt,
         }),
         signal: controller.signal,
@@ -210,15 +210,236 @@ export const updateMessage = createAsyncThunk(
   }
 )
 
+// Fetch conversation messages from server
+export const fetchConversationMessages = createAsyncThunk(
+  'chat/fetchConversationMessages',
+  async (conversationId: number, { dispatch, rejectWithValue }) => {
+    try {
+      const messages = await apiCall<Message[]>(`/conversations/${conversationId}/messages`)
+      dispatch(chatActions.messagesLoaded(messages))
+      return messages
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch messages')
+    }
+  }
+)
+
 export const deleteMessage = createAsyncThunk(
   'chat/deleteMessage',
-  async (id: number, { dispatch, rejectWithValue }) => {
+  async ({ id, conversationId }: { id: number; conversationId: number }, { dispatch, rejectWithValue }) => {
     try {
       await apiCall(`/messages/${id}`, { method: 'DELETE' })
-      dispatch(chatActions.messageDeleted(id))
+      // Refetch conversation messages to ensure sync with server
+      await dispatch(fetchConversationMessages(conversationId))
       return id
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Delete failed')
+    }
+  }
+)
+
+// Branch message when editing - creates new branch while preserving original
+export const editMessageWithBranching = createAsyncThunk(
+  'chat/editMessageWithBranching',
+  async ({ conversationId, originalMessageId, newContent, modelOverride, systemPrompt }: EditMessagePayload, { dispatch, getState, rejectWithValue, signal }) => {
+    dispatch(chatActions.sendingStarted())
+
+    let controller: AbortController | undefined
+
+    try {
+      controller = new AbortController()
+      signal.addEventListener('abort', () => controller?.abort())
+
+      const state = getState() as RootState
+      const originalMessage = state.chat.conversation.messages.find(m => m.id === originalMessageId)
+      
+      if (!originalMessage) {
+        throw new Error('Original message not found')
+      }
+
+      // Find the parent of the original message to branch from
+      const parentId = originalMessage.parent_id
+      const modelName = modelOverride || state.chat.models.selected || state.chat.models.default
+
+      if (!modelName) {
+        throw new Error('No model selected')
+      }
+
+      // Create new user message as a branch
+      const response = await createStreamingRequest(`/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: newContent,
+          modelName,
+          parentId: parentId, // Branch from the same parent as original
+          systemPrompt
+        }),
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('No stream reader available')
+
+      const decoder = new TextDecoder()
+      let messageId: number | null = null
+      let userMessage: any = null
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const lines = decoder.decode(value).split('\n')
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+
+            try {
+              const chunk = JSON.parse(line.slice(6))
+
+              if (chunk.type === 'user_message' && chunk.message) {
+                userMessage = chunk.message
+                dispatch(chatActions.messageBranchCreated({ newMessage: chunk.message }))
+              }
+
+              dispatch(chatActions.streamChunkReceived(chunk))
+
+              if (chunk.type === 'complete' && chunk.message) {
+                messageId = chunk.message.id
+                dispatch(chatActions.messageBranchCreated({ newMessage: chunk.message }))
+              } else if (chunk.type === 'error') {
+                throw new Error(chunk.error || 'Stream error')
+              }
+            } catch (parseError) {
+              console.warn('Failed to parse chunk:', line, parseError)
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock()
+      }
+
+      if (messageId) {
+        dispatch(chatActions.streamCompleted({ messageId }))
+      }
+
+      dispatch(chatActions.sendingCompleted())
+      return { messageId, userMessage, originalMessageId }
+    } catch (error) {
+      dispatch(chatActions.sendingCompleted())
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        return rejectWithValue('Message cancelled')
+      }
+
+      const message = error instanceof Error ? error.message : 'Failed to edit message'
+      dispatch(chatActions.streamChunkReceived({ type: 'error', error: message }))
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Send message to specific branch
+export const sendMessageToBranch = createAsyncThunk(
+  'chat/sendMessageToBranch',
+  async ({ conversationId, parentId, content, modelOverride, systemPrompt }: BranchMessagePayload, { dispatch, getState, rejectWithValue, signal }) => {
+    dispatch(chatActions.sendingStarted())
+
+    let controller: AbortController | undefined
+
+    try {
+      controller = new AbortController()
+      signal.addEventListener('abort', () => controller?.abort())
+
+      const state = getState() as RootState
+      const modelName = modelOverride || state.chat.models.selected || state.chat.models.default
+
+      if (!modelName) {
+        throw new Error('No model selected')
+      }
+
+      const response = await createStreamingRequest(`/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          modelName,
+          parentId,
+          systemPrompt
+        }),
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('No stream reader available')
+
+      const decoder = new TextDecoder()
+      let messageId: number | null = null
+      let userMessage: any = null
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const lines = decoder.decode(value).split('\n')
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+
+            try {
+              const chunk = JSON.parse(line.slice(6))
+
+              if (chunk.type === 'user_message' && chunk.message) {
+                userMessage = chunk.message
+                dispatch(chatActions.messageBranchCreated({ newMessage: chunk.message }))
+              }
+
+              dispatch(chatActions.streamChunkReceived(chunk))
+
+              if (chunk.type === 'complete' && chunk.message) {
+                messageId = chunk.message.id
+                dispatch(chatActions.messageBranchCreated({ newMessage: chunk.message }))
+              } else if (chunk.type === 'error') {
+                throw new Error(chunk.error || 'Stream error')
+              }
+            } catch (parseError) {
+              console.warn('Failed to parse chunk:', line, parseError)
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock()
+      }
+
+      if (messageId) {
+        dispatch(chatActions.streamCompleted({ messageId }))
+      }
+
+      dispatch(chatActions.sendingCompleted())
+      dispatch(chatActions.inputCleared())
+      return { messageId, userMessage }
+    } catch (error) {
+      dispatch(chatActions.sendingCompleted())
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        return rejectWithValue('Message cancelled')
+      }
+
+      const message = error instanceof Error ? error.message : 'Failed to send message'
+      dispatch(chatActions.streamChunkReceived({ type: 'error', error: message }))
+      return rejectWithValue(message)
     }
   }
 )

@@ -19,6 +19,7 @@ interface ChatMessageProps {
   content: string
   timestamp?: Date
   onEdit?: (id: string, newContent: string) => void
+  onBranch?: (id: string, newContent: string) => void
   onDelete?: (id: string) => void
   onCopy?: (content: string) => void
   isEditing?: boolean
@@ -28,26 +29,35 @@ interface ChatMessageProps {
 
 interface MessageActionsProps {
   onEdit?: () => void
+  onBranch?: () => void
   onDelete?: () => void
   onCopy?: () => void
   onSave?: () => void
   onCancel?: () => void
+  onSaveBranch?: () => void
   isEditing: boolean
+  editMode?: 'edit' | 'branch'
 }
 
-const MessageActions: React.FC<MessageActionsProps> = ({ onEdit, onDelete, onCopy, onSave, onCancel, isEditing }) => {
+const MessageActions: React.FC<MessageActionsProps> = ({ onEdit, onBranch, onDelete, onCopy, onSave, onCancel, onSaveBranch, isEditing, editMode = 'edit' }) => {
   return (
     <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200'>
       {isEditing ? (
         <>
           <button
-            onClick={onSave}
+            onClick={editMode === 'branch' ? onSaveBranch : onSave}
             className='p-1.5 rounded-md text-gray-400 hover:text-green-400 hover:bg-gray-700 transition-colors duration-150'
-            title='Save changes'
+            title={editMode === 'branch' ? 'Create branch' : 'Save changes'}
           >
-            <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
-            </svg>
+            {editMode === 'branch' ? (
+              <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+              </svg>
+            ) : (
+              <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+              </svg>
+            )}
           </button>
           <button
             onClick={onCancel}
@@ -77,7 +87,7 @@ const MessageActions: React.FC<MessageActionsProps> = ({ onEdit, onDelete, onCop
           </button>
           {onEdit && (
             <button
-              onClick={onEdit}
+              onClick={onBranch}
               className='p-1.5 rounded-md text-gray-400 hover:text-yellow-400 hover:bg-gray-700 transition-colors duration-150'
               title='Edit message'
             >
@@ -119,6 +129,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   content,
   timestamp,
   onEdit,
+  onBranch,
   onDelete,
   onCopy,
   isEditing = false,
@@ -126,10 +137,18 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 }) => {
   const [editingState, setEditingState] = useState(isEditing)
   const [editContent, setEditContent] = useState(content)
+  const [editMode, setEditMode] = useState<'edit' | 'branch'>('edit')
 
   const handleEdit = () => {
     setEditingState(true)
     setEditContent(content)
+    setEditMode('edit')
+  }
+
+  const handleBranch = () => {
+    setEditingState(true)
+    setEditContent(content)
+    setEditMode('branch')
   }
 
   const handleSave = () => {
@@ -139,9 +158,17 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     setEditingState(false)
   }
 
+  const handleSaveBranch = () => {
+    if (onBranch && editContent.trim() !== content) {
+      onBranch(id, editContent.trim())
+    }
+    setEditingState(false)
+  }
+
   const handleCancel = () => {
     setEditContent(content)
     setEditingState(false)
+    setEditMode('edit')
   }
 
   const handleCopy = async () => {
@@ -210,11 +237,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
         <MessageActions
           onEdit={role === 'user' ? handleEdit : undefined}
+          onBranch={role === 'user' ? handleBranch : undefined}
           onDelete={handleDelete}
           onCopy={handleCopy}
           onSave={handleSave}
+          onSaveBranch={handleSaveBranch}
           onCancel={handleCancel}
           isEditing={editingState}
+          editMode={editMode}
         />
       </div>
 

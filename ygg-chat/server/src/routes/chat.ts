@@ -190,10 +190,16 @@ router.post(
     // Determine parent ID: use requested parentId if provided, otherwise get last message
     let parentId: number | null = null
     if (requestedParentId !== undefined) {
-      parentId = requestedParentId
+      // Validate that the requested parent exists
+      const parentMessage = MessageService.getById(requestedParentId)
+      parentId = parentMessage ? requestedParentId : null
     } else {
       const lastMessage = MessageService.getLastMessage(conversationId)
-      parentId = lastMessage ? lastMessage.id : null
+      // Double-check that the last message still exists (in case it was deleted)
+      if (lastMessage) {
+        const validParent = MessageService.getById(lastMessage.id)
+        parentId = validParent ? lastMessage.id : null
+      }
     }
 
     // Save user message with proper parent ID

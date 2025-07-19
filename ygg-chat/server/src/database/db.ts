@@ -110,7 +110,7 @@ export function initializeDatabase() {
 // Prepared statements - initialized after tables exist
 export let statements: any = {}
 
-function initializeStatements() {
+export function initializeStatements() {
   statements = {
     // Users
     createUser: db.prepare('INSERT INTO users (username) VALUES (?)'),

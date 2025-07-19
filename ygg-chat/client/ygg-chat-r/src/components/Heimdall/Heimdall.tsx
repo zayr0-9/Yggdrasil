@@ -34,6 +34,7 @@ interface HeimdallProps {
   compactMode?: boolean
   loading?: boolean
   error?: string | null
+  onNodeSelect?: (nodeId: string, path: string[]) => void
 }
 
 // Default empty state when no data is provided
@@ -49,6 +50,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   compactMode = true,
   loading = false,
   error = null,
+  onNodeSelect,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -68,6 +70,24 @@ export const Heimdall: React.FC<HeimdallProps> = ({
 
   // Use provided data or fallback to default
   const currentChatData = chatData || defaultEmptyNode
+
+  // Calculate path from root to a specific node
+  const getPathToNode = (targetNodeId: string, node: ChatNode = currentChatData, path: string[] = []): string[] | null => {
+    const currentPath = [...path, node.id]
+    
+    if (node.id === targetNodeId) {
+      return currentPath
+    }
+    
+    if (node.children) {
+      for (const child of node.children) {
+        const result = getPathToNode(targetNodeId, child, currentPath)
+        if (result) return result
+      }
+    }
+    
+    return null
+  }
 
   // Reset view when data changes
   // useEffect(() => {
@@ -324,7 +344,16 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               }}
               onMouseEnter={() => setSelectedNode(node)}
               onMouseLeave={() => setSelectedNode(null)}
-              onClick={() => compactMode && setFocusedNodeId(node.id === focusedNodeId ? null : node.id)}
+              onClick={() => {
+              if (compactMode) {
+                setFocusedNodeId(node.id === focusedNodeId ? null : node.id)
+              }
+              // Trigger node selection callback
+              if (onNodeSelect) {
+                const path = getPathToNode(node.id)
+                onNodeSelect(node.id, path || [])
+              }
+            }}
             />
             <foreignObject width={nodeWidth} height={nodeHeight} style={{ pointerEvents: 'none' }}>
               <div className='p-3 text-white text-sm h-full flex items-center'>
@@ -349,7 +378,14 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               }}
               onMouseEnter={() => setSelectedNode(node)}
               onMouseLeave={() => setSelectedNode(null)}
-              onClick={() => setFocusedNodeId(node.id === focusedNodeId ? null : node.id)}
+              onClick={() => {
+              setFocusedNodeId(node.id === focusedNodeId ? null : node.id)
+              // Trigger node selection callback
+              if (onNodeSelect) {
+                const path = getPathToNode(node.id)
+                onNodeSelect(node.id, path || [])
+              }
+            }}
             />
             {/* Add a small indicator for branch nodes */}
             {node.children && node.children.length > 1 && (
@@ -476,6 +512,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
           const target = e.target as SVGElement
           if (target === e.currentTarget || target.tagName === 'svg') {
             setFocusedNodeId(null)
+            // Clear selection when clicking on empty space
+            if (onNodeSelect) {
+              onNodeSelect('', [])
+            }
           }
         }}
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}

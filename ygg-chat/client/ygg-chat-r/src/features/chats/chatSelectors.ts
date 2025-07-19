@@ -101,3 +101,43 @@ export const selectExcludedMessages = createSelector(
   [selectConversationState],
   conversation => conversation.excludedMessages
 )
+
+// Filter messages based on selected path (for branch navigation)
+export const selectFilteredMessages = createSelector(
+  [selectConversationMessages, selectCurrentPath],
+  (messages, currentPath) => {
+    // If no path is selected, show all messages (default behavior)
+    if (!currentPath || currentPath.length === 0) {
+      return messages
+    }
+    
+    // Filter messages to only include those in the selected path
+    const pathSet = new Set(currentPath)
+    return messages.filter(message => pathSet.has(message.id))
+  }
+)
+
+// Get messages for display (either filtered by path or all messages)
+export const selectDisplayMessages = createSelector(
+  [selectConversationMessages, selectCurrentPath],
+  (messages, currentPath) => {
+    // If no path is selected, show all messages
+    if (!currentPath || currentPath.length === 0) {
+      return messages
+    }
+    
+    // Build the conversation thread following the selected path
+    const pathMessages: typeof messages = []
+    const messageMap = new Map(messages.map(msg => [msg.id, msg]))
+    
+    // Follow the path from root to selected node
+    for (const messageId of currentPath) {
+      const message = messageMap.get(messageId)
+      if (message) {
+        pathMessages.push(message)
+      }
+    }
+    
+    return pathMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+  }
+)

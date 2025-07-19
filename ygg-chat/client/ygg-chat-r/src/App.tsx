@@ -1,14 +1,16 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import './App.css'
 import { Button, ChatMessage, Heimdall, TextArea } from './components'
 import {
   // Chat actions
   chatActions,
   deleteMessage,
+  editMessageWithBranching,
   fetchModels,
   selectCanSend,
   selectConversationMessages,
   selectCurrentConversationId,
+  selectDisplayMessages,
   selectMessageInput,
   // Chat selectors
   selectModels,
@@ -38,7 +40,11 @@ function ChatTest() {
   const sendingState = useAppSelector(selectSendingState)
   const streamState = useAppSelector(selectStreamState)
   const conversationMessages = useAppSelector(selectConversationMessages)
+  const displayMessages = useAppSelector(selectDisplayMessages)
   const currentConversationId = useAppSelector(selectCurrentConversationId)
+
+  // Ref for auto-scroll
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   // Local state only for Heimdall tree visualization
   const [heimdallData, setHeimdallData] = React.useState<ChatNode | null>(null)
@@ -87,6 +93,13 @@ function ChatTest() {
     console.log('messages refreshed')
     fetchTreeData(currentConversationId)
   }, [conversationMessages])
+
+  // Auto-scroll to bottom when messages update
+  useEffect(() => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
+  }, [displayMessages, streamState.buffer, streamState.active])
 
   // Load models on mount
   useEffect(() => {
@@ -171,10 +184,29 @@ function ChatTest() {
     console.log(parseInt(id))
   }
 
+  const handleMessageBranch = (id: string, newContent: string) => {
+    if (currentConversationId) {
+      dispatch(editMessageWithBranching({
+        conversationId: currentConversationId,
+        originalMessageId: parseInt(id),
+        newContent: newContent,
+        modelOverride: selectedModel || undefined
+      }))
+    }
+  }
+
+  const handleNodeSelect = (nodeId: string, path: string[]) => {
+    console.log('Node selected:', nodeId, 'Path:', path)
+    dispatch(chatActions.selectedNodePathSet(path))
+  }
+
   const handleMessageDelete = (id: string) => {
-    dispatch(chatActions.messageDeleted(parseInt(id)))
-    dispatch(deleteMessage(parseInt(id)))
-    console.log(parseInt(id))
+    const messageId = parseInt(id)
+    dispatch(chatActions.messageDeleted(messageId))
+    if (currentConversationId) {
+      dispatch(deleteMessage({ id: messageId, conversationId: currentConversationId }))
+    }
+    console.log(messageId)
   }
 
   // Handle key press
@@ -278,11 +310,11 @@ function ChatTest() {
         {/* Messages Display */}
         <div className='mb-6 bg-gray-800 p-4 rounded-lg'>
           <h3 className='text-lg font-semibold text-white mb-3'>Messages ({conversationMessages.length}):</h3>
-          <div className='border border-gray-600 rounded h-128 overflow-y-auto p-3 bg-gray-900'>
-            {conversationMessages.length === 0 ? (
+          <div ref={messagesContainerRef} className='border border-gray-600 rounded h-128 overflow-y-auto p-3 bg-gray-900'>
+            {displayMessages.length === 0 ? (
               <p className='text-gray-500'>No messages yet...</p>
             ) : (
-              conversationMessages.map(msg => (
+              displayMessages.map(msg => (
                 <ChatMessage
                   key={msg.id}
                   id={msg.id.toString()}
@@ -291,6 +323,7 @@ function ChatTest() {
                   timestamp={new Date(msg.timestamp)}
                   width='w-full'
                   onEdit={handleMessageEdit}
+                  onBranch={handleMessageBranch}
                   onDelete={handleMessageDelete}
                 />
               ))
@@ -458,7 +491,13 @@ function ChatTest() {
       </div>
 
       <div className='flex-1 min-w-0'>
-        <Heimdall chatData={heimdallData} loading={loading} error={error} compactMode={compactMode} />
+        <Heimdall 
+          chatData={heimdallData} 
+          loading={loading} 
+          error={error} 
+          compactMode={compactMode}
+          onNodeSelect={handleNodeSelect}
+        />
       </div>
     </div>
   )

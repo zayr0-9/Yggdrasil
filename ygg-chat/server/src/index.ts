@@ -1,6 +1,9 @@
 import cors from 'cors'
 import express from 'express'
+import fs from 'fs'
+import path from 'path'
 import { initializeDatabase } from './database/db'
+import { initializeStatements } from './database/db'
 import chatRoutes from './routes/chat'
 import { modelService } from './utils/modelService'
 
@@ -9,7 +12,16 @@ app.use(cors())
 app.use(express.json())
 app.use('/api', chatRoutes)
 
-initializeDatabase()
+// Check if database file exists before initializing
+const dbPath = path.join(__dirname, 'data', 'yggdrasil.db')
+if (!fs.existsSync(dbPath)) {
+  console.log('Database file not found, initializing new database...')
+  initializeDatabase()
+} else {
+  console.log('Database file exists, skipping schema initialization')
+  // Always initialize prepared statements even if DB exists
+  initializeStatements()
+}
 ;(async () => {
   await modelService.getAvailableModels() // Force cache population
   console.log('Models discovered:', await modelService.getAvailableModels())

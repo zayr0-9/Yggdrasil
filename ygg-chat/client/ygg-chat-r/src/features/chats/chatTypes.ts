@@ -76,8 +76,22 @@ export interface ChatState {
 export interface SendMessagePayload {
   conversationId: number
   input: MessageInput
-  // parentId: number
-  // childrenId: number[]
+}
+
+export interface EditMessagePayload {
+  conversationId: number
+  originalMessageId: number
+  newContent: string
+  modelOverride?: string
+  systemPrompt?: string
+}
+
+export interface BranchMessagePayload {
+  conversationId: number
+  parentId: number
+  content: string
+  modelOverride?: string
+  systemPrompt?: string
 }
 
 export interface ModelSelectionPayload {

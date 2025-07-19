@@ -177,6 +177,55 @@ export const chatSlice = createSlice({
     messageDeleted: (state, action: PayloadAction<number>) => {
       state.conversation.messages = state.conversation.messages.filter(m => m.id !== action.payload)
     },
+
+    messagesLoaded: (state, action: PayloadAction<Message[]>) => {
+      state.conversation.messages = action.payload
+    },
+
+    // Branching support
+    messageBranchCreated: (state, action: PayloadAction<{ newMessage: Message }>) => {
+      const { newMessage } = action.payload
+      
+      // Add the new branched message
+      state.conversation.messages.push(newMessage)
+      
+      // Update the parent's children_ids if it exists
+      const parentMessage = state.conversation.messages.find(m => m.id === newMessage.parent_id)
+      if (parentMessage && !parentMessage.children_ids.includes(newMessage.id)) {
+        parentMessage.children_ids.push(newMessage.id)
+      }
+
+      // Auto-navigate current path to new branch
+      if (!state.conversation.currentPath || state.conversation.currentPath.length === 0) {
+        state.conversation.currentPath = [newMessage.id]
+      } else {
+        // If last element is parent or within path, append; otherwise reset to branch root then append
+        const parentIndex = state.conversation.currentPath.lastIndexOf(newMessage.parent_id ?? -1)
+        if (parentIndex !== -1) {
+          state.conversation.currentPath = [
+            ...state.conversation.currentPath.slice(0, parentIndex + 1),
+            newMessage.id,
+          ]
+        } else {
+          state.conversation.currentPath = [...state.conversation.currentPath, newMessage.id]
+        }
+      }
+    },
+
+    // Set current path for navigation through branches
+    conversationPathSet: (state, action: PayloadAction<number[]>) => {
+      state.conversation.currentPath = action.payload
+    },
+
+    // Set selected node path (string IDs from Heimdall)
+    selectedNodePathSet: (state, action: PayloadAction<string[]>) => {
+      // Convert string IDs to numbers for consistency with message IDs
+      const numericPath = action.payload
+        .filter(id => id !== 'empty' && id !== '') // Filter out empty/default nodes
+        .map(id => parseInt(id))
+        .filter(id => !isNaN(id)) // Filter out invalid numbers
+      state.conversation.currentPath = numericPath
+    },
   },
 })
 
