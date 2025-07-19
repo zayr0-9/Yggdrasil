@@ -1,12 +1,14 @@
 // store.ts
 import { configureStore } from '@reduxjs/toolkit'
-import { chatReducer } from '../features/chats' // ADD THIS IMPORT
+import { chatReducer } from '../features/chats'
+import { conversationsReducer } from '../features/conversations'
 import { usersReducer } from '../features/users'
 
 // Root reducer configuration
 const rootReducer = {
   users: usersReducer,
-  chat: chatReducer, // ADD THIS LINE
+  chat: chatReducer,
+  conversations: conversationsReducer,
 }
 
 // Main store for the app

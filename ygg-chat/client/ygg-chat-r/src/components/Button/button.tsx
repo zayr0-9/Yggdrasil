@@ -2,6 +2,7 @@
 import React from 'react'
 
 interface ButtonProps {
+  className?: string
   children: React.ReactNode
   variant?: 'primary' | 'secondary' | 'outline' | 'danger'
   size?: 'small' | 'medium' | 'large'
@@ -17,6 +18,8 @@ export const Button: React.FC<ButtonProps> = ({
   disabled = false,
   onClick,
   type = 'button',
+  className = '',
+  ...rest
 }) => {
   // Base styles that all buttons share
   const baseStyles =
@@ -48,8 +51,14 @@ export const Button: React.FC<ButtonProps> = ({
     ${disabled ? disabledStyles : ''}
   `.trim()
 
-  return (
-    <button type={type} className={buttonClasses} onClick={onClick} disabled={disabled}>
+    return (
+    <button
+      type={type}
+      className={`${buttonClasses} ${className}`.trim()}
+      onClick={onClick}
+      disabled={disabled}
+      {...rest}
+    >
       {children}
     </button>
   )
