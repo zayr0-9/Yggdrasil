@@ -6,6 +6,7 @@ interface TextFieldProps {
   placeholder?: string
   value?: string
   onChange?: (value: string) => void
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
   type?: 'text' | 'email' | 'password' | 'number'
   disabled?: boolean
   error?: string
@@ -19,6 +20,7 @@ export const TextField: React.FC<TextFieldProps> = ({
   placeholder,
   value,
   onChange,
+  onKeyDown,
   type = 'text',
   disabled = false,
   error,
@@ -87,6 +89,7 @@ export const TextField: React.FC<TextFieldProps> = ({
         type={type}
         value={inputValue}
         onChange={handleChange}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
         disabled={disabled}
         required={required}

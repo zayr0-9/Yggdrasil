@@ -7,6 +7,20 @@ import { modelService } from '../utils/modelService'
 import { generateResponse } from '../utils/ollama'
 const router = express.Router()
 
+// Global search endpoint (temporary: userId query param optional, default 1)
+router.get(
+  '/search',
+  asyncHandler(async (req, res) => {
+    const q = (req.query.q as string) || ''
+    if (!q.trim()) {
+      return res.status(400).json({ error: 'Missing q parameter' })
+    }
+    const userId = req.query.userId ? parseInt(req.query.userId as string) : 1
+    const results = MessageService.searchAllUserMessages(q, userId, 50)
+    res.json(results)
+  })
+)
+
 router.get(
   '/models',
   asyncHandler(async (req, res) => {
