@@ -17,7 +17,7 @@ interface ChatMessageProps {
   id: string
   role: MessageRole
   content: string
-  timestamp?: Date
+  timestamp?: string | Date
   onEdit?: (id: string, newContent: string) => void
   onBranch?: (id: string, newContent: string) => void
   onDelete?: (id: string) => void
@@ -220,7 +220,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const styles = getRoleStyles()
 
-  const formatTimestamp = (date: Date) => {
+  const formatTimestamp = (dateInput: string | Date) => {
+    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    if (isNaN(date.getTime())) {
+      return typeof dateInput === 'string' ? dateInput : '';
+    }
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
@@ -232,7 +236,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       <div className='flex items-center justify-between mb-3'>
         <div className='flex items-center gap-2'>
           <span className={`text-sm font-semibold ${styles.role}`}>{styles.roleText}</span>
-          {timestamp && <span className='text-xs text-gray-500'>{formatTimestamp(timestamp)}</span>}
+          {timestamp && formatTimestamp(timestamp) && (
+            <span className='text-xs text-gray-500'>{formatTimestamp(timestamp)}</span>
+          )}
         </div>
 
         <MessageActions

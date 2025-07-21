@@ -55,4 +55,19 @@ export {
 } from './chatSelectors'
 
 // Convenience re-exports
+// New async thunks
+export { fetchConversationMessages, fetchMessageTree, initializeUserAndConversation } from './chatActions'
+
+// New selectors for Heimdall and initialization
+export {
+  selectHeimdallState,
+  selectHeimdallData,
+  selectHeimdallLoading,
+  selectHeimdallError,
+  selectHeimdallCompactMode,
+  selectInitializationState,
+  selectInitializationLoading,
+  selectInitializationError,
+} from './chatSelectors'
+
 export { chatActions as actions } from './chatSlice'

@@ -6,14 +6,21 @@ import {
     deleteMessage,
     editMessageWithBranching,
     fetchModels,
+    fetchConversationMessages,
     selectCanSend,
     selectConversationMessages,
     selectCurrentConversationId,
     selectDisplayMessages,
     selectMessageInput,
+    fetchMessageTree,
+    initializeUserAndConversation,
     // Chat selectors
     selectModels,
     selectSelectedModel,
+    selectHeimdallData,
+    selectHeimdallLoading,
+    selectHeimdallError,
+    selectHeimdallCompactMode,
     selectSendingState,
     selectStreamState,
     sendMessage,
@@ -21,12 +28,9 @@ import {
 } from '../features/chats'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
 
-interface ChatNode {
-  id: string
-  message: string
-  sender: 'user' | 'assistant'
-  children: ChatNode[]
-}
+// Types
+
+
 
 function Chat() {
   const dispatch = useAppDispatch()
@@ -45,53 +49,33 @@ function Chat() {
   // Ref for auto-scroll
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
-  // Local state only for Heimdall tree visualization
-  const [heimdallData, setHeimdallData] = React.useState<ChatNode | null>(null)
-  const [loading, setLoading] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
-  const [compactMode, setCompactMode] = React.useState<boolean>(false)
+  // Heimdall state from Redux
+  const heimdallData = useAppSelector(selectHeimdallData)
+  const loading = useAppSelector(selectHeimdallLoading)
+  const error = useAppSelector(selectHeimdallError)
+  const compactMode = useAppSelector(selectHeimdallCompactMode)
 
-  const fetchTreeData = async (conversationId: number) => {
-    console.log('🌳 fetchTreeData: Starting fetch for conversation:', conversationId)
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await fetch(`http://localhost:3001/api/conversations/${conversationId}/messages/tree`)
-      console.log('🌳 fetchTreeData: Response status:', response.status)
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch conversation tree: ${response.status} ${response.statusText}`)
-      }
-
-      const treeData = await response.json()
-      console.log('🌳 fetchTreeData: Tree data received:', treeData)
-      setHeimdallData(treeData)
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-      console.error('🌳 fetchTreeData: Error:', errorMessage)
-      setError(errorMessage)
-      setHeimdallData(null)
-    } finally {
-      setLoading(false)
-      console.log('🌳 fetchTreeData: Fetch complete')
-    }
-  }
-
+  
   // Fetch tree when conversation changes
   useEffect(() => {
-    console.log('🔄 Conversation ID changed:', currentConversationId)
     if (currentConversationId) {
-      console.log('🔄 Triggering initial fetchTreeData for conversation:', currentConversationId)
-      fetchTreeData(currentConversationId)
+      dispatch(fetchMessageTree(currentConversationId))
     }
-  }, [currentConversationId])
+  }, [currentConversationId, dispatch])
 
-  //refresh tree when new message added
+  // Fetch conversation messages when conversation changes
   useEffect(() => {
-    console.log('messages refreshed')
-    fetchTreeData(currentConversationId)
-  }, [conversationMessages])
+    if (currentConversationId) {
+      dispatch(fetchConversationMessages(currentConversationId))
+    }
+  }, [currentConversationId, dispatch])
+
+  // Refresh tree when new message added
+  useEffect(() => {
+    if (currentConversationId) {
+      dispatch(fetchMessageTree(currentConversationId))
+    }
+  }, [conversationMessages, currentConversationId, dispatch])
 
   // Auto-scroll to bottom when messages update
   useEffect(() => {
@@ -107,50 +91,10 @@ function Chat() {
 
   // Initialize conversation on mount
   useEffect(() => {
-    const initializeConversation = async () => {
-      try {
-        // Create test user
-        const userResponse = await fetch('http://localhost:3001/api/users', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: 'test-user' }),
-        })
+    dispatch(initializeUserAndConversation())
+  }, [dispatch])
 
-        if (!userResponse.ok) {
-          console.error('Failed to create user:', userResponse.status)
-          return
-        }
 
-        const user = await userResponse.json()
-
-        // Create conversation
-        const convResponse = await fetch('http://localhost:3001/api/conversations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user.id,
-            title: 'Test Conversation',
-            modelName: selectedModel,
-          }),
-        })
-
-        if (!convResponse.ok) {
-          console.error('Failed to create conversation:', convResponse.status)
-          return
-        }
-
-        const conversation = await convResponse.json()
-        console.log('💬 Conversation created with ID:', conversation.id)
-        dispatch(chatActions.conversationSet(conversation.id))
-      } catch (error) {
-        console.error('Failed to initialize conversation:', error)
-      }
-    }
-
-    if (!currentConversationId) {
-      initializeConversation()
-    }
-  }, [selectedModel, currentConversationId, dispatch])
 
   // Handle input changes
   const handleInputChange = (content: string) => {
@@ -247,7 +191,7 @@ function Chat() {
       // Refresh tree when response completes
       console.log('🌳 Stream complete, refreshing tree data for conversation:', currentConversationId)
       setTimeout(() => {
-        fetchTreeData(currentConversationId)
+        dispatch(fetchMessageTree(currentConversationId))
       }, 500)
     }
   }, [
@@ -272,9 +216,7 @@ function Chat() {
               Refresh Models
             </Button>
             <Button
-              onClick={() => {
-                setCompactMode(!compactMode)
-              }}
+              onClick={() => dispatch(chatActions.heimdallCompactModeToggled()) }
             >
               {' '}
               change mode
@@ -311,7 +253,7 @@ function Chat() {
                   id={msg.id.toString()}
                   role={msg.role}
                   content={msg.content}
-                  timestamp={new Date(msg.timestamp)}
+                  timestamp={msg.timestamp}
                   width='w-full'
                   onEdit={handleMessageEdit}
                   onBranch={handleMessageBranch}
@@ -385,7 +327,7 @@ function Chat() {
               onClick={() => {
                 console.log('🆕 New conversation - clearing state')
                 dispatch(chatActions.conversationCleared())
-                setHeimdallData(null)
+                dispatch(chatActions.heimdallDataLoaded({ treeData: null }))
               }}
             >
               New Conversation
@@ -395,10 +337,7 @@ function Chat() {
               size='small'
               onClick={() => {
                 if (currentConversationId) {
-                  console.log('🔄 Manual tree refresh for conversation:', currentConversationId)
-                  fetchTreeData(currentConversationId)
-                } else {
-                  console.warn('🔄 Cannot refresh - no conversation ID')
+                  dispatch(fetchMessageTree(currentConversationId))
                 }
               }}
             >

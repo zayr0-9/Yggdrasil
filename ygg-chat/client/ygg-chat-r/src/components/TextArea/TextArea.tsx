@@ -28,11 +28,11 @@ export const TextArea: React.FC<TextAreaProps> = ({
   onKeyDown,
   state = 'default',
   errorMessage,
-  maxLength = 2000,
+  maxLength = 20000,
   width = 'max-w-3xl',
   className = '',
   minRows = 1,
-  // maxRows = 10,
+  maxRows = 10,
   autoFocus = false,
   showCharCount = false,
   ...rest
@@ -61,9 +61,17 @@ export const TextArea: React.FC<TextAreaProps> = ({
       // Calculate the number of lines
       const lineHeight = 24 // Approximate line height in pixels
       const minHeight = minRows * lineHeight + 16 // 16px for padding
+      const maxHeight = maxRows ? maxRows * lineHeight + 16 : undefined
 
       const scrollHeight = textarea.scrollHeight
-      const newHeight = Math.max(scrollHeight, minHeight)
+      let newHeight = Math.max(scrollHeight, minHeight)
+
+      if (maxHeight && newHeight > maxHeight) {
+        newHeight = maxHeight
+        textarea.style.overflowY = 'auto'
+      } else {
+        textarea.style.overflowY = 'hidden'
+      }
 
       textarea.style.height = `${newHeight}px`
     }

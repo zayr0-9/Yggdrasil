@@ -60,6 +60,18 @@ export const selectSendingState = createSelector([selectChatState], chat => ({
   error: chat.streaming.error,
 }))
 
+// Heimdall selectors
+export const selectHeimdallState = createSelector([selectChatState], chat => chat.heimdall)
+export const selectHeimdallData = createSelector([selectHeimdallState], h => h.treeData)
+export const selectHeimdallLoading = createSelector([selectHeimdallState], h => h.loading)
+export const selectHeimdallError = createSelector([selectHeimdallState], h => h.error)
+export const selectHeimdallCompactMode = createSelector([selectHeimdallState], h => h.compactMode)
+
+// Initialization selectors
+export const selectInitializationState = createSelector([selectChatState], chat => chat.initialization)
+export const selectInitializationLoading = createSelector([selectInitializationState], i => i.loading)
+export const selectInitializationError = createSelector([selectInitializationState], i => i.error)
+
 // UI selectors
 export const selectModelSelectorOpen = createSelector([selectChatState], chat => chat.ui.modelSelectorOpen)
 

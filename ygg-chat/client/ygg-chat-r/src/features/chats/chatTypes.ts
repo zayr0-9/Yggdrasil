@@ -62,6 +62,26 @@ export interface ConversationState {
 }
 
 // Core chat state - ONLY chat concerns
+export interface ChatNode {
+  id: string
+  message: string
+  sender: 'user' | 'assistant'
+  children: ChatNode[]
+}
+
+export interface HeimdallState {
+  treeData: ChatNode | null
+  loading: boolean
+  error: string | null
+  compactMode: boolean
+}
+
+export interface InitializationState {
+  loading: boolean
+  error: string | null
+  userId: number | null
+}
+
 export interface ChatState {
   models: ModelState
   composition: CompositionState
@@ -70,6 +90,8 @@ export interface ChatState {
     modelSelectorOpen: boolean
   }
   conversation: ConversationState
+  heimdall: HeimdallState
+  initialization: InitializationState
 }
 
 // Action payloads

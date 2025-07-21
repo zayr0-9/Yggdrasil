@@ -141,7 +141,10 @@ export const sendMessage = createAsyncThunk(
 
               if (chunk.type === 'user_message' && chunk.message) {
                 userMessage = chunk.message
-                dispatch(chatActions.messageAdded(chunk.message)) // UNCOMMENT AND FIX
+                if (!chunk.message.timestamp) {
+                  chunk.message.timestamp = new Date().toISOString()
+                }
+                dispatch(chatActions.messageAdded(chunk.message))
               }
 
               dispatch(chatActions.streamChunkReceived(chunk))
@@ -439,6 +442,51 @@ export const sendMessageToBranch = createAsyncThunk(
 
       const message = error instanceof Error ? error.message : 'Failed to send message'
       dispatch(chatActions.streamChunkReceived({ type: 'error', error: message }))
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Fetch Heimdall message tree
+export const fetchMessageTree = createAsyncThunk(
+  'chat/fetchMessageTree',
+  async (conversationId: number, { dispatch, rejectWithValue }) => {
+    dispatch(chatActions.heimdallLoadingStarted())
+    try {
+      const treeData = await apiCall<any>(`/conversations/${conversationId}/messages/tree`)
+      dispatch(chatActions.heimdallDataLoaded({ treeData }))
+      return treeData
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch message tree'
+      dispatch(chatActions.heimdallError(message))
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Initialize user and conversation
+export const initializeUserAndConversation = createAsyncThunk(
+  'chat/initializeUserAndConversation',
+  async (_arg, { dispatch, rejectWithValue }) => {
+    dispatch(chatActions.initializationStarted())
+    try {
+      // Create test user
+      const user = await apiCall<{ id: number }>('/users', {
+        method: 'POST',
+        body: JSON.stringify({ username: 'test-user' }),
+      })
+
+      // Create new conversation
+      const conversation = await apiCall<{ id: number }>(`/conversations`, {
+        method: 'POST',
+        body: JSON.stringify({ user_id: user.id }),
+      })
+
+      dispatch(chatActions.initializationCompleted({ userId: user.id, conversationId: conversation.id }))
+      return { userId: user.id, conversationId: conversation.id }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to initialize'
+      dispatch(chatActions.initializationError(message))
       return rejectWithValue(message)
     }
   }

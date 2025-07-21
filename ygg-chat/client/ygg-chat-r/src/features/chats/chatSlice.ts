@@ -37,6 +37,17 @@ const initialState: ChatState = {
     bookmarked: [],
     excludedMessages: [],
   },
+  heimdall: {
+    treeData: null,
+    loading: false,
+    error: null,
+    compactMode: false,
+  },
+  initialization: {
+    loading: false,
+    error: null,
+    userId: null,
+  },
 }
 
 export const chatSlice = createSlice({
@@ -83,7 +94,7 @@ export const chatSlice = createSlice({
       const content = state.composition.input.content.trim()
       if (content.length === 0) {
         state.composition.validationError = null
-      } else if (content.length > 4000) {
+      } else if (content.length > 20000) {
         state.composition.validationError = 'Message too long'
       } else {
         state.composition.validationError = null
@@ -225,6 +236,39 @@ export const chatSlice = createSlice({
         .map(id => parseInt(id))
         .filter(id => !isNaN(id)) // Filter out invalid numbers
       state.conversation.currentPath = numericPath
+    },
+
+    /* Heimdall tree reducers */
+    heimdallLoadingStarted: state => {
+      state.heimdall.loading = true
+      state.heimdall.error = null
+    },
+    heimdallDataLoaded: (state, action: PayloadAction<{ treeData: any }>) => {
+      state.heimdall.treeData = action.payload.treeData
+      state.heimdall.loading = false
+      state.heimdall.error = null
+    },
+    heimdallError: (state, action: PayloadAction<string>) => {
+      state.heimdall.error = action.payload
+      state.heimdall.loading = false
+    },
+    heimdallCompactModeToggled: state => {
+      state.heimdall.compactMode = !state.heimdall.compactMode
+    },
+
+    /* Initialization reducers */
+    initializationStarted: state => {
+      state.initialization.loading = true
+      state.initialization.error = null
+    },
+    initializationCompleted: (state, action: PayloadAction<{ userId: number; conversationId: number }>) => {
+      state.initialization.loading = false
+      state.initialization.userId = action.payload.userId
+      state.conversation.currentConversationId = action.payload.conversationId
+    },
+    initializationError: (state, action: PayloadAction<string>) => {
+      state.initialization.loading = false
+      state.initialization.error = action.payload
     },
   },
 })
