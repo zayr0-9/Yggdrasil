@@ -2,7 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit'
 import type { RootState } from '../../store/store'
 import { apiCall, createStreamingRequest } from '../../utils/api'
 import { chatActions } from './chatSlice'
-import { Message, ModelsResponse, SendMessagePayload, EditMessagePayload, BranchMessagePayload } from './chatTypes'
+import { BranchMessagePayload, EditMessagePayload, Message, ModelsResponse, SendMessagePayload } from './chatTypes'
 // TODO: Import when conversations feature is available
 // import { conversationActions } from '../conversations'
 
@@ -479,7 +479,7 @@ export const initializeUserAndConversation = createAsyncThunk(
       // Create new conversation
       const conversation = await apiCall<{ id: number }>(`/conversations`, {
         method: 'POST',
-        body: JSON.stringify({ user_id: user.id }),
+        body: JSON.stringify({ userId: user.id }),
       })
 
       dispatch(chatActions.initializationCompleted({ userId: user.id, conversationId: conversation.id }))

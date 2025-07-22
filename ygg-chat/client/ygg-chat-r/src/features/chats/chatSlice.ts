@@ -196,14 +196,29 @@ export const chatSlice = createSlice({
     // Branching support
     messageBranchCreated: (state, action: PayloadAction<{ newMessage: Message }>) => {
       const { newMessage } = action.payload
-      
+
+      // Ensure children_ids is an array on both new and parent messages
+      const normalizeIds = (ids: any): number[] => {
+        if (Array.isArray(ids)) return ids as number[]
+        try {
+          return JSON.parse(ids || '[]') as number[]
+        } catch {
+          return []
+        }
+      }
+
+      newMessage.children_ids = normalizeIds(newMessage.children_ids)
+
       // Add the new branched message
       state.conversation.messages.push(newMessage)
-      
+
       // Update the parent's children_ids if it exists
       const parentMessage = state.conversation.messages.find(m => m.id === newMessage.parent_id)
-      if (parentMessage && !parentMessage.children_ids.includes(newMessage.id)) {
-        parentMessage.children_ids.push(newMessage.id)
+      if (parentMessage) {
+        parentMessage.children_ids = normalizeIds(parentMessage.children_ids)
+        if (!parentMessage.children_ids.includes(newMessage.id)) {
+          parentMessage.children_ids.push(newMessage.id)
+        }
       }
 
       // Auto-navigate current path to new branch

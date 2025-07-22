@@ -133,23 +133,44 @@ export const selectFilteredMessages = createSelector(
 export const selectDisplayMessages = createSelector(
   [selectConversationMessages, selectCurrentPath],
   (messages, currentPath) => {
-    // If no path is selected, show all messages
+    // If no branch selected, show everything chronologically (deduped)
     if (!currentPath || currentPath.length === 0) {
-      return messages
+      const unique = new Map<number, typeof messages[number]>()
+      for (const m of messages) if (!unique.has(m.id)) unique.set(m.id, m)
+      return [...unique.values()].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     }
-    
-    // Build the conversation thread following the selected path
-    const pathMessages: typeof messages = []
-    const messageMap = new Map(messages.map(msg => [msg.id, msg]))
-    
-    // Follow the path from root to selected node
-    for (const messageId of currentPath) {
-      const message = messageMap.get(messageId)
-      if (message) {
-        pathMessages.push(message)
-      }
+
+    // Build map for fast lookup
+    const map = new Map(messages.map(m => [m.id, m]))
+    const branch: typeof messages = []
+
+    // Ancestors/selected path
+    for (const id of currentPath) {
+      const m = map.get(id)
+      if (m) branch.push(m)
     }
-    
-    return pathMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+
+    // Descendants (linear): walk down first-child chronologically
+    let cursor = currentPath[currentPath.length - 1]
+    while (true) {
+      const node = map.get(cursor)
+      if (!node) break
+      const childIds = Array.isArray(node.children_ids) ? node.children_ids : (() => {
+        try { return JSON.parse((node.children_ids as unknown as string) || '[]') } catch { return [] }
+      })()
+      if (childIds.length === 0) break
+      const next = childIds
+        .map(id => map.get(id))
+        .filter((m): m is NonNullable<typeof node> => !!m)
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())[0]
+      if (!next) break
+      branch.push(next)
+      cursor = next.id
+    }
+
+    // Dedup and sort
+    const unique = new Map<number, typeof messages[number]>()
+    for (const m of branch) if (!unique.has(m.id)) unique.set(m.id, m)
+    return [...unique.values()].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
   }
 )

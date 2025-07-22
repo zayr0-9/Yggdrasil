@@ -14,6 +14,11 @@ export interface Message {
   //when user drags and drops it on the input component
 }
 
+export interface miniMessage {
+  content: string
+  media: Blob | null
+}
+
 // Stream-specific types
 export interface StreamChunk {
   type: 'chunk' | 'complete' | 'error' | 'user_message'

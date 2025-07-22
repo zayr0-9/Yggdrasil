@@ -396,7 +396,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 fill='white'
                 opacity='0.4'
                 className='animate-pulse'
-                style={{ pointerEvents: 'none' }}
+                style={{ pointerEvents: 'none', userSelect: 'none' }}
               />
             )}
           </g>

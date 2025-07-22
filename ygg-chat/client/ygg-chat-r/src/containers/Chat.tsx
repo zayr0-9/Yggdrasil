@@ -1,30 +1,32 @@
 import React, { useEffect, useRef } from 'react'
+import { useParams } from 'react-router-dom'
 import { Button, ChatMessage, Heimdall, TextArea } from '../components'
 import {
-    // Chat actions
-    chatActions,
-    deleteMessage,
-    editMessageWithBranching,
-    fetchModels,
-    fetchConversationMessages,
-    selectCanSend,
-    selectConversationMessages,
-    selectCurrentConversationId,
-    selectDisplayMessages,
-    selectMessageInput,
-    fetchMessageTree,
-    initializeUserAndConversation,
-    // Chat selectors
-    selectModels,
-    selectSelectedModel,
-    selectHeimdallData,
-    selectHeimdallLoading,
-    selectHeimdallError,
-    selectHeimdallCompactMode,
-    selectSendingState,
-    selectStreamState,
-    sendMessage,
-    updateMessage,
+  // Chat actions
+  chatActions,
+  deleteMessage,
+  editMessageWithBranching,
+  fetchConversationMessages,
+  fetchMessageTree,
+  fetchModels,
+  initializeUserAndConversation,
+  selectCanSend,
+  selectConversationMessages,
+  selectCurrentConversationId,
+  selectCurrentPath,
+  selectDisplayMessages,
+  selectHeimdallCompactMode,
+  selectHeimdallData,
+  selectHeimdallError,
+  selectHeimdallLoading,
+  selectMessageInput,
+  // Chat selectors
+  selectModels,
+  selectSelectedModel,
+  selectSendingState,
+  selectStreamState,
+  sendMessage,
+  updateMessage,
 } from '../features/chats'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
 
@@ -45,6 +47,7 @@ function Chat() {
   const conversationMessages = useAppSelector(selectConversationMessages)
   const displayMessages = useAppSelector(selectDisplayMessages)
   const currentConversationId = useAppSelector(selectCurrentConversationId)
+  const selectedPath = useAppSelector(selectCurrentPath)
 
   // Ref for auto-scroll
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -77,22 +80,65 @@ function Chat() {
     }
   }, [conversationMessages, currentConversationId, dispatch])
 
-  // Auto-scroll to bottom when messages update
+  // Auto-scroll to bottom when messages update, but avoid doing so when a specific
+  // path is selected (e.g. after clicking a node in Heimdall) to prevent the
+  // subsequent smooth scroll animation from always starting at the very bottom.
   useEffect(() => {
-    if (messagesContainerRef.current) {
+    // Only auto-scroll when no node/path is explicitly selected
+    if ((!selectedPath || selectedPath.length === 0) && messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
     }
-  }, [displayMessages, streamState.buffer, streamState.active])
+  }, [displayMessages, streamState.buffer, streamState.active, selectedPath])
+
+  // Scroll to selected node when path changes
+  useEffect(() => {
+    if (selectedPath && selectedPath.length > 0) {
+      const targetId = selectedPath[selectedPath.length - 1]
+      const el = document.getElementById(`message-${targetId}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }
+  }, [selectedPath, displayMessages])
+
+  // Auto-select latest branch when messages first load
+  useEffect(() => {
+    if (conversationMessages.length > 0 && (!selectedPath || selectedPath.length === 0)) {
+      // latest message by timestamp
+      const latest = [...conversationMessages].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+      if (latest) {
+        const idToMsg = new Map(conversationMessages.map(m => [m.id, m]))
+        const pathNums: number[] = []
+        let cur: typeof latest | undefined = latest
+        while (cur) {
+          pathNums.unshift(cur.id)
+          cur = cur.parent_id ? idToMsg.get(cur.parent_id) : undefined
+        }
+        if (pathNums.length) {
+          dispatch(chatActions.conversationPathSet(pathNums))
+        }
+      }
+    }
+  }, [conversationMessages, selectedPath, dispatch])
 
   // Load models on mount
   useEffect(() => {
     dispatch(fetchModels(true))
   }, [dispatch])
 
-  // Initialize conversation on mount
+  // Initialize or set conversation based on route param
+  const { id: conversationIdParam } = useParams<{ id?: string }>()
+
   useEffect(() => {
-    dispatch(initializeUserAndConversation())
-  }, [dispatch])
+    if (conversationIdParam) {
+      const idNum = parseInt(conversationIdParam)
+      if (!isNaN(idNum)) {
+        dispatch(chatActions.conversationSet(idNum))
+      }
+    } else {
+      dispatch(initializeUserAndConversation())
+    }
+  }, [conversationIdParam, dispatch])
 
 
 
@@ -139,6 +185,7 @@ function Chat() {
   }
 
   const handleNodeSelect = (nodeId: string, path: string[]) => {
+    if (!nodeId || !path || path.length === 0) return // ignore clicks on empty space
     console.log('Node selected:', nodeId, 'Path:', path)
     dispatch(chatActions.selectedNodePathSet(path))
   }
@@ -208,42 +255,12 @@ function Chat() {
       <div className='p-5 max-w-4xl flex-1'>
         <h1 className='text-3xl font-bold text-white mb-6'>Ygg Chat</h1>
 
-        {/* Model Selection */}
-        <div className='mb-6 bg-gray-800 p-4 rounded-lg'>
-          <h3 className='text-lg font-semibold text-white mb-3'>Model Selection:</h3>
-          <div className='flex items-center gap-3 mb-3'>
-            <Button variant='primary' size='small' onClick={handleRefreshModels}>
-              Refresh Models
-            </Button>
-            <Button
-              onClick={() => dispatch(chatActions.heimdallCompactModeToggled()) }
-            >
-              {' '}
-              change mode
-            </Button>
-
-            <span className='text-gray-300 text-sm'>Available: {models.length} models</span>
-          </div>
-
-          <select
-            value={selectedModel || ''}
-            onChange={e => handleModelSelect(e.target.value)}
-            className='w-full max-w-md p-2 rounded bg-gray-700 text-white border border-gray-600'
-            disabled={models.length === 0}
-          >
-            <option value=''>Select a model...</option>
-            {models.map(model => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
-        </div>
+        
 
         {/* Messages Display */}
         <div className='mb-6 bg-gray-800 p-4 rounded-lg'>
           <h3 className='text-lg font-semibold text-white mb-3'>Messages ({conversationMessages.length}):</h3>
-          <div ref={messagesContainerRef} className='border border-gray-600 rounded h-128 overflow-y-auto p-3 bg-gray-900'>
+          <div ref={messagesContainerRef} className='border border-gray-600 rounded h-230 overflow-y-auto p-3 bg-gray-900'>
             {displayMessages.length === 0 ? (
               <p className='text-gray-500'>No messages yet...</p>
             ) : (
@@ -306,6 +323,38 @@ function Chat() {
           {messageInput.content.length > 0 && (
             <small className='text-gray-400 text-xs mt-2 block'>Press Enter to send, Shift+Enter for new line</small>
           )}
+        </div>
+
+        {/* Model Selection */}
+        <div className='mb-6 bg-gray-800 p-4 rounded-lg'>
+          <h3 className='text-lg font-semibold text-white mb-3'>Model Selection:</h3>
+          <div className='flex items-center gap-3 mb-3'>
+            <Button variant='primary' size='small' onClick={handleRefreshModels}>
+              Refresh Models
+            </Button>
+            <Button
+              onClick={() => dispatch(chatActions.heimdallCompactModeToggled()) }
+            >
+              {' '}
+              change mode
+            </Button>
+
+            <span className='text-gray-300 text-sm'>Available: {models.length} models</span>
+          </div>
+
+          <select
+            value={selectedModel || ''}
+            onChange={e => handleModelSelect(e.target.value)}
+            className='w-full max-w-md p-2 rounded bg-gray-700 text-white border border-gray-600'
+            disabled={models.length === 0}
+          >
+            <option value=''>Select a model...</option>
+            {models.map(model => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Test Actions */}

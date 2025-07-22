@@ -230,6 +230,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   return (
     <div
+      id={`message-${id}`}
       className={`group rounded-lg p-4 mb-4 ${styles.container} ${width} transition-all duration-200 hover:bg-opacity-80`}
     >
       {/* Header with role and actions */}
