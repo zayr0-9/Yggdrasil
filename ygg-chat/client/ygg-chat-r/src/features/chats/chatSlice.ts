@@ -149,6 +149,13 @@ export const chatSlice = createSlice({
           children_ids: [],
         }
         state.conversation.messages.push(assistantMessage)
+
+        // Update the current path so the UI (chat list) follows the latest assistant reply
+        if (!state.conversation.currentPath || state.conversation.currentPath.length === 0) {
+          state.conversation.currentPath = [assistantMessage.id]
+        } else if (!state.conversation.currentPath.includes(assistantMessage.id)) {
+          state.conversation.currentPath = [...state.conversation.currentPath, assistantMessage.id]
+        }
       }
 
       state.streaming.active = false
