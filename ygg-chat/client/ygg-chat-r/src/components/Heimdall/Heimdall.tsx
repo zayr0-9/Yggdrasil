@@ -89,6 +89,50 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     return null
   }
 
+
+
+  // Get the complete branch path for a selected node
+  const getPathWithDescendants = (targetNodeId: string): string[] => {
+    const pathToNode = getPathToNode(targetNodeId)
+    if (!pathToNode) return []
+    
+    // Find the target node in the tree
+    const findNode = (nodeId: string, node: ChatNode = currentChatData): ChatNode | null => {
+      if (node.id === nodeId) return node
+      if (node.children) {
+        for (const child of node.children) {
+          const found = findNode(nodeId, child)
+          if (found) return found
+        }
+      }
+      return null
+    }
+    
+    const targetNode = findNode(targetNodeId)
+    if (!targetNode) return pathToNode
+    
+    // Find the end of the branch by following the path to the deepest leaf
+    const findBranchEnd = (node: ChatNode): ChatNode => {
+      // If no children, this is the end
+      if (!node.children || node.children.length === 0) {
+        return node
+      }
+      // If single child, continue down the branch
+      if (node.children.length === 1) {
+        return findBranchEnd(node.children[0])
+      }
+      // If multiple children, this node is the branch point - return it
+      return node
+    }
+    
+    // Get the end of the current branch
+    const branchEnd = findBranchEnd(targetNode)
+    
+    // Return the complete path from root to the end of this branch
+    const fullBranchPath = getPathToNode(branchEnd.id)
+    return fullBranchPath || pathToNode
+  }
+
   // Reset view when data changes
   // useEffect(() => {
   //   if (chatData) {
@@ -350,8 +394,8 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               }
               // Trigger node selection callback
               if (onNodeSelect) {
-                const path = getPathToNode(node.id)
-                onNodeSelect(node.id, path || [])
+                const path = getPathWithDescendants(node.id)
+                onNodeSelect(node.id, path)
               }
             }}
             />
@@ -382,8 +426,8 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               setFocusedNodeId(node.id === focusedNodeId ? null : node.id)
               // Trigger node selection callback
               if (onNodeSelect) {
-                const path = getPathToNode(node.id)
-                onNodeSelect(node.id, path || [])
+                const path = getPathWithDescendants(node.id)
+                onNodeSelect(node.id, path)
               }
             }}
             />
