@@ -1,17 +1,17 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button, TextField } from '../components'
-import { useAppDispatch, useAppSelector } from '../hooks/redux'
 import { chatActions } from '../features/chats'
 import {
-  fetchConversations,
-  createConversation,
-  selectAllConversations,
-  selectConvLoading,
-  selectConvError,
   Conversation,
+  createConversation,
+  fetchConversations,
+  selectAllConversations,
+  selectConvError,
+  selectConvLoading,
 } from '../features/conversations'
-import { searchActions, selectSearchResults, selectSearchQuery, selectSearchLoading as selectSearchLoading2 } from '../features/search'
+import { searchActions, selectSearchLoading as selectSearchLoading2, selectSearchQuery, selectSearchResults } from '../features/search'
+import { useAppDispatch, useAppSelector } from '../hooks/redux'
 
 
 
@@ -72,8 +72,8 @@ const Homepage: React.FC = () => {
   }
 
   return (
-    <div className='p-6 max-w-3xl mx-auto'>
-      <h1 className='text-2xl font-bold mb-4'>Conversations</h1>
+    <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900'><div className='p-6 max-w-3xl mx-auto'>
+      <h1 className='text-2xl font-bold mb-4 dark:text-neutral-100'>Conversations</h1>
 
       {/* Search Field */}
       <div className='mb-6 relative'>
@@ -86,17 +86,18 @@ const Homepage: React.FC = () => {
 
         {/* Dropdown */}
         {isDropdownOpen && (searchLoading ? (
-          <div className='absolute z-10 left-0 right-0 bg-gray-800 p-4 text-sm'>Searching...</div>
+          <div className='absolute z-10 left-0 right-0 bg-purple-50 p-4 text-sm'>Searching...</div>
         ) : (
           searchResults.length > 0 && (
             <ul
               ref={dropdownRef}
-              className='absolute z-10 left-0 right-0 max-h-60 overflow-y-auto bg-gray-800 border border-gray-700 rounded shadow-lg'
+className='absolute z-10 left-0 right-0 max-h-60 overflow-y-auto bg-purple-50 border border-purple-100 dark:border-neutral-600 rounded shadow-lg dark:bg-neutral-700 scrollbar-thin scrollbar-track-transparent  dark:scrollbar-track-neutral-800 scrollbar-thumb-purple-200 dark:scrollbar-thumb-neutral-500'
+style={{ colorScheme: 'dark' }}
             >
               {searchResults.map(res => (
                 <li
                   key={`${res.conversationId}-${res.messageId}`}
-                  className='p-3 hover:bg-gray-700 cursor-pointer text-sm'
+                  className='p-3 hover:bg-purple-100 dark:bg-neutral-700 dark:hover:bg-neutral-500 cursor-pointer text-sm dark:text-neutral-200'
                   onClick={() => handleResultClick(res.conversationId, res.messageId)}
                 >
                   <div className='font-semibold'>Conv {res.conversationId}</div>
@@ -115,16 +116,16 @@ const Homepage: React.FC = () => {
       {loading && <p>Loading...</p>}
       {error && <p className='text-red-500'>{error}</p>}
 
-      <ul className='space-y-2'>
+      <ul className='space-y-2 rounded'>
         {conversations.map(conv => (
           <li
             key={conv.id}
-            className='p-3 bg-gray-800 rounded cursor-pointer hover:bg-gray-700'
+            className='p-3 mb-4 bg-rose-100 rounded-lg cursor-pointer dark:bg-zinc-700 hover:bg-rose-50 dark:hover:bg-zinc-600'
             onClick={() => handleSelect(conv)}
           >
-            <div className='font-semibold'>{conv.title || `Conversation ${conv.id}`}</div>
+            <div className='font-semibold dark:text-neutral-100'>{conv.title || `Conversation ${conv.id}`}</div>
             {conv.created_at && (
-              <div className='text-xs text-gray-400'>
+              <div className='text-xs text-neutral-900 dark:text-neutral-100'>
                 {new Date(conv.created_at).toLocaleString()}
               </div>
             )}
@@ -132,7 +133,7 @@ const Homepage: React.FC = () => {
         ))}
         {conversations.length === 0 && !loading && <p>No conversations yet.</p>}
       </ul>
-    </div>
+    </div></div>
   )
 }
 
