@@ -81,7 +81,7 @@ export const fetchModels = createAsyncThunk(
 // Streaming message sending with proper error handling
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
-  async ({ conversationId, input }: SendMessagePayload, { dispatch, getState, rejectWithValue, signal }) => {
+  async ({ conversationId, input, parent, repeatNum }: SendMessagePayload, { dispatch, getState, rejectWithValue, signal }) => {
     dispatch(chatActions.sendingStarted())
 
     let controller: AbortController | undefined
@@ -91,14 +91,35 @@ export const sendMessage = createAsyncThunk(
       signal.addEventListener('abort', () => controller?.abort())
 
       const state = getState() as RootState
-      const { messages: currentMessages, currentPath } = state.chat.conversation
+      const { messages: currentMessages } = state.chat.conversation
       const modelName = input.modelOverride || state.chat.models.selected || state.chat.models.default
+      let response = null
 
       if (!modelName) {
         throw new Error('No model selected')
       }
       console.log('last currentMessage - ', currentMessages?.at(-1)?.id)
-      const response = await createStreamingRequest(`/conversations/${conversationId}/messages`, {
+      if (repeatNum > 1) {
+        response = await createStreamingRequest(`/conversations/${conversationId}/messages/repeat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: currentMessages.map(m => ({
+              role: m.role,
+              content: m.content,
+            })),
+            content: input.content.trim(),
+            modelName: modelName,
+            // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
+            parentId: parent,
+            systemPrompt: input.systemPrompt,
+            repeatNum: repeatNum,
+          }),
+          signal: controller.signal,
+        })
+      }
+      else 
+      {response = await createStreamingRequest(`/conversations/${conversationId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -108,16 +129,19 @@ export const sendMessage = createAsyncThunk(
           })),
           content: input.content.trim(),
           modelName: modelName,
-          parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
+          // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
+          parentId: parent,
           systemPrompt: input.systemPrompt,
         }),
         signal: controller.signal,
-      })
+      })}
 
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(`HTTP ${response.status}: ${errorText || 'Failed to send message'}`)
       }
+
+      console.log(response)
 
       const reader = response.body?.getReader()
       if (!reader) throw new Error('No stream reader available')
@@ -147,11 +171,17 @@ export const sendMessage = createAsyncThunk(
                 dispatch(chatActions.messageAdded(chunk.message))
               }
 
-              dispatch(chatActions.streamChunkReceived(chunk))
-
-              if (chunk.type === 'complete' && chunk.message) {
+              // For streaming, accumulate or finalize per event
+              if (chunk.type === 'chunk') {
+                dispatch(chatActions.streamChunkReceived(chunk))
+              } else if (chunk.type === 'complete' && chunk.message) {
+                // Push each assistant reply as its own message
+                dispatch(chatActions.messageAdded(chunk.message))
+                // Reset streaming buffer for next iteration
+                dispatch(chatActions.streamChunkReceived({ type: 'reset' } as any))
                 messageId = chunk.message.id
               } else if (chunk.type === 'error') {
+                dispatch(chatActions.streamChunkReceived(chunk))
                 throw new Error(chunk.error || 'Stream error')
               }
             } catch (parseError) {

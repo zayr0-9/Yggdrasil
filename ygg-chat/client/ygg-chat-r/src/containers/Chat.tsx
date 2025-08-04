@@ -22,6 +22,7 @@ import {
   selectMessageInput,
   // Chat selectors
   selectModels,
+  selectMultiReplyCount,
   selectSelectedModel,
   selectSendingState,
   selectStreamState,
@@ -48,6 +49,7 @@ function Chat() {
   const displayMessages = useAppSelector(selectDisplayMessages)
   const currentConversationId = useAppSelector(selectCurrentConversationId)
   const selectedPath = useAppSelector(selectCurrentPath)
+  const multiReplyCount = useAppSelector(selectMultiReplyCount)
 
   // Ref for auto-scroll
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -152,20 +154,39 @@ function Chat() {
     dispatch(chatActions.modelSelected({ modelName, persist: true }))
   }
 
-  // Handle sending message
-  const handleSend = () => {
+  const handleSend = (value: number) => {
     if (canSend && currentConversationId) {
-      // Send message
+      // Compute parent message index (last selected path item, if any)
+      const parent: number | null = selectedPath.length > 0 ? selectedPath[selectedPath.length - 1] : null
+
+      // Dispatch a single sendMessage with repeatNum set to value.
       dispatch(
         sendMessage({
           conversationId: currentConversationId,
           input: messageInput,
+          repeatNum: value,
+          parent: parent ?? undefined,
         })
       )
     } else if (!currentConversationId) {
       console.error('📤 No conversation ID available')
     }
   }
+
+  // Handle sending message
+  // const handleSend = () => {
+  //   if (canSend && currentConversationId) {
+  //     // Send message
+  //     dispatch(
+  //       sendMessage({
+  //         conversationId: currentConversationId,
+  //         input: messageInput,
+  //       })
+  //     )
+  //   } else if (!currentConversationId) {
+  //     console.error('📤 No conversation ID available')
+  //   }
+  // }
 
   const handleMessageEdit = (id: string, newContent: string) => {
     dispatch(chatActions.messageUpdated({ id: parseInt(id), content: newContent }))
@@ -203,9 +224,16 @@ function Chat() {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSend()
+      handleSend(multiReplyCount)
     }
   }
+
+  // const handleMultiReplyCountChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  //   const value = e.target.value
+  //   if (value === '' || !isNaN(Number(value))) {
+  //     dispatch(chatActions.multiReplyCountSet(Number(value)))
+  //   }
+  // }
 
   // Refresh models
   const handleRefreshModels = () => {
@@ -251,16 +279,16 @@ function Chat() {
   ])
 
   return (
-    <div className='flex min-h-screen bg-gray-900'>
+    <div className='flex min-h-screen bg-gray-900 dark:bg-neutral-900'>
       <div className='p-5 max-w-4xl flex-1'>
-        <h1 className='text-3xl font-bold text-white mb-6'>Ygg Chat</h1>
+        <h1 className='text-3xl font-bold text-white mb-6'>Ygg Chat {currentConversationId}</h1>
 
         
 
         {/* Messages Display */}
-        <div className='mb-6 bg-gray-800 p-4 rounded-lg'>
+        <div className='mb-6 bg-gray-800 py-4 rounded-lg dark:bg-neutral-900'>
           <h3 className='text-lg font-semibold text-white mb-3'>Messages ({conversationMessages.length}):</h3>
-          <div ref={messagesContainerRef} className='border border-gray-600 rounded h-230 overflow-y-auto p-3 bg-gray-900'>
+          <div ref={messagesContainerRef} className='border light:border-neutral-300 dark:border-neutral-700 rounded-lg py-4 h-230 overflow-y-auto p-3 bg-gray-900 dark:bg-neutral-900'>
             {displayMessages.length === 0 ? (
               <p className='text-gray-500'>No messages yet...</p>
             ) : (
@@ -293,7 +321,7 @@ function Chat() {
         </div>
 
         {/* Message Input */}
-        <div className='mb-6 bg-gray-800 p-4 rounded-lg'>
+        <div className='mb-6 bg-gray-800 p-4 rounded-lg dark:bg-neutral-800'>
           <h3 className='text-lg font-semibold text-white mb-3'>Send Message:</h3>
           <div>
             <TextArea
@@ -309,7 +337,7 @@ function Chat() {
             <Button
               variant={canSend && currentConversationId ? 'primary' : 'secondary'}
               disabled={!canSend || !currentConversationId}
-              onClick={handleSend}
+              onClick={() => handleSend(multiReplyCount)}
             >
               {!currentConversationId
                 ? 'Creating...'
@@ -319,6 +347,8 @@ function Chat() {
                     ? 'Sending...'
                     : 'Send'}
             </Button>
+            <div className='text-neutral-50'>Multi reply count - </div>
+            <TextArea value={multiReplyCount.toString()} onChange={(e) => dispatch(chatActions.multiReplyCountSet(Number(e)))} width='w-1/6' minRows={1} ></TextArea>
           </div>
           {messageInput.content.length > 0 && (
             <small className='text-gray-400 text-xs mt-2 block'>Press Enter to send, Shift+Enter for new line</small>
@@ -326,7 +356,7 @@ function Chat() {
         </div>
 
         {/* Model Selection */}
-        <div className='mb-6 bg-gray-800 p-4 rounded-lg'>
+        <div className='mb-6 bg-gray-800 p-4 rounded-lg dark:bg-neutral-800'>
           <h3 className='text-lg font-semibold text-white mb-3'>Model Selection:</h3>
           <div className='flex items-center gap-3 mb-3'>
             <Button variant='primary' size='small' onClick={handleRefreshModels}>
@@ -358,7 +388,7 @@ function Chat() {
         </div>
 
         {/* Test Actions */}
-        <div className='mb-6 bg-gray-800 p-4 rounded-lg'>
+        <div className='mb-6 bg-gray-800 p-4 rounded-lg dark:bg-neutral-800'>
           <h3 className='text-lg font-semibold text-white mb-3'>Test Actions:</h3>
           <div className='flex gap-2 flex-wrap'>
             <Button variant='secondary' size='small' onClick={() => handleInputChange('Hello, how are you?')}>
@@ -396,7 +426,7 @@ function Chat() {
         </div>
 
         {/* Test Instructions */}
-        <div className='bg-blue-900 bg-opacity-50 border border-blue-700 p-4 rounded-lg text-blue-100'>
+        <div className='bg-blue-900 bg-opacity-50 border border-blue-700 p-4 rounded-lg text-blue-100 dark:bg-neutral-800 dark:border-neutral-700 mb-4'>
           <h4 className='font-semibold mb-2'>Test Instructions:</h4>
           <ol className='list-decimal list-inside space-y-1 text-sm'>
             <li>Make sure your server is running on localhost:3001</li>
@@ -414,7 +444,7 @@ function Chat() {
           </p>
         </div>
         {/* Chat State Display */}
-        <div className='bg-gray-800 p-4 mb-6 rounded-lg text-gray-300 text-sm font-mono'>
+        <div className='bg-gray-800 p-4 mb-6 rounded-lg text-gray-300 text-sm font-mono dark:bg-neutral-800'>
           <h3 className='text-lg font-semibold mb-3 text-white'>Chat State:</h3>
           <div className='grid grid-cols-2 gap-2'>
             <p>

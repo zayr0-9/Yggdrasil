@@ -54,7 +54,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
 }) => {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const [zoom, setZoom] = useState<number>(compactMode ? 1 : 0.6)
+  const [zoom, setZoom] = useState<number>(compactMode ? 1 : 1)
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState<boolean>(false)
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -380,7 +380,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               width={nodeWidth}
               height={nodeHeight}
               rx='8'
-              fill={node.sender === 'user' ? '#3b82f6' : '#374151'}
+              fill={node.sender === 'user' ? '#64748b' : '#1e293b'}
               className={`cursor-pointer hover:opacity-90 transition-all duration-300 ${compactMode && focusedNodeId === node.id ? 'animate-pulse' : ''}`}
               style={{
                 filter:
@@ -414,7 +414,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               cx={x}
               cy={y + circleRadius}
               r={circleRadius}
-              fill={node.sender === 'user' ? '#3b82f6' : '#374151'}
+              fill={node.sender === 'user' ? '#64748b' : '#1e293b'}
               className='cursor-pointer transition-all'
               style={{
                 transform: selectedNode?.id === node.id ? 'scale(1.1)' : 'scale(1)',
@@ -497,7 +497,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   }
 
   return (
-    <div ref={containerRef} className='w-full h-screen bg-gray-900 relative overflow-hidden'>
+    <div ref={containerRef} className='w-full h-screen bg-gray-900 relative overflow-hidden dark:bg-neutral-900'>
       <div className='absolute top-4 left-4 z-10 flex gap-2'>
         <button
           onClick={zoomIn}
@@ -529,11 +529,11 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         )}
         <div className='bg-gray-800 text-white px-3 py-2 rounded-lg text-xs space-y-1'>
           <div className='flex items-center gap-2'>
-            <div className='w-3 h-3 bg-blue-500 rounded'></div>
+            <div className='w-3 h-3 bg-slate-400 rounded '></div>
             <span>User messages</span>
           </div>
           <div className='flex items-center gap-2'>
-            <div className='w-3 h-3 bg-gray-600 rounded'></div>
+            <div className='w-3 h-3 bg-slate-600 rounded'></div>
             <span>Assistant messages</span>
           </div>
           {compactMode && (
@@ -575,7 +575,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       </svg>
 
       <div className='absolute bottom-4 left-4 flex flex-col gap-2'>
-        <div className='bg-gray-800 text-gray-300 px-3 py-2 rounded-lg text-xs space-y-1'>
+        <div className='bg-gray-800 text-gray-300 px-3 py-2 rounded-lg text-xs space-y-1 dark:bg-neutral-800'>
           <div>Messages: {stats.totalNodes}</div>
           <div>Max depth: {stats.maxDepth}</div>
           <div>Branches: {stats.branches}</div>

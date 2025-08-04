@@ -21,7 +21,7 @@ export interface miniMessage {
 
 // Stream-specific types
 export interface StreamChunk {
-  type: 'chunk' | 'complete' | 'error' | 'user_message'
+  type: 'chunk' | 'complete' | 'error' | 'user_message' | 'reset'
   content?: string
   message?: Message
   error?: string
@@ -56,6 +56,7 @@ export interface CompositionState {
   sending: boolean
   validationError: string | null
   draftMessage: String | null
+  multiReplyCount: number
 }
 
 export interface ConversationState {
@@ -103,6 +104,8 @@ export interface ChatState {
 export interface SendMessagePayload {
   conversationId: number
   input: MessageInput
+  parent: number
+  repeatNum: number
 }
 
 export interface EditMessagePayload {

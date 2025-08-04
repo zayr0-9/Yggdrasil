@@ -9,7 +9,7 @@ export type {
   ModelState,
   SendMessagePayload,
   StreamChunk,
-  StreamState,
+  StreamState
 } from './chatTypes'
 
 // Slice
@@ -51,7 +51,7 @@ export {
   selectStreamError,
   // Streaming selectors
   selectStreamState,
-  selectValidationError,
+  selectValidationError
 } from './chatSelectors'
 
 // Convenience re-exports
@@ -60,14 +60,7 @@ export { fetchConversationMessages, fetchMessageTree, initializeUserAndConversat
 
 // New selectors for Heimdall and initialization
 export {
-  selectHeimdallState,
-  selectHeimdallData,
-  selectHeimdallLoading,
-  selectHeimdallError,
-  selectHeimdallCompactMode,
-  selectInitializationState,
-  selectInitializationLoading,
-  selectInitializationError,
+  selectHeimdallCompactMode, selectHeimdallData, selectHeimdallError, selectHeimdallLoading, selectHeimdallState, selectInitializationError, selectInitializationLoading, selectInitializationState, selectMultiReplyCount
 } from './chatSelectors'
 
 export { chatActions as actions } from './chatSlice'

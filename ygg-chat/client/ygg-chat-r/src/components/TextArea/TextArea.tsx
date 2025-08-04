@@ -87,7 +87,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
     adjustHeight()
   }, [])
 
-  const baseStyles = `${width} px-4 py-3 rounded-xl border transition-all duration-200 overflow-hidden`
+  const baseStyles = `${width} px-4 py-3 rounded-xl border transition-all duration-200 overflow-hidden dark:bg-neutral-900`
   const labelClasses = state === 'disabled' ? 'opacity-40' : ''
 
   const stateStyles = {

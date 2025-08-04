@@ -19,6 +19,7 @@ const initialState: ChatState = {
     sending: false,
     validationError: null,
     draftMessage: null,
+    multiReplyCount: 1
   },
   // activeChat:{},
   streaming: {
@@ -125,6 +126,8 @@ export const chatSlice = createSlice({
 
       if (type === 'chunk' && content) {
         state.streaming.buffer += content
+      } else if (type === 'reset') {
+        state.streaming.buffer = ''
       } else if (type === 'error') {
         state.streaming.error = action.payload.error || 'Stream error'
         state.streaming.active = false
@@ -190,8 +193,9 @@ export const chatSlice = createSlice({
       if (message) {
         message.content = action.payload.content
       }
+      // Reset multi-reply to default after editing
+      state.composition.multiReplyCount = 1
     },
-
     messageDeleted: (state, action: PayloadAction<number>) => {
       state.conversation.messages = state.conversation.messages.filter(m => m.id !== action.payload)
     },
@@ -291,6 +295,9 @@ export const chatSlice = createSlice({
     initializationError: (state, action: PayloadAction<string>) => {
       state.initialization.loading = false
       state.initialization.error = action.payload
+    },
+    multiReplyCountSet: (state, action: PayloadAction<number>) => {
+      state.composition.multiReplyCount = action.payload
     },
   },
 })

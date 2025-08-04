@@ -193,7 +193,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     switch (role) {
       case 'user':
         return {
-          container: 'bg-gray-800 border-l-4 border-l-blue-500',
+          container: 'bg-gray-800 border-l-4 border-l-blue-500 dark:bg-neutral-800',
           role: 'text-blue-400',
           roleText: 'User',
         }

@@ -102,7 +102,7 @@ export class MessageService {
     role: Message['role'],
     content: string,
     parentId: number | null = null,
-    children: []
+    // children: []
   ): Message {
     const result = statements.createMessage.run(conversationId, parentId, role, content, '[]')
     statements.updateConversationTimestamp.run(conversationId)

@@ -14,6 +14,7 @@ export const selectDefaultModel = createSelector([selectChatState], chat => chat
 export const selectModelsLoading = createSelector([selectChatState], chat => chat.models.loading)
 
 export const selectModelsError = createSelector([selectChatState], chat => chat.models.error)
+export const selectMultiReplyCount = createSelector([selectChatState], chat => chat.composition.multiReplyCount)
 
 // Get effective model (selected or default)
 export const selectEffectiveModel = createSelector(
