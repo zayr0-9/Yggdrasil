@@ -23,9 +23,10 @@ export function convertMessagesToHeimdall(messages: Message[]): ChatNode | null 
 
   if (rootMessages.length === 0) return null
 
-  // Sort root messages by creation time and take the first one
-  // (assuming single conversation tree, but this handles multiple roots gracefully)
-  const root = rootMessages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0]
+  // When there are multiple root messages (multiple independent branches),
+  // we build each root subtree and attach them to a synthetic wrapper node.
+  // This guarantees the function still returns a single `ChatNode` as expected
+  // by the Heimdall component while preserving **all** messages.
 
   // Recursive function to build tree structure
   function buildNode(message: Message): ChatNode {
@@ -43,7 +44,23 @@ export function convertMessagesToHeimdall(messages: Message[]): ChatNode | null 
     }
   }
 
-  return buildNode(root)
+  // If only one root message, return it directly to keep the previous behaviour
+  if (rootMessages.length === 1) {
+    return buildNode(rootMessages[0])
+  }
+
+  // Multiple roots → create a synthetic root node that contains each root branch.
+  const rootChildren = rootMessages
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    .map(buildNode)
+
+  return {
+    id: 'root',
+    message: 'Conversation',
+    // Choose a fixed sender (assistant) as the synthetic node is not an actual message
+    sender: 'assistant',
+    children: rootChildren,
+  }
 }
 
 /**

@@ -176,8 +176,9 @@ router.get(
     // if (process.env.NODE_ENV === 'development') {
     //   debugMessageTree(messages)
     // }
-
+    console.log(`messages ${JSON.stringify(messages)} \n`)
     const treeData = convertMessagesToHeimdall(messages)
+    console.log(`treeserver data ${JSON.stringify(treeData)} \n`)
     res.json(treeData)
   })
 )

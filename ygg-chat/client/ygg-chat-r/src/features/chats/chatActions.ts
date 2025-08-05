@@ -81,7 +81,10 @@ export const fetchModels = createAsyncThunk(
 // Streaming message sending with proper error handling
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
-  async ({ conversationId, input, parent, repeatNum }: SendMessagePayload, { dispatch, getState, rejectWithValue, signal }) => {
+  async (
+    { conversationId, input, parent, repeatNum }: SendMessagePayload,
+    { dispatch, getState, rejectWithValue, signal }
+  ) => {
     dispatch(chatActions.sendingStarted())
 
     let controller: AbortController | undefined
@@ -117,24 +120,24 @@ export const sendMessage = createAsyncThunk(
           }),
           signal: controller.signal,
         })
+      } else {
+        response = await createStreamingRequest(`/conversations/${conversationId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: currentMessages.map(m => ({
+              role: m.role,
+              content: m.content,
+            })),
+            content: input.content.trim(),
+            modelName: modelName,
+            // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
+            parentId: parent,
+            systemPrompt: input.systemPrompt,
+          }),
+          signal: controller.signal,
+        })
       }
-      else 
-      {response = await createStreamingRequest(`/conversations/${conversationId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: currentMessages.map(m => ({
-            role: m.role,
-            content: m.content,
-          })),
-          content: input.content.trim(),
-          modelName: modelName,
-          // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
-          parentId: parent,
-          systemPrompt: input.systemPrompt,
-        }),
-        signal: controller.signal,
-      })}
 
       if (!response.ok) {
         const errorText = await response.text()
@@ -274,7 +277,10 @@ export const deleteMessage = createAsyncThunk(
 // Branch message when editing - creates new branch while preserving original
 export const editMessageWithBranching = createAsyncThunk(
   'chat/editMessageWithBranching',
-  async ({ conversationId, originalMessageId, newContent, modelOverride, systemPrompt }: EditMessagePayload, { dispatch, getState, rejectWithValue, signal }) => {
+  async (
+    { conversationId, originalMessageId, newContent, modelOverride, systemPrompt }: EditMessagePayload,
+    { dispatch, getState, rejectWithValue, signal }
+  ) => {
     dispatch(chatActions.sendingStarted())
 
     let controller: AbortController | undefined
@@ -285,7 +291,7 @@ export const editMessageWithBranching = createAsyncThunk(
 
       const state = getState() as RootState
       const originalMessage = state.chat.conversation.messages.find(m => m.id === originalMessageId)
-      
+
       if (!originalMessage) {
         throw new Error('Original message not found')
       }
@@ -306,7 +312,7 @@ export const editMessageWithBranching = createAsyncThunk(
           content: newContent,
           modelName,
           parentId: parentId, // Branch from the same parent as original
-          systemPrompt
+          systemPrompt,
         }),
         signal: controller.signal,
       })
@@ -381,7 +387,10 @@ export const editMessageWithBranching = createAsyncThunk(
 // Send message to specific branch
 export const sendMessageToBranch = createAsyncThunk(
   'chat/sendMessageToBranch',
-  async ({ conversationId, parentId, content, modelOverride, systemPrompt }: BranchMessagePayload, { dispatch, getState, rejectWithValue, signal }) => {
+  async (
+    { conversationId, parentId, content, modelOverride, systemPrompt }: BranchMessagePayload,
+    { dispatch, getState, rejectWithValue, signal }
+  ) => {
     dispatch(chatActions.sendingStarted())
 
     let controller: AbortController | undefined
@@ -404,7 +413,7 @@ export const sendMessageToBranch = createAsyncThunk(
           content,
           modelName,
           parentId,
-          systemPrompt
+          systemPrompt,
         }),
         signal: controller.signal,
       })
@@ -484,6 +493,7 @@ export const fetchMessageTree = createAsyncThunk(
     dispatch(chatActions.heimdallLoadingStarted())
     try {
       const treeData = await apiCall<any>(`/conversations/${conversationId}/messages/tree`)
+      console.log(`tree data ${JSON.stringify(treeData)}`)
       dispatch(chatActions.heimdallDataLoaded({ treeData }))
       return treeData
     } catch (error) {
