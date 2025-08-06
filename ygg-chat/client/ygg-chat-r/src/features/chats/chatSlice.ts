@@ -19,7 +19,7 @@ const initialState: ChatState = {
     sending: false,
     validationError: null,
     draftMessage: null,
-    multiReplyCount: 1
+    multiReplyCount: 1,
   },
   // activeChat:{},
   streaming: {
@@ -182,7 +182,19 @@ export const chatSlice = createSlice({
     },
 
     messageAdded: (state, action: PayloadAction<Message>) => {
-      state.conversation.messages.push(action.payload)
+      const msg = action.payload
+      state.conversation.messages.push(msg)
+
+      // Keep the currentPath in sync when new messages arrive
+      if (!state.conversation.currentPath || state.conversation.currentPath.length === 0) {
+        // No existing path – start with the first message (user or assistant)
+        state.conversation.currentPath = [msg.id]
+      } else {
+        const last = state.conversation.currentPath[state.conversation.currentPath.length - 1]
+        if (last !== msg.id) {
+          state.conversation.currentPath = [...state.conversation.currentPath, msg.id]
+        }
+      }
     },
 
     messagesCleared: state => {
@@ -232,21 +244,23 @@ export const chatSlice = createSlice({
         }
       }
 
-      // Auto-navigate current path to new branch
-      if (!state.conversation.currentPath || state.conversation.currentPath.length === 0) {
-        state.conversation.currentPath = [newMessage.id]
-      } else {
-        // If last element is parent or within path, append; otherwise reset to branch root then append
-        const parentIndex = state.conversation.currentPath.lastIndexOf(newMessage.parent_id ?? -1)
-        if (parentIndex !== -1) {
-          state.conversation.currentPath = [
-            ...state.conversation.currentPath.slice(0, parentIndex + 1),
-            newMessage.id,
-          ]
-        } else {
-          state.conversation.currentPath = [...state.conversation.currentPath, newMessage.id]
+      // Auto-navigate current path to new branch by building complete path from root
+      // This ensures we switch cleanly to the new branch without leftover messages
+      const buildPathToMessage = (messageId: number): number[] => {
+        const path: number[] = []
+        let currentId: number | null = messageId
+        
+        // Walk up the parent chain to build the complete path
+        while (currentId !== null) {
+          path.unshift(currentId)
+          const message = state.conversation.messages.find(m => m.id === currentId)
+          currentId = message?.parent_id ?? null
         }
+        
+        return path
       }
+      
+      state.conversation.currentPath = buildPathToMessage(newMessage.id)
     },
 
     // Set current path for navigation through branches

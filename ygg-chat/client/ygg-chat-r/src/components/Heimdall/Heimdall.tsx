@@ -72,30 +72,32 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const currentChatData = chatData || defaultEmptyNode
 
   // Calculate path from root to a specific node
-  const getPathToNode = (targetNodeId: string, node: ChatNode = currentChatData, path: string[] = []): string[] | null => {
+  const getPathToNode = (
+    targetNodeId: string,
+    node: ChatNode = currentChatData,
+    path: string[] = []
+  ): string[] | null => {
     const currentPath = [...path, node.id]
-    
+
     if (node.id === targetNodeId) {
       return currentPath
     }
-    
+
     if (node.children) {
       for (const child of node.children) {
         const result = getPathToNode(targetNodeId, child, currentPath)
         if (result) return result
       }
     }
-    
+
     return null
   }
-
-
 
   // Get the complete branch path for a selected node
   const getPathWithDescendants = (targetNodeId: string): string[] => {
     const pathToNode = getPathToNode(targetNodeId)
     if (!pathToNode) return []
-    
+
     // Find the target node in the tree
     const findNode = (nodeId: string, node: ChatNode = currentChatData): ChatNode | null => {
       if (node.id === nodeId) return node
@@ -107,10 +109,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       }
       return null
     }
-    
+
     const targetNode = findNode(targetNodeId)
     if (!targetNode) return pathToNode
-    
+
     // Find the end of the branch by following the path to the deepest leaf
     const findBranchEnd = (node: ChatNode): ChatNode => {
       // If no children, this is the end
@@ -124,10 +126,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       // If multiple children, this node is the branch point - return it
       return node
     }
-    
+
     // Get the end of the current branch
     const branchEnd = findBranchEnd(targetNode)
-    
+
     // Return the complete path from root to the end of this branch
     const fullBranchPath = getPathToNode(branchEnd.id)
     return fullBranchPath || pathToNode
@@ -389,17 +391,17 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               onMouseEnter={() => setSelectedNode(node)}
               onMouseLeave={() => setSelectedNode(null)}
               onClick={() => {
-              if (compactMode) {
-                setFocusedNodeId(node.id === focusedNodeId ? null : node.id)
-              }
-              // Trigger node selection callback
-              if (onNodeSelect) {
-                const path = getPathWithDescendants(node.id)
-                onNodeSelect(node.id, path)
-              }
-            }}
+                if (compactMode) {
+                  setFocusedNodeId(node.id === focusedNodeId ? null : node.id)
+                }
+                // Trigger node selection callback
+                if (onNodeSelect) {
+                  const path = getPathWithDescendants(node.id)
+                  onNodeSelect(node.id, path)
+                }
+              }}
             />
-            <foreignObject width={nodeWidth} height={nodeHeight} style={{ pointerEvents: 'none' }}>
+            <foreignObject width={nodeWidth} height={nodeHeight} style={{ pointerEvents: 'none', userSelect: 'none' }}>
               <div className='p-3 text-white text-sm h-full flex items-center'>
                 <p className='line-clamp-3'>{node.message}</p>
               </div>
@@ -423,13 +425,13 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               onMouseEnter={() => setSelectedNode(node)}
               onMouseLeave={() => setSelectedNode(null)}
               onClick={() => {
-              setFocusedNodeId(node.id === focusedNodeId ? null : node.id)
-              // Trigger node selection callback
-              if (onNodeSelect) {
-                const path = getPathWithDescendants(node.id)
-                onNodeSelect(node.id, path)
-              }
-            }}
+                setFocusedNodeId(node.id === focusedNodeId ? null : node.id)
+                // Trigger node selection callback
+                if (onNodeSelect) {
+                  const path = getPathWithDescendants(node.id)
+                  onNodeSelect(node.id, path)
+                }
+              }}
             />
             {/* Add a small indicator for branch nodes */}
             {node.children && node.children.length > 1 && (

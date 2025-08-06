@@ -33,8 +33,6 @@ import { useAppDispatch, useAppSelector } from '../hooks/redux'
 
 // Types
 
-
-
 function Chat() {
   const dispatch = useAppDispatch()
 
@@ -60,7 +58,6 @@ function Chat() {
   const error = useAppSelector(selectHeimdallError)
   const compactMode = useAppSelector(selectHeimdallCompactMode)
 
-  
   // Fetch tree when conversation changes
   useEffect(() => {
     if (currentConversationId) {
@@ -107,7 +104,9 @@ function Chat() {
   useEffect(() => {
     if (conversationMessages.length > 0 && (!selectedPath || selectedPath.length === 0)) {
       // latest message by timestamp
-      const latest = [...conversationMessages].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+      const latest = [...conversationMessages].sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )[0]
       if (latest) {
         const idToMsg = new Map(conversationMessages.map(m => [m.id, m]))
         const pathNums: number[] = []
@@ -117,6 +116,7 @@ function Chat() {
           cur = cur.parent_id ? idToMsg.get(cur.parent_id) : undefined
         }
         if (pathNums.length) {
+          console.log(`path nums ${pathNums}`)
           dispatch(chatActions.conversationPathSet(pathNums))
         }
       }
@@ -141,8 +141,6 @@ function Chat() {
       dispatch(initializeUserAndConversation())
     }
   }, [conversationIdParam, dispatch])
-
-
 
   // Handle input changes
   const handleInputChange = (content: string) => {
@@ -196,12 +194,14 @@ function Chat() {
 
   const handleMessageBranch = (id: string, newContent: string) => {
     if (currentConversationId) {
-      dispatch(editMessageWithBranching({
-        conversationId: currentConversationId,
-        originalMessageId: parseInt(id),
-        newContent: newContent,
-        modelOverride: selectedModel || undefined
-      }))
+      dispatch(
+        editMessageWithBranching({
+          conversationId: currentConversationId,
+          originalMessageId: parseInt(id),
+          newContent: newContent,
+          modelOverride: selectedModel || undefined,
+        })
+      )
     }
   }
 
@@ -283,12 +283,13 @@ function Chat() {
       <div className='p-5 max-w-4xl flex-1'>
         <h1 className='text-3xl font-bold text-white mb-6'>Ygg Chat {currentConversationId}</h1>
 
-        
-
         {/* Messages Display */}
         <div className='mb-6 bg-gray-800 py-4 rounded-lg dark:bg-neutral-900'>
           <h3 className='text-lg font-semibold text-white mb-3'>Messages ({conversationMessages.length}):</h3>
-          <div ref={messagesContainerRef} className='border light:border-neutral-300 dark:border-neutral-700 rounded-lg py-4 h-230 overflow-y-auto p-3 bg-gray-900 dark:bg-neutral-900'>
+          <div
+            ref={messagesContainerRef}
+            className='border light:border-neutral-300 dark:border-neutral-700 rounded-lg py-4 h-230 overflow-y-auto p-3 bg-gray-900 dark:bg-neutral-900'
+          >
             {displayMessages.length === 0 ? (
               <p className='text-gray-500'>No messages yet...</p>
             ) : (
@@ -348,7 +349,12 @@ function Chat() {
                     : 'Send'}
             </Button>
             <div className='text-neutral-50'>Multi reply count - </div>
-            <TextArea value={multiReplyCount.toString()} onChange={(e) => dispatch(chatActions.multiReplyCountSet(Number(e)))} width='w-1/6' minRows={1} ></TextArea>
+            <TextArea
+              value={multiReplyCount.toString()}
+              onChange={e => dispatch(chatActions.multiReplyCountSet(Number(e)))}
+              width='w-1/6'
+              minRows={1}
+            ></TextArea>
           </div>
           {messageInput.content.length > 0 && (
             <small className='text-gray-400 text-xs mt-2 block'>Press Enter to send, Shift+Enter for new line</small>
@@ -362,12 +368,7 @@ function Chat() {
             <Button variant='primary' size='small' onClick={handleRefreshModels}>
               Refresh Models
             </Button>
-            <Button
-              onClick={() => dispatch(chatActions.heimdallCompactModeToggled()) }
-            >
-              {' '}
-              change mode
-            </Button>
+            <Button onClick={() => dispatch(chatActions.heimdallCompactModeToggled())}> change mode</Button>
 
             <span className='text-gray-300 text-sm'>Available: {models.length} models</span>
           </div>
@@ -500,10 +501,10 @@ function Chat() {
       </div>
 
       <div className='flex-1 min-w-0'>
-        <Heimdall 
-          chatData={heimdallData} 
-          loading={loading} 
-          error={error} 
+        <Heimdall
+          chatData={heimdallData}
+          loading={loading}
+          error={error}
           compactMode={compactMode}
           onNodeSelect={handleNodeSelect}
         />
