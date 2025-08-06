@@ -11,16 +11,15 @@ app.use(cors())
 app.use(express.json())
 app.use('/api', chatRoutes)
 
-// Check if database file exists before initializing
+// Ensure database file and schema exist / are up to date
 const dbPath = path.join(__dirname, 'data', 'yggdrasil.db')
 if (!fs.existsSync(dbPath)) {
-  console.log('Database file not found, initializing new database...')
-  initializeDatabase()
-} else {
-  console.log('Database file exists, skipping schema initialization')
-  // Always initialize prepared statements even if DB exists
-  initializeStatements()
+  console.log('Database file not found, creating new database...')
 }
+// Initialize / migrate schema (CREATE TABLE IF NOT EXISTS is idempotent)
+initializeDatabase()
+// Prepare statements (requires tables to exist)
+initializeStatements()
 ;(async () => {
   await modelService.getAvailableModels() // Force cache population
   console.log('Models discovered:', await modelService.getAvailableModels())

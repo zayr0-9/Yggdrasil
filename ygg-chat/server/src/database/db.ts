@@ -2,7 +2,14 @@
 import Database from 'better-sqlite3'
 import path from 'path'
 
-const DB_PATH = path.join(__dirname, '../data', 'yggdrasil.db')
+import fs from 'fs'
+
+const DATA_DIR = path.join(__dirname, '../data')
+// Ensure the data directory exists before opening the database file
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true })
+}
+const DB_PATH = path.join(DATA_DIR, 'yggdrasil.db')
 
 export const db = new Database(DB_PATH)
 
@@ -67,7 +74,7 @@ export function initializeDatabase() {
 
   // Triggers to maintain children_ids integrity
   db.exec(`
-    CREATE TRIGGER messages_children_insert AFTER INSERT ON messages 
+    CREATE TRIGGER IF NOT EXISTS messages_children_insert AFTER INSERT ON messages 
     WHEN NEW.parent_id IS NOT NULL
     BEGIN
       UPDATE messages 
