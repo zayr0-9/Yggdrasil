@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react'
-import { useParams } from 'react-router-dom'
-import { Button, ChatMessage, Heimdall, TextArea } from '../components'
+import React, { useEffect, useRef, useState } from 'react'
+import { useLocation, useParams } from 'react-router-dom'
+import { Button, ChatMessage, Heimdall, TextArea, TextField } from '../components'
 import {
   // Chat actions
   chatActions,
@@ -29,7 +29,9 @@ import {
   sendMessage,
   updateMessage,
 } from '../features/chats'
+import { makeSelectConversationById, updateConversation } from '../features/conversations'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
+import { getParentPath } from '../utils/path'
 
 // Types
 
@@ -48,6 +50,24 @@ function Chat() {
   const currentConversationId = useAppSelector(selectCurrentConversationId)
   const selectedPath = useAppSelector(selectCurrentPath)
   const multiReplyCount = useAppSelector(selectMultiReplyCount)
+
+  // Conversation title editing
+  const currentConversation = useAppSelector(
+    currentConversationId ? makeSelectConversationById(currentConversationId) : () => null
+  )
+  const [titleInput, setTitleInput] = useState(currentConversation?.title ?? '')
+
+  useEffect(() => {
+    setTitleInput(currentConversation?.title ?? '')
+  }, [currentConversation?.title])
+
+  const titleChanged = titleInput !== (currentConversation?.title ?? '')
+
+  const handleTitleSave = () => {
+    if (currentConversationId && titleChanged) {
+      dispatch(updateConversation({ id: currentConversationId, title: titleInput.trim() }))
+    }
+  }
 
   // Ref for auto-scroll
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -100,12 +120,30 @@ function Chat() {
     }
   }, [selectedPath, displayMessages])
 
+  // If URL contains a #messageId fragment, capture it once
+  const location = useLocation()
+  const hashMessageId = React.useMemo(() => {
+    if (location.hash && location.hash.startsWith('#')) {
+      const idNum = parseInt(location.hash.substring(1))
+      return isNaN(idNum) ? null : idNum
+    }
+    return null
+  }, [location.hash])
+
+  // When we have messages loaded and a hashMessageId, build path to that message and set it
+  useEffect(() => {
+    if (hashMessageId && conversationMessages.length > 0) {
+      const path = getParentPath(conversationMessages, hashMessageId)
+      dispatch(chatActions.conversationPathSet(path))
+    }
+  }, [hashMessageId, conversationMessages, dispatch])
+
   // Auto-select latest branch when messages first load
   useEffect(() => {
     if (conversationMessages.length > 0 && (!selectedPath || selectedPath.length === 0)) {
       // latest message by timestamp
       const latest = [...conversationMessages].sort(
-        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )[0]
       if (latest) {
         const idToMsg = new Map(conversationMessages.map(m => [m.id, m]))
@@ -254,7 +292,7 @@ function Chat() {
           conversation_id: currentConversationId,
           role: 'assistant' as const,
           content: streamState.buffer,
-          timestamp: new Date().toISOString(),
+          created_at: new Date().toISOString(),
           pastedContext: [],
           artifacts: [],
           parentId: null,
@@ -282,6 +320,15 @@ function Chat() {
     <div className='flex min-h-screen bg-gray-900 dark:bg-neutral-900'>
       <div className='p-5 max-w-4xl flex-1'>
         <h1 className='text-3xl font-bold text-white mb-6'>Ygg Chat {currentConversationId}</h1>
+        {/* Conversation Title Editor */}
+        {currentConversationId && (
+          <div className='flex items-center gap-2 mb-4'>
+            <TextField value={titleInput} onChange={setTitleInput} placeholder='Conversation title' size='large' />
+            <Button variant='primary' size='small' disabled={!titleChanged} onClick={handleTitleSave}>
+              Save
+            </Button>
+          </div>
+        )}
 
         {/* Messages Display */}
         <div className='mb-6 bg-gray-800 py-4 rounded-lg dark:bg-neutral-900'>
@@ -299,7 +346,7 @@ function Chat() {
                   id={msg.id.toString()}
                   role={msg.role}
                   content={msg.content}
-                  timestamp={msg.timestamp}
+                  timestamp={msg.created_at}
                   width='w-full'
                   onEdit={handleMessageEdit}
                   onBranch={handleMessageBranch}
@@ -444,6 +491,7 @@ function Chat() {
             <strong>Note:</strong> This tests the chat Redux logic without requiring actual conversation management.
           </p>
         </div>
+
         {/* Chat State Display */}
         <div className='bg-gray-800 p-4 mb-6 rounded-lg text-gray-300 text-sm font-mono dark:bg-neutral-800'>
           <h3 className='text-lg font-semibold mb-3 text-white'>Chat State:</h3>

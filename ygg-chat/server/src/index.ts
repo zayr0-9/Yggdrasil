@@ -1,10 +1,13 @@
 import cors from 'cors'
+import dotenv from 'dotenv'
 import express from 'express'
 import fs from 'fs'
 import path from 'path'
 import { initializeDatabase, initializeStatements } from './database/db'
 import chatRoutes from './routes/chat'
 import { modelService } from './utils/modelService'
+
+dotenv.config({ path: '../.env' })
 
 const app = express()
 app.use(cors())

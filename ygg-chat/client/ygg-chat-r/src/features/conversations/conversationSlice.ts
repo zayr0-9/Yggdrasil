@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { ConversationsState, Conversation } from './conversationTypes'
-import { fetchConversations, createConversation } from './conversationActions'
+import { fetchConversations, createConversation, deleteConversation, updateConversation } from './conversationActions'
 
 const initialState: ConversationsState = {
   items: [],
@@ -42,6 +42,35 @@ const conversationSlice = createSlice({
         state.items.unshift(action.payload)
       })
       .addCase(createConversation.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload as string
+      })
+      // update conversation title
+      .addCase(updateConversation.pending, state => {
+        state.loading = true
+        state.error = null
+      })
+      .addCase(updateConversation.fulfilled, (state, action: PayloadAction<Conversation>) => {
+        state.loading = false
+        const idx = state.items.findIndex(c => c.id === action.payload.id)
+        if (idx !== -1) {
+          state.items[idx] = action.payload
+        }
+      })
+      .addCase(updateConversation.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload as string
+      })
+      // delete conversation
+      .addCase(deleteConversation.pending, state => {
+        state.loading = true
+        state.error = null
+      })
+      .addCase(deleteConversation.fulfilled, (state, action: PayloadAction<number>) => {
+        state.loading = false
+        state.items = state.items.filter(conv => conv.id !== action.payload)
+      })
+      .addCase(deleteConversation.rejected, (state, action) => {
         state.loading = false
         state.error = action.payload as string
       })

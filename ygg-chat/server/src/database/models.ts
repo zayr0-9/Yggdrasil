@@ -1,3 +1,4 @@
+import { BaseMessage } from '../../../shared/types'
 import { modelService } from '../utils/modelService'
 import { statements } from './db'
 
@@ -16,15 +17,7 @@ export interface Conversation {
   updated_at: string
 }
 
-export interface Message {
-  id: number
-  conversation_id: number
-  parent_id: number | null
-  children_ids: string // JSON array of child message IDs
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  created_at: string
-}
+export interface Message extends BaseMessage {}
 
 // Search result interfaces
 export interface SearchResult extends Message {
@@ -101,7 +94,7 @@ export class MessageService {
     conversationId: number,
     role: Message['role'],
     content: string,
-    parentId: number | null = null,
+    parentId: number | null = null
     // children: []
   ): Message {
     const result = statements.createMessage.run(conversationId, parentId, role, content, '[]')
@@ -196,7 +189,7 @@ export function buildMessageTree(messages: Message[]): ChatNode | null {
     }
 
     // Add children using children_ids array
-    const childIds: number[] = JSON.parse(msg.children_ids || '[]')
+    const childIds: number[] = msg.children_ids
     childIds.forEach(childId => {
       const childNode = messageMap.get(childId)
       if (childNode) {

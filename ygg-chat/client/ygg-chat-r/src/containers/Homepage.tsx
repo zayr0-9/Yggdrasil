@@ -5,6 +5,7 @@ import { chatActions } from '../features/chats'
 import {
   Conversation,
   createConversation,
+  deleteConversation,
   fetchConversations,
   selectAllConversations,
   selectConvError,
@@ -47,6 +48,10 @@ const Homepage: React.FC = () => {
   const handleSelect = (conv: Conversation) => {
     dispatch(chatActions.conversationSet(conv.id))
     navigate(`/chat/${conv.id}`)
+  }
+
+  const handleDelete = (id: number) => {
+    dispatch(deleteConversation({ id }))
   }
 
   const handleNewConversation = async () => {
@@ -123,7 +128,19 @@ style={{ colorScheme: 'dark' }}
             className='p-3 mb-4 bg-rose-100 rounded-lg cursor-pointer dark:bg-zinc-700 hover:bg-rose-50 dark:hover:bg-zinc-600'
             onClick={() => handleSelect(conv)}
           >
-            <div className='font-semibold dark:text-neutral-100'>{conv.title || `Conversation ${conv.id}`}</div>
+            <div className='flex items-center justify-between'>
+              <span className='font-semibold dark:text-neutral-100'>{conv.title || `Conversation ${conv.id}`}</span>
+              <Button
+                variant='secondary'
+                size='small'
+                onClick={(e => {
+                  (e as unknown as React.MouseEvent).stopPropagation()
+                  handleDelete(conv.id)
+                }) as unknown as () => void}
+              >
+                Delete
+              </Button>
+            </div>
             {conv.created_at && (
               <div className='text-xs text-neutral-900 dark:text-neutral-100'>
                 {new Date(conv.created_at).toLocaleString()}

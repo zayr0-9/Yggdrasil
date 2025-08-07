@@ -1,10 +1,12 @@
 // This file contains types shared between client and server
-export interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant' | 'system'
+export interface BaseMessage {
+  id: number
+  conversation_id: number
+  role: 'user' | 'assistant'
   content: string
-  timestamp: Date
-  chatId: string
+  parent_id?: number | null
+  children_ids: number[]
+  created_at: string // ISO timestamp, consistent naming
 }
 
 export interface ChatSession {
@@ -22,7 +24,7 @@ export interface ChatRequest {
 }
 
 export interface ChatResponse {
-  message: ChatMessage
+  message: BaseMessage
   chatId: string
 }
 

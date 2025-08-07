@@ -145,7 +145,7 @@ export const chatSlice = createSlice({
           conversation_id: state.conversation.currentConversationId,
           role: 'assistant' as const,
           content: state.streaming.buffer,
-          timestamp: new Date().toISOString(),
+          created_at: new Date().toISOString(),
           pastedContext: [],
           artifacts: [],
           parentId: state.conversation.messages.at(-1)?.id,
@@ -249,17 +249,17 @@ export const chatSlice = createSlice({
       const buildPathToMessage = (messageId: number): number[] => {
         const path: number[] = []
         let currentId: number | null = messageId
-        
+
         // Walk up the parent chain to build the complete path
         while (currentId !== null) {
           path.unshift(currentId)
           const message = state.conversation.messages.find(m => m.id === currentId)
           currentId = message?.parent_id ?? null
         }
-        
+
         return path
       }
-      
+
       state.conversation.currentPath = buildPathToMessage(newMessage.id)
     },
 

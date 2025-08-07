@@ -1,7 +1,7 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
+import { RootState } from '../../store/store'
 import { api } from '../../utils/api'
 import { Conversation } from './conversationTypes'
-import { RootState } from '../../store/store'
 
 // Fetch conversations for current user (creates demo user if none)
 export const fetchConversations = createAsyncThunk<Conversation[], void, { state: RootState }>(
@@ -44,3 +44,30 @@ export const createConversation = createAsyncThunk<Conversation, { title?: strin
     }
   }
 )
+
+// Update conversation title by id
+export const updateConversation = createAsyncThunk<Conversation, { id: number; title: string }, { state: RootState }>(
+  'conversations/update',
+  async ({ id, title }, { rejectWithValue }) => {
+    try {
+      return await api.patch<Conversation>(`/conversations/${id}/`, { title })
+    } catch (err) {
+      return rejectWithValue(err instanceof Error ? err.message : 'Failed to update conversation')
+    }
+  }
+)
+
+// Delete conversation by id
+export const deleteConversation = createAsyncThunk<number, { id: number }, { state: RootState }>(
+  'conversations/delete',
+  async ({ id }, { rejectWithValue }) => {
+    try {
+      await api.delete(`/conversations/${id}/`)
+      return id
+    } catch (err) {
+      return rejectWithValue(err instanceof Error ? err.message : 'Failed to delete conversation')
+    }
+  }
+)
+
+// delete conversation

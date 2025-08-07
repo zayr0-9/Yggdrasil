@@ -32,6 +32,13 @@ export const api = {
       body: data ? JSON.stringify(data) : undefined,
     }),
 
+  patch: <T>(endpoint: string, data?: any, options?: RequestInit) =>
+    apiCall<T>(endpoint, {
+      ...options,
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    }),
+
   put: <T>(endpoint: string, data?: any, options?: RequestInit) =>
     apiCall<T>(endpoint, {
       ...options,

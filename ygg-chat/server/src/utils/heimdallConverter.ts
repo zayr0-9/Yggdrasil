@@ -111,9 +111,10 @@ export function debugMessageTree(messages: Message[]): void {
 
   const childCounts = new Map<number, number>()
   messages.forEach(msg => {
-    if (msg.parent_id !== null) {
-      const count = childCounts.get(msg.parent_id) || 0
-      childCounts.set(msg.parent_id, count + 1)
+    if (msg.parent_id != null) { // covers both null and undefined
+      const parentId = msg.parent_id
+      const count = childCounts.get(parentId) ?? 0
+      childCounts.set(parentId, count + 1)
     }
   })
 

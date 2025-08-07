@@ -1,15 +1,10 @@
+import { BaseMessage } from '../../../../../shared/types'
+
 // Message types (shared with conversations)
-export interface Message {
-  id: number
-  conversation_id: number
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: string
+export interface Message extends BaseMessage {
   //media: Blob or path to file
   pastedContext: string[]
   artifacts: string[]
-  parent_id?: number
-  children_ids: number[]
   //should write a function which extracts text content
   //when user drags and drops it on the input component
 }

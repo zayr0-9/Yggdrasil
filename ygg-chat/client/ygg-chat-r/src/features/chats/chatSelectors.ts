@@ -138,7 +138,7 @@ export const selectDisplayMessages = createSelector(
     if (!currentPath || currentPath.length === 0) {
       const unique = new Map<number, (typeof messages)[number]>()
       for (const m of messages) if (!unique.has(m.id)) unique.set(m.id, m)
-      return [...unique.values()].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+      return [...unique.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
     }
 
     // Build map for fast lookup
@@ -151,7 +151,7 @@ export const selectDisplayMessages = createSelector(
       if (m) branch.push(m)
     }
 
-        // Descendants (linear): walk down ONLY when there is exactly one child to avoid accidentally
+    // Descendants (linear): walk down ONLY when there is exactly one child to avoid accidentally
     // switching to an alternate branch. This ensures that after creating a new branch, we display
     // the new branch path exclusively instead of continuing down an existing sibling branch.
     let cursor = currentPath[currentPath.length - 1]
@@ -184,6 +184,6 @@ export const selectDisplayMessages = createSelector(
     const unique = new Map<number, (typeof messages)[number]>()
     for (const m of branch) if (!unique.has(m.id)) unique.set(m.id, m)
     console.log(`display messages ${JSON.stringify([...unique.values()])}`)
-    return [...unique.values()].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    return [...unique.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   }
 )
