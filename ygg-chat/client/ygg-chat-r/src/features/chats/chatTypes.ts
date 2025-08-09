@@ -39,6 +39,19 @@ export interface ModelState {
   lastRefresh: number | null
 }
 
+export interface Provider {
+  name: string
+  url: string
+  description: string
+}
+
+export interface ProviderState {
+  providers: Provider[]
+  currentProvider: string | null
+  loading: boolean
+  error: string | null
+}
+
 // Message composition types
 export interface MessageInput {
   content: string
@@ -85,6 +98,7 @@ export interface InitializationState {
 
 export interface ChatState {
   models: ModelState
+  providerState: ProviderState
   composition: CompositionState
   streaming: StreamState
   ui: {

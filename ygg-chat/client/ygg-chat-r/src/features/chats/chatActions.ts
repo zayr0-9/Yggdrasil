@@ -1,7 +1,7 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
 import type { RootState } from '../../store/store'
 import { apiCall, createStreamingRequest } from '../../utils/api'
-import { chatActions } from './chatSlice'
+import { chatSliceActions } from './chatSlice'
 import { BranchMessagePayload, EditMessagePayload, Message, ModelsResponse, SendMessagePayload } from './chatTypes'
 // TODO: Import when conversations feature is available
 // import { conversationActions } from '../conversations'
@@ -64,15 +64,15 @@ export const fetchModels = createAsyncThunk(
     appropriate reducers.
     */
 
-    dispatch(chatActions.modelsLoadingStarted())
+    dispatch(chatSliceActions.modelsLoadingStarted())
 
     try {
       const response = await apiCall<ModelsResponse>('/models')
-      dispatch(chatActions.modelsLoaded(response))
+      dispatch(chatSliceActions.modelsLoaded(response))
       return response
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch models'
-      dispatch(chatActions.modelsError(message))
+      dispatch(chatSliceActions.modelsError(message))
       return rejectWithValue(message)
     }
   }
@@ -85,7 +85,7 @@ export const sendMessage = createAsyncThunk(
     { conversationId, input, parent, repeatNum }: SendMessagePayload,
     { dispatch, getState, rejectWithValue, signal }
   ) => {
-    dispatch(chatActions.sendingStarted())
+    dispatch(chatSliceActions.sendingStarted())
 
     let controller: AbortController | undefined
 
@@ -171,20 +171,20 @@ export const sendMessage = createAsyncThunk(
                 if (!chunk.message.timestamp) {
                   chunk.message.timestamp = new Date().toISOString()
                 }
-                dispatch(chatActions.messageAdded(chunk.message))
+                dispatch(chatSliceActions.messageAdded(chunk.message))
               }
 
               // For streaming, accumulate or finalize per event
               if (chunk.type === 'chunk') {
-                dispatch(chatActions.streamChunkReceived(chunk))
+                dispatch(chatSliceActions.streamChunkReceived(chunk))
               } else if (chunk.type === 'complete' && chunk.message) {
                 // Push each assistant reply as its own message
-                dispatch(chatActions.messageAdded(chunk.message))
+                dispatch(chatSliceActions.messageAdded(chunk.message))
                 // Reset streaming buffer for next iteration
-                dispatch(chatActions.streamChunkReceived({ type: 'reset' } as any))
+                dispatch(chatSliceActions.streamChunkReceived({ type: 'reset' } as any))
                 messageId = chunk.message.id
               } else if (chunk.type === 'error') {
-                dispatch(chatActions.streamChunkReceived(chunk))
+                dispatch(chatSliceActions.streamChunkReceived(chunk))
                 throw new Error(chunk.error || 'Stream error')
               }
             } catch (parseError) {
@@ -197,22 +197,22 @@ export const sendMessage = createAsyncThunk(
       }
 
       if (messageId) {
-        dispatch(chatActions.streamCompleted({ messageId }))
+        dispatch(chatSliceActions.streamCompleted({ messageId }))
       }
 
-      dispatch(chatActions.sendingCompleted())
-      dispatch(chatActions.inputCleared())
+      dispatch(chatSliceActions.sendingCompleted())
+      dispatch(chatSliceActions.inputCleared())
 
       return { messageId, userMessage }
     } catch (error) {
-      dispatch(chatActions.sendingCompleted())
+      dispatch(chatSliceActions.sendingCompleted())
 
       if (error instanceof Error && error.name === 'AbortError') {
         return rejectWithValue('Message cancelled')
       }
 
       const message = error instanceof Error ? error.message : 'Failed to send message'
-      dispatch(chatActions.streamChunkReceived({ type: 'error', error: message }))
+      dispatch(chatSliceActions.streamChunkReceived({ type: 'error', error: message }))
       return rejectWithValue(message)
     }
   }
@@ -226,7 +226,7 @@ export const selectModel = createAsyncThunk('chat/selectModel', async (modelName
     throw new Error(`Model ${modelName} not available`)
   }
 
-  dispatch(chatActions.modelSelected({ modelName, persist: true }))
+  dispatch(chatSliceActions.modelSelected({ modelName, persist: true }))
   return modelName
 })
 
@@ -238,7 +238,7 @@ export const updateMessage = createAsyncThunk(
         method: 'PUT',
         body: JSON.stringify({ content }),
       })
-      dispatch(chatActions.messageUpdated({ id, content }))
+      dispatch(chatSliceActions.messageUpdated({ id, content }))
       return updated
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Update failed')
@@ -252,7 +252,7 @@ export const fetchConversationMessages = createAsyncThunk(
   async (conversationId: number, { dispatch, rejectWithValue }) => {
     try {
       const messages = await apiCall<Message[]>(`/conversations/${conversationId}/messages`)
-      dispatch(chatActions.messagesLoaded(messages))
+      dispatch(chatSliceActions.messagesLoaded(messages))
       return messages
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch messages')
@@ -281,7 +281,7 @@ export const editMessageWithBranching = createAsyncThunk(
     { conversationId, originalMessageId, newContent, modelOverride, systemPrompt }: EditMessagePayload,
     { dispatch, getState, rejectWithValue, signal }
   ) => {
-    dispatch(chatActions.sendingStarted())
+    dispatch(chatSliceActions.sendingStarted())
 
     let controller: AbortController | undefined
 
@@ -344,14 +344,14 @@ export const editMessageWithBranching = createAsyncThunk(
 
               if (chunk.type === 'user_message' && chunk.message) {
                 userMessage = chunk.message
-                dispatch(chatActions.messageBranchCreated({ newMessage: chunk.message }))
+                dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
               }
 
-              dispatch(chatActions.streamChunkReceived(chunk))
+              dispatch(chatSliceActions.streamChunkReceived(chunk))
 
               if (chunk.type === 'complete' && chunk.message) {
                 messageId = chunk.message.id
-                dispatch(chatActions.messageBranchCreated({ newMessage: chunk.message }))
+                dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
               } else if (chunk.type === 'error') {
                 throw new Error(chunk.error || 'Stream error')
               }
@@ -365,20 +365,20 @@ export const editMessageWithBranching = createAsyncThunk(
       }
 
       if (messageId) {
-        dispatch(chatActions.streamCompleted({ messageId }))
+        dispatch(chatSliceActions.streamCompleted({ messageId }))
       }
 
-      dispatch(chatActions.sendingCompleted())
+      dispatch(chatSliceActions.sendingCompleted())
       return { messageId, userMessage, originalMessageId }
     } catch (error) {
-      dispatch(chatActions.sendingCompleted())
+      dispatch(chatSliceActions.sendingCompleted())
 
       if (error instanceof Error && error.name === 'AbortError') {
         return rejectWithValue('Message cancelled')
       }
 
       const message = error instanceof Error ? error.message : 'Failed to edit message'
-      dispatch(chatActions.streamChunkReceived({ type: 'error', error: message }))
+      dispatch(chatSliceActions.streamChunkReceived({ type: 'error', error: message }))
       return rejectWithValue(message)
     }
   }
@@ -391,7 +391,7 @@ export const sendMessageToBranch = createAsyncThunk(
     { conversationId, parentId, content, modelOverride, systemPrompt }: BranchMessagePayload,
     { dispatch, getState, rejectWithValue, signal }
   ) => {
-    dispatch(chatActions.sendingStarted())
+    dispatch(chatSliceActions.sendingStarted())
 
     let controller: AbortController | undefined
 
@@ -445,14 +445,14 @@ export const sendMessageToBranch = createAsyncThunk(
 
               if (chunk.type === 'user_message' && chunk.message) {
                 userMessage = chunk.message
-                dispatch(chatActions.messageBranchCreated({ newMessage: chunk.message }))
+                dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
               }
 
-              dispatch(chatActions.streamChunkReceived(chunk))
+              dispatch(chatSliceActions.streamChunkReceived(chunk))
 
               if (chunk.type === 'complete' && chunk.message) {
                 messageId = chunk.message.id
-                dispatch(chatActions.messageBranchCreated({ newMessage: chunk.message }))
+                dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
               } else if (chunk.type === 'error') {
                 throw new Error(chunk.error || 'Stream error')
               }
@@ -466,21 +466,21 @@ export const sendMessageToBranch = createAsyncThunk(
       }
 
       if (messageId) {
-        dispatch(chatActions.streamCompleted({ messageId }))
+        dispatch(chatSliceActions.streamCompleted({ messageId }))
       }
 
-      dispatch(chatActions.sendingCompleted())
-      dispatch(chatActions.inputCleared())
+      dispatch(chatSliceActions.sendingCompleted())
+      dispatch(chatSliceActions.inputCleared())
       return { messageId, userMessage }
     } catch (error) {
-      dispatch(chatActions.sendingCompleted())
+      dispatch(chatSliceActions.sendingCompleted())
 
       if (error instanceof Error && error.name === 'AbortError') {
         return rejectWithValue('Message cancelled')
       }
 
       const message = error instanceof Error ? error.message : 'Failed to send message'
-      dispatch(chatActions.streamChunkReceived({ type: 'error', error: message }))
+      dispatch(chatSliceActions.streamChunkReceived({ type: 'error', error: message }))
       return rejectWithValue(message)
     }
   }
@@ -490,15 +490,15 @@ export const sendMessageToBranch = createAsyncThunk(
 export const fetchMessageTree = createAsyncThunk(
   'chat/fetchMessageTree',
   async (conversationId: number, { dispatch, rejectWithValue }) => {
-    dispatch(chatActions.heimdallLoadingStarted())
+    dispatch(chatSliceActions.heimdallLoadingStarted())
     try {
       const treeData = await apiCall<any>(`/conversations/${conversationId}/messages/tree`)
       console.log(`tree data ${JSON.stringify(treeData)}`)
-      dispatch(chatActions.heimdallDataLoaded({ treeData }))
+      dispatch(chatSliceActions.heimdallDataLoaded({ treeData }))
       return treeData
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch message tree'
-      dispatch(chatActions.heimdallError(message))
+      dispatch(chatSliceActions.heimdallError(message))
       return rejectWithValue(message)
     }
   }
@@ -508,7 +508,7 @@ export const fetchMessageTree = createAsyncThunk(
 export const initializeUserAndConversation = createAsyncThunk(
   'chat/initializeUserAndConversation',
   async (_arg, { dispatch, rejectWithValue }) => {
-    dispatch(chatActions.initializationStarted())
+    dispatch(chatSliceActions.initializationStarted())
     try {
       // Create test user
       const user = await apiCall<{ id: number }>('/users', {
@@ -522,11 +522,11 @@ export const initializeUserAndConversation = createAsyncThunk(
         body: JSON.stringify({ userId: user.id }),
       })
 
-      dispatch(chatActions.initializationCompleted({ userId: user.id, conversationId: conversation.id }))
+      dispatch(chatSliceActions.initializationCompleted({ userId: user.id, conversationId: conversation.id }))
       return { userId: user.id, conversationId: conversation.id }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to initialize'
-      dispatch(chatActions.initializationError(message))
+      dispatch(chatSliceActions.initializationError(message))
       return rejectWithValue(message)
     }
   }

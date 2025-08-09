@@ -7,6 +7,8 @@ const selectChatState = (state: RootState) => state.chat
 // Model selectors - simplified for string models
 export const selectModels = createSelector([selectChatState], chat => chat.models.available)
 
+export const selectProviderState = createSelector([selectChatState], chat => chat.providerState)
+
 export const selectSelectedModel = createSelector([selectChatState], chat => chat.models.selected)
 
 export const selectDefaultModel = createSelector([selectChatState], chat => chat.models.default)

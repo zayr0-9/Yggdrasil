@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
+import providersList from '../../../../../shared/providers.json'
 import { ChatState, Message, MessageInput, ModelSelectionPayload, ModelsResponse, StreamChunk } from './chatTypes'
 
 const initialState: ChatState = {
@@ -9,6 +10,12 @@ const initialState: ChatState = {
     loading: false,
     error: null,
     lastRefresh: null,
+  },
+  providerState: {
+    providers: Object.values(providersList.providers),
+    currentProvider: localStorage.getItem('currentProvider') || null,
+    loading: false,
+    error: null,
   },
   composition: {
     input: {
@@ -55,6 +62,11 @@ export const chatSlice = createSlice({
   name: 'chat',
   initialState,
   reducers: {
+    //provider management
+    providerSelected: (state, action: PayloadAction<string>) => {
+      state.providerState.currentProvider = action.payload
+      localStorage.setItem('currentProvider', action.payload)
+    },
     // Model management - simplified for string models
     modelsLoaded: (state, action: PayloadAction<ModelsResponse>) => {
       state.models.available = action.payload.models
@@ -150,6 +162,7 @@ export const chatSlice = createSlice({
           artifacts: [],
           parentId: state.conversation.messages.at(-1)?.id,
           children_ids: [],
+          model_name: state.models.selected,
         }
         state.conversation.messages.push(assistantMessage)
 
@@ -316,5 +329,5 @@ export const chatSlice = createSlice({
   },
 })
 
-export const chatActions = chatSlice.actions
+export const chatSliceActions = chatSlice.actions
 export default chatSlice.reducer

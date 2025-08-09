@@ -9,14 +9,22 @@ export type {
   ModelState,
   SendMessagePayload,
   StreamChunk,
-  StreamState
+  StreamState,
 } from './chatTypes'
 
 // Slice
-export { chatActions, default as chatReducer } from './chatSlice'
+export { default as chatReducer, chatSliceActions } from './chatSlice'
 
 // Async actions
-export { deleteMessage, editMessageWithBranching, fetchModels, selectModel, sendMessage, sendMessageToBranch, updateMessage } from './chatActions'
+export {
+  deleteMessage,
+  editMessageWithBranching,
+  fetchModels,
+  selectModel,
+  sendMessage,
+  sendMessageToBranch,
+  updateMessage,
+} from './chatActions'
 
 // Selectors - grouped by feature
 export {
@@ -45,13 +53,14 @@ export {
   selectModelsError,
   selectModelsLoading,
   selectModelState,
+  selectProviderState,
   selectSelectedModel,
   selectSendingState,
   selectStreamBuffer,
   selectStreamError,
   // Streaming selectors
   selectStreamState,
-  selectValidationError
+  selectValidationError,
 } from './chatSelectors'
 
 // Convenience re-exports
@@ -60,7 +69,15 @@ export { fetchConversationMessages, fetchMessageTree, initializeUserAndConversat
 
 // New selectors for Heimdall and initialization
 export {
-  selectHeimdallCompactMode, selectHeimdallData, selectHeimdallError, selectHeimdallLoading, selectHeimdallState, selectInitializationError, selectInitializationLoading, selectInitializationState, selectMultiReplyCount
+  selectHeimdallCompactMode,
+  selectHeimdallData,
+  selectHeimdallError,
+  selectHeimdallLoading,
+  selectHeimdallState,
+  selectInitializationError,
+  selectInitializationLoading,
+  selectInitializationState,
+  selectMultiReplyCount,
 } from './chatSelectors'
 
-export { chatActions as actions } from './chatSlice'
+export { chatSliceActions as actions } from './chatSlice'

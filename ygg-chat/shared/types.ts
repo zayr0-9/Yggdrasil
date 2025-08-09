@@ -7,6 +7,8 @@ export interface BaseMessage {
   parent_id?: number | null
   children_ids: number[]
   created_at: string // ISO timestamp, consistent naming
+  updated_at?: string
+  model_name: string
 }
 
 export interface ChatSession {

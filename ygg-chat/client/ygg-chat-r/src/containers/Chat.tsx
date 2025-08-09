@@ -2,8 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { Button, ChatMessage, Heimdall, TextArea, TextField } from '../components'
 import {
-  // Chat actions
-  chatActions,
+  chatSliceActions,
   deleteMessage,
   editMessageWithBranching,
   fetchConversationMessages,
@@ -23,6 +22,7 @@ import {
   // Chat selectors
   selectModels,
   selectMultiReplyCount,
+  selectProviderState,
   selectSelectedModel,
   selectSendingState,
   selectStreamState,
@@ -41,6 +41,7 @@ function Chat() {
   // Redux selectors
   const models = useAppSelector(selectModels)
   const selectedModel = useAppSelector(selectSelectedModel)
+  const providers = useAppSelector(selectProviderState)
   const messageInput = useAppSelector(selectMessageInput)
   const canSend = useAppSelector(selectCanSend)
   const sendingState = useAppSelector(selectSendingState)
@@ -134,7 +135,7 @@ function Chat() {
   useEffect(() => {
     if (hashMessageId && conversationMessages.length > 0) {
       const path = getParentPath(conversationMessages, hashMessageId)
-      dispatch(chatActions.conversationPathSet(path))
+      dispatch(chatSliceActions.conversationPathSet(path))
     }
   }, [hashMessageId, conversationMessages, dispatch])
 
@@ -155,7 +156,7 @@ function Chat() {
         }
         if (pathNums.length) {
           console.log(`path nums ${pathNums}`)
-          dispatch(chatActions.conversationPathSet(pathNums))
+          dispatch(chatSliceActions.conversationPathSet(pathNums))
         }
       }
     }
@@ -173,7 +174,7 @@ function Chat() {
     if (conversationIdParam) {
       const idNum = parseInt(conversationIdParam)
       if (!isNaN(idNum)) {
-        dispatch(chatActions.conversationSet(idNum))
+        dispatch(chatSliceActions.conversationSet(idNum))
       }
     } else {
       dispatch(initializeUserAndConversation())
@@ -182,12 +183,16 @@ function Chat() {
 
   // Handle input changes
   const handleInputChange = (content: string) => {
-    dispatch(chatActions.inputChanged({ content }))
+    dispatch(chatSliceActions.inputChanged({ content }))
   }
 
   // Handle model selection
   const handleModelSelect = (modelName: string) => {
-    dispatch(chatActions.modelSelected({ modelName, persist: true }))
+    dispatch(chatSliceActions.modelSelected({ modelName, persist: true }))
+  }
+
+  const handleProviderSelect = (providerName: string) => {
+    dispatch(chatSliceActions.providerSelected(providerName))
   }
 
   const handleSend = (value: number) => {
@@ -225,7 +230,7 @@ function Chat() {
   // }
 
   const handleMessageEdit = (id: string, newContent: string) => {
-    dispatch(chatActions.messageUpdated({ id: parseInt(id), content: newContent }))
+    dispatch(chatSliceActions.messageUpdated({ id: parseInt(id), content: newContent }))
     dispatch(updateMessage({ id: parseInt(id), content: newContent }))
     console.log(parseInt(id))
   }
@@ -246,12 +251,12 @@ function Chat() {
   const handleNodeSelect = (nodeId: string, path: string[]) => {
     if (!nodeId || !path || path.length === 0) return // ignore clicks on empty space
     console.log('Node selected:', nodeId, 'Path:', path)
-    dispatch(chatActions.selectedNodePathSet(path))
+    dispatch(chatSliceActions.selectedNodePathSet(path))
   }
 
   const handleMessageDelete = (id: string) => {
     const messageId = parseInt(id)
-    dispatch(chatActions.messageDeleted(messageId))
+    dispatch(chatSliceActions.messageDeleted(messageId))
     if (currentConversationId) {
       dispatch(deleteMessage({ id: messageId, conversationId: currentConversationId }))
     }
@@ -297,8 +302,9 @@ function Chat() {
           artifacts: [],
           parentId: null,
           children_ids: [],
+          model_name: selectedModel,
         }
-        dispatch(chatActions.messageAdded(assistantMessage))
+        dispatch(chatSliceActions.messageAdded(assistantMessage))
       }
 
       // Refresh tree when response completes
@@ -398,7 +404,7 @@ function Chat() {
             <div className='text-neutral-50'>Multi reply count - </div>
             <TextArea
               value={multiReplyCount.toString()}
-              onChange={e => dispatch(chatActions.multiReplyCountSet(Number(e)))}
+              onChange={e => dispatch(chatSliceActions.multiReplyCountSet(Number(e)))}
               width='w-1/6'
               minRows={1}
             ></TextArea>
@@ -408,6 +414,33 @@ function Chat() {
           )}
         </div>
 
+        {/* Provider Selection */}
+        <div className='mb-6 bg-gray-800 p-4 rounded-lg dark:bg-neutral-800'>
+          <h3 className='text-lg font-semibold text-white mb-3'>Provider Selection:</h3>
+          <div className='flex items-center gap-3 mb-3'>
+            {/* TODO : implement provider refresh */}
+            {/* <Button variant='primary' size='small' onClick={handleRefreshProviders}>
+              Refresh Providers
+            </Button> */}
+
+            <span className='text-gray-300 text-sm'>Available: {models.length} providers</span>
+          </div>
+
+          <select
+            value={providers.currentProvider || ''}
+            onChange={e => handleProviderSelect(e.target.value)}
+            className='w-full max-w-md p-2 rounded bg-gray-700 text-white border border-gray-600'
+            disabled={providers.providers.length === 0}
+          >
+            <option value=''>Select a provider...</option>
+            {providers.providers.map(provider => (
+              <option key={provider.url} value={provider.url}>
+                {provider.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Model Selection */}
         <div className='mb-6 bg-gray-800 p-4 rounded-lg dark:bg-neutral-800'>
           <h3 className='text-lg font-semibold text-white mb-3'>Model Selection:</h3>
@@ -415,7 +448,7 @@ function Chat() {
             <Button variant='primary' size='small' onClick={handleRefreshModels}>
               Refresh Models
             </Button>
-            <Button onClick={() => dispatch(chatActions.heimdallCompactModeToggled())}> change mode</Button>
+            <Button onClick={() => dispatch(chatSliceActions.heimdallCompactModeToggled())}> change mode</Button>
 
             <span className='text-gray-300 text-sm'>Available: {models.length} models</span>
           </div>
@@ -442,10 +475,10 @@ function Chat() {
             <Button variant='secondary' size='small' onClick={() => handleInputChange('Hello, how are you?')}>
               Set Test Message
             </Button>
-            <Button variant='danger' size='small' onClick={() => dispatch(chatActions.inputCleared())}>
+            <Button variant='danger' size='small' onClick={() => dispatch(chatSliceActions.inputCleared())}>
               Clear Input
             </Button>
-            <Button variant='outline' size='small' onClick={() => dispatch(chatActions.messagesCleared())}>
+            <Button variant='outline' size='small' onClick={() => dispatch(chatSliceActions.messagesCleared())}>
               Clear Messages
             </Button>
             <Button
@@ -453,8 +486,8 @@ function Chat() {
               size='small'
               onClick={() => {
                 console.log('🆕 New conversation - clearing state')
-                dispatch(chatActions.conversationCleared())
-                dispatch(chatActions.heimdallDataLoaded({ treeData: null }))
+                dispatch(chatSliceActions.conversationCleared())
+                dispatch(chatSliceActions.heimdallDataLoaded({ treeData: null }))
               }}
             >
               New Conversation
