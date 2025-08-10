@@ -56,6 +56,7 @@ const initialState: ChatState = {
     error: null,
     userId: null,
   },
+  selectedNodes: [],
 }
 
 export const chatSlice = createSlice({
@@ -192,6 +193,10 @@ export const chatSlice = createSlice({
       state.conversation.currentConversationId = null
       state.conversation.messages = []
       state.conversation.currentPath = []
+    },
+
+    nodesSelected: (state, action: PayloadAction<number[]>) => {
+      state.selectedNodes = action.payload
     },
 
     messageAdded: (state, action: PayloadAction<Message>) => {

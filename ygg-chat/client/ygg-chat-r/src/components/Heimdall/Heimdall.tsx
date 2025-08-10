@@ -1,6 +1,9 @@
 import { Move, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import type { JSX } from 'react'
 import React, { MouseEvent, useEffect, useRef, useState } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
+import { chatSliceActions } from '../../features/chats/chatSlice'
+import type { RootState } from '../../store/store'
 
 // Type definitions
 interface ChatNode {
@@ -52,6 +55,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   error = null,
   onNodeSelect,
 }) => {
+  const dispatch = useDispatch()
+  const selectedNodes = useSelector((state: RootState) => state.chat.selectedNodes)
+  
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState<number>(compactMode ? 1 : 1)
@@ -274,6 +280,41 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     setIsDragging(false)
   }
 
+  // Handle right-click context menu events
+  const handleContextMenu = (e: React.MouseEvent<SVGElement>, nodeId: string): void => {
+    e.preventDefault() // Prevent default browser context menu
+    e.stopPropagation()
+    
+    // Convert nodeId to number for selectedNodes array
+    const nodeIdNumber = parseInt(nodeId, 10)
+    
+    // Check if the node is already selected
+    const isAlreadySelected = selectedNodes.includes(nodeIdNumber)
+    
+    let newSelectedNodes: number[]
+    
+    if (e.ctrlKey || e.metaKey) {
+      // Multi-select: toggle the node in the selection
+      if (isAlreadySelected) {
+        newSelectedNodes = selectedNodes.filter(id => id !== nodeIdNumber)
+      } else {
+        newSelectedNodes = [...selectedNodes, nodeIdNumber]
+      }
+    } else {
+      // Single select: replace selection with this node
+      newSelectedNodes = [nodeIdNumber]
+    }
+    
+    // Dispatch the nodesSelected action
+    dispatch(chatSliceActions.nodesSelected(newSelectedNodes))
+    
+    // Also trigger the existing onNodeSelect callback if provided
+    if (onNodeSelect) {
+      const path = getPathToNode(nodeId)
+      onNodeSelect(nodeId, path || [])
+    }
+  }
+
   const resetView = (): void => {
     setZoom(compactMode ? 1 : 0.6)
     setPan({ x: 0, y: 0 })
@@ -400,6 +441,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                   onNodeSelect(node.id, path)
                 }
               }}
+              onContextMenu={(e) => handleContextMenu(e, node.id)}
             />
             <foreignObject width={nodeWidth} height={nodeHeight} style={{ pointerEvents: 'none', userSelect: 'none' }}>
               <div className='p-3 text-white text-sm h-full flex items-center'>
@@ -432,6 +474,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                   onNodeSelect(node.id, path)
                 }
               }}
+              onContextMenu={(e) => handleContextMenu(e, node.id)}
             />
             {/* Add a small indicator for branch nodes */}
             {node.children && node.children.length > 1 && (
@@ -499,7 +542,11 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   }
 
   return (
-    <div ref={containerRef} className='w-full h-screen bg-gray-900 relative overflow-hidden dark:bg-neutral-900'>
+    <div 
+      ref={containerRef} 
+      className='w-full h-screen bg-gray-900 relative overflow-hidden dark:bg-neutral-900'
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <div className='absolute top-4 left-4 z-10 flex gap-2'>
         <button
           onClick={zoomIn}

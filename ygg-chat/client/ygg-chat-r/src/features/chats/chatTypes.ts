@@ -107,6 +107,7 @@ export interface ChatState {
   conversation: ConversationState
   heimdall: HeimdallState
   initialization: InitializationState
+  selectedNodes: number[]
 }
 
 // Action payloads
