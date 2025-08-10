@@ -7,7 +7,7 @@ import {
   editMessageWithBranching,
   fetchConversationMessages,
   fetchMessageTree,
-  fetchModels,
+  fetchModelsForCurrentProvider,
   initializeUserAndConversation,
   selectCanSend,
   selectConversationMessages,
@@ -164,8 +164,15 @@ function Chat() {
 
   // Load models on mount
   useEffect(() => {
-    dispatch(fetchModels(true))
+    dispatch(fetchModelsForCurrentProvider(true))
   }, [dispatch])
+
+  // Reload models when provider changes
+  useEffect(() => {
+    if (providers.currentProvider) {
+      dispatch(fetchModelsForCurrentProvider(true))
+    }
+  }, [providers.currentProvider, dispatch])
 
   // Initialize or set conversation based on route param
   const { id: conversationIdParam } = useParams<{ id?: string }>()
@@ -280,7 +287,7 @@ function Chat() {
 
   // Refresh models
   const handleRefreshModels = () => {
-    dispatch(fetchModels(true))
+    dispatch(fetchModelsForCurrentProvider(true))
   }
 
   // Add assistant message when streaming completes
@@ -434,7 +441,7 @@ function Chat() {
           >
             <option value=''>Select a provider...</option>
             {providers.providers.map(provider => (
-              <option key={provider.url} value={provider.url}>
+              <option key={provider.name} value={provider.name}>
                 {provider.name}
               </option>
             ))}

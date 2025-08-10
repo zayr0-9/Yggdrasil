@@ -40,7 +40,6 @@ typescriptconst myAsyncThunk = createAsyncThunk(
 
 //   return response.json()
 // }
-
 // Model operations - cached and optimized
 export const fetchModels = createAsyncThunk(
   'chat/fetchModels',
@@ -72,6 +71,79 @@ export const fetchModels = createAsyncThunk(
       return response
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch models'
+      dispatch(chatSliceActions.modelsError(message))
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Fetch Gemini models from Google's Generative Language API and load into ModelState.available
+export const fetchGeminiModels = createAsyncThunk(
+  'chat/fetchGeminiModels',
+  async (_: void, { dispatch, rejectWithValue }) => {
+    dispatch(chatSliceActions.modelsLoadingStarted())
+
+    try {
+      const env = (import.meta as any).env || {}
+      const apiKey = env.VITE_GEMINI_API_KEY || env.VITE_GOOGLE_GENERATIVE_AI_API_KEY
+      console.log('Gemini API key present:', Boolean(apiKey))
+      if (!apiKey) {
+        throw new Error('Missing VITE_GEMINI_API_KEY')
+      }
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`
+      const res = await fetch(url)
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`Gemini API error ${res.status}: ${text || res.statusText}`)
+      }
+
+      const data = await res.json()
+      const rawModels: any[] = Array.isArray(data?.models) ? data.models : []
+
+      // Filter for chat-capable models and strip the 'models/' prefix
+      const names: string[] = rawModels
+        .filter(m => {
+          const methods = m?.supportedGenerationMethods || m?.supportedActions || []
+          return Array.isArray(methods) && methods.includes('generateContent')
+        })
+        .map(m => String(m?.name || ''))
+        .filter(n => n.length > 0)
+        .map(n => n.replace(/^models\//, ''))
+
+      const preferredDefault = 'gemini-2.5-flash'
+      const defaultModel = names.includes(preferredDefault) ? preferredDefault : names[0] || ''
+
+      const payload: ModelsResponse = { models: names, default: defaultModel }
+      dispatch(chatSliceActions.modelsLoaded(payload))
+      return payload
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch Gemini models'
+      dispatch(chatSliceActions.modelsError(message))
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Provider-aware models fetch orchestrator
+export const fetchModelsForCurrentProvider = createAsyncThunk(
+  'chat/fetchModelsForCurrentProvider',
+  async (force: boolean = false, { getState, dispatch, rejectWithValue }) => {
+    console.log('1---------')
+    const state = getState() as RootState
+    const provider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
+    console.log('2---------', provider)
+    try {
+      if (provider === 'google') {
+        const res = await (dispatch as any)(fetchGeminiModels()).unwrap()
+        console.log('4---------', res)
+        return res
+      }
+      console.log('3---------')
+      const res = await (dispatch as any)(fetchModels(force)).unwrap()
+      return res
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch models for provider'
       dispatch(chatSliceActions.modelsError(message))
       return rejectWithValue(message)
     }

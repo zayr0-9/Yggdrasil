@@ -20,6 +20,7 @@ export {
   deleteMessage,
   editMessageWithBranching,
   fetchModels,
+  fetchModelsForCurrentProvider,
   selectModel,
   sendMessage,
   sendMessageToBranch,
