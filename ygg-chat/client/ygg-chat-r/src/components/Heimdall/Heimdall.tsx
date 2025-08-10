@@ -57,7 +57,8 @@ export const Heimdall: React.FC<HeimdallProps> = ({
 }) => {
   const dispatch = useDispatch()
   const selectedNodes = useSelector((state: RootState) => state.chat.selectedNodes)
-  
+  const allMessages = useSelector((state: RootState) => state.chat.conversation.messages)
+
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState<number>(compactMode ? 1 : 1)
@@ -67,6 +68,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 })
   const [selectedNode, setSelectedNode] = useState<ChatNode | null>(null)
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null)
+  const [isSelecting, setIsSelecting] = useState<boolean>(false)
+  const [selectionStart, setSelectionStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [selectionEnd, setSelectionEnd] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
 
   const nodeWidth = 250
   const nodeHeight = 80
@@ -223,9 +227,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
 
   useEffect(() => {
     const updateDimensions = (): void => {
-      if (svgRef.current) {
-        const { width, height } = svgRef.current.getBoundingClientRect()
-        setDimensions({ width, height })
+      if (containerRef.current) {
+        const { offsetWidth, offsetHeight } = containerRef.current
+        setDimensions({ width: offsetWidth, height: offsetHeight })
       }
     }
 
@@ -257,14 +261,237 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     }
   }, [])
 
+  // Function to determine which nodes are within the selection rectangle
+  const getNodesInSelectionRectangle = (): number[] => {
+    const selectedNodeIds: number[] = []
+
+    // Calculate selection rectangle bounds
+    const minX = Math.min(selectionStart.x, selectionEnd.x)
+    const maxX = Math.max(selectionStart.x, selectionEnd.x)
+    const minY = Math.min(selectionStart.y, selectionEnd.y)
+    const maxY = Math.max(selectionStart.y, selectionEnd.y)
+
+    // Outer group transform (pan + zoom) in screen coordinates
+    const tx = pan.x + dimensions.width / 2
+    const ty = pan.y + 100
+    const s = zoom
+
+    // Account for inner group offset used to keep the tree in view
+    Object.values(positions).forEach(({ x, y, node }) => {
+      const x0 = x + offsetX
+      const y0 = y + offsetY
+
+      const isExpanded = !compactMode || node.id === focusedNodeId
+
+      // Compute node bounds in screen space (after all transforms)
+      let left: number, right: number, top: number, bottom: number
+
+      if (isExpanded) {
+        // Expanded nodes are rendered as a rectangle with top-left at (x - nodeWidth/2, y)
+        left = (x0 - nodeWidth / 2) * s + tx
+        right = (x0 + nodeWidth / 2) * s + tx
+        top = y0 * s + ty
+        bottom = (y0 + nodeHeight) * s + ty
+      } else {
+        // Compact nodes are rendered as a circle centered at (x, y + circleRadius),
+        // but the top of the bounding box is y and height is 2 * circleRadius.
+        left = (x0 - circleRadius) * s + tx
+        right = (x0 + circleRadius) * s + tx
+        top = y0 * s + ty
+        bottom = (y0 + circleRadius * 2) * s + ty
+      }
+
+      // Intersect test between node bounds and selection rectangle (all in screen space)
+      const intersects = right >= minX && left <= maxX && bottom >= minY && top <= maxY
+      if (intersects) {
+        const nodeIdNumber = parseInt(node.id, 10)
+        if (!isNaN(nodeIdNumber)) {
+          selectedNodeIds.push(nodeIdNumber)
+        }
+      }
+    })
+
+    return selectedNodeIds
+  }
+
+  // Keep only one branch: choose the branch that contains the most selected nodes
+  const filterToDominantBranch = (ids: number[]): number[] => {
+    if (!ids || ids.length <= 1) return ids
+
+    // Prefer message-graph approach if we have flat messages available
+    const msgs = allMessages as any[] | undefined
+    if (Array.isArray(msgs) && msgs.length > 0) {
+      // Build parent and children maps
+      const parentMap = new Map<number, number | null>()
+      const childrenMap = new Map<number, number[]>()
+
+      const parseChildren = (val: unknown): number[] => {
+        if (Array.isArray(val)) {
+          return (val as unknown[]).map(x => Number(x)).filter(n => !isNaN(n))
+        }
+        if (typeof val === 'string') {
+          try {
+            const arr = JSON.parse(val)
+            if (Array.isArray(arr)) {
+              return arr.map((x: any) => Number(x)).filter((n: number) => !isNaN(n))
+            }
+          } catch {}
+        }
+        return []
+      }
+
+      for (const m of msgs) {
+        const id = Number((m as any).id)
+        const pRaw = (m as any).parent_id
+        const parent = pRaw === null || pRaw === undefined ? null : Number(pRaw)
+        parentMap.set(id, isNaN(parent as number) ? null : (parent as number))
+        const children = parseChildren((m as any).children_ids)
+        childrenMap.set(id, children)
+      }
+
+      const ascendToRoot = (id: number): number[] => {
+        const path: number[] = []
+        const seen = new Set<number>()
+        let cur: number | null = id
+        while (cur != null && !seen.has(cur)) {
+          seen.add(cur)
+          path.push(cur)
+          cur = parentMap.get(cur) ?? null
+        }
+        return path.reverse() // root -> id
+      }
+
+      const descendSingleChain = (from: number): number[] => {
+        const out: number[] = []
+        const seen = new Set<number>()
+        let cur = from
+        seen.add(cur)
+        while (true) {
+          const children = childrenMap.get(cur) || []
+          if (children.length !== 1) break
+          const next = Number(children[0])
+          if (seen.has(next)) break // guard against cycles
+          out.push(next)
+          seen.add(next)
+          cur = next
+        }
+        return out // nodes strictly after `from`
+      }
+
+      const groups = new Map<string, { ids: number[]; count: number; pathLen: number }>()
+      for (const idNum of [...ids].sort((a, b) => a - b)) {
+        // stable processing order
+        const rootPath = ascendToRoot(idNum)
+        const down = descendSingleChain(idNum)
+        const fullPath = rootPath.concat(down) // root -> ... -> idNum -> ... -> branch leaf
+        const key = fullPath.join('>')
+        const existing = groups.get(key)
+        if (existing) {
+          existing.ids.push(idNum)
+          existing.count += 1
+          existing.pathLen = Math.max(existing.pathLen, fullPath.length)
+        } else {
+          groups.set(key, { ids: [idNum], count: 1, pathLen: fullPath.length })
+        }
+      }
+
+      let bestKey = ''
+      let best: { ids: number[]; count: number; pathLen: number } | null = null
+      for (const [k, v] of groups) {
+        if (
+          !best ||
+          v.count > best.count ||
+          (v.count === best.count && v.pathLen > best.pathLen) ||
+          (v.count === best.count && v.pathLen === best.pathLen && k < bestKey)
+        ) {
+          bestKey = k
+          best = v
+        }
+      }
+      if (best) {
+        const pathSet = new Set(
+          bestKey
+            .split('>')
+            .map(n => Number(n))
+            .filter(n => !isNaN(n))
+        )
+        const extraAncestors = ids.filter(n => pathSet.has(n))
+        const merged = Array.from(new Set<number>([...best.ids, ...extraAncestors]))
+        return merged
+      }
+      return ids
+    }
+
+    // Fallback to tree-based grouping when flat messages are not available
+    const groups = new Map<string, { ids: number[]; count: number; pathLen: number }>()
+    for (const idNum of ids) {
+      const idStr = String(idNum)
+      let path = getPathWithDescendants(idStr)
+      if (!path || path.length === 0) {
+        const fallback = getPathToNode(idStr)
+        path = fallback || [idStr]
+      }
+      const key = path.join('>')
+      const existing = groups.get(key)
+      if (existing) {
+        existing.ids.push(idNum)
+        existing.count += 1
+      } else {
+        groups.set(key, { ids: [idNum], count: 1, pathLen: path.length })
+      }
+    }
+    let bestKey = ''
+    let best: { ids: number[]; count: number; pathLen: number } | null = null
+    for (const [k, v] of groups) {
+      if (
+        !best ||
+        v.count > best.count ||
+        (v.count === best.count && v.pathLen > best.pathLen) ||
+        (v.count === best.count && v.pathLen === best.pathLen && k < bestKey)
+      ) {
+        bestKey = k
+        best = v
+      }
+    }
+    if (best) {
+      const pathSet = new Set(
+        bestKey
+          .split('>')
+          .map(n => Number(n))
+          .filter(n => !isNaN(n))
+      )
+      const extraAncestors = ids.filter(n => pathSet.has(n))
+      const merged = Array.from(new Set<number>([...best.ids, ...extraAncestors]))
+      return merged
+    }
+    return ids
+  }
+
   const handleMouseDown = (e: MouseEvent<SVGSVGElement>): void => {
     // Don't start dragging if clicking on a node
     const target = e.target as SVGElement
     if (target.tagName === 'rect' || target.tagName === 'circle') {
       return
     }
-    setIsDragging(true)
-    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
+
+    if (e.button === 2) {
+      // Right mouse button
+      // Start selection rectangle
+      const svgRect = svgRef.current?.getBoundingClientRect()
+      if (svgRect) {
+        const svgX = e.clientX - svgRect.left
+        const svgY = e.clientY - svgRect.top
+        // Reset selection when starting a new drag-selection
+        dispatch(chatSliceActions.nodesSelected([]))
+        setIsSelecting(true)
+        setSelectionStart({ x: svgX, y: svgY })
+        setSelectionEnd({ x: svgX, y: svgY })
+      }
+    } else if (e.button === 0) {
+      // Left mouse button
+      setIsDragging(true)
+      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
+    }
   }
 
   const handleMouseMove = (e: MouseEvent<SVGSVGElement>): void => {
@@ -273,10 +500,25 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         x: e.clientX - dragStart.x,
         y: e.clientY - dragStart.y,
       })
+    } else if (isSelecting) {
+      const svgRect = svgRef.current?.getBoundingClientRect()
+      if (svgRect) {
+        const svgX = e.clientX - svgRect.left
+        const svgY = e.clientY - svgRect.top
+        setSelectionEnd({ x: svgX, y: svgY })
+      }
     }
   }
 
   const handleMouseUp = (): void => {
+    if (isSelecting) {
+      // Calculate which nodes are within the selection rectangle
+      const selectedNodeIds = getNodesInSelectionRectangle()
+      // Replace selection with filtered nodes from this drag
+      const filteredSelection = filterToDominantBranch(selectedNodeIds)
+      dispatch(chatSliceActions.nodesSelected(filteredSelection))
+      setIsSelecting(false)
+    }
     setIsDragging(false)
   }
 
@@ -284,15 +526,15 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const handleContextMenu = (e: React.MouseEvent<SVGElement>, nodeId: string): void => {
     e.preventDefault() // Prevent default browser context menu
     e.stopPropagation()
-    
+
     // Convert nodeId to number for selectedNodes array
     const nodeIdNumber = parseInt(nodeId, 10)
-    
+
     // Check if the node is already selected
     const isAlreadySelected = selectedNodes.includes(nodeIdNumber)
-    
+
     let newSelectedNodes: number[]
-    
+
     if (e.ctrlKey || e.metaKey) {
       // Multi-select: toggle the node in the selection
       if (isAlreadySelected) {
@@ -301,13 +543,18 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         newSelectedNodes = [...selectedNodes, nodeIdNumber]
       }
     } else {
-      // Single select: replace selection with this node
-      newSelectedNodes = [nodeIdNumber]
+      // Without modifiers: toggle off if already selected; otherwise single-select this node
+      if (isAlreadySelected) {
+        newSelectedNodes = selectedNodes.filter(id => id !== nodeIdNumber)
+      } else {
+        newSelectedNodes = [nodeIdNumber]
+      }
     }
-    
-    // Dispatch the nodesSelected action
-    dispatch(chatSliceActions.nodesSelected(newSelectedNodes))
-    
+
+    // Dispatch the nodesSelected action (filtered to the dominant branch)
+    const filteredNodes = filterToDominantBranch(newSelectedNodes)
+    dispatch(chatSliceActions.nodesSelected(filteredNodes))
+
     // Also trigger the existing onNodeSelect callback if provided
     if (onNodeSelect) {
       const path = getPathToNode(nodeId)
@@ -414,11 +661,28 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const renderNodes = (): JSX.Element[] => {
     return Object.values(positions).map(({ x, y, node }) => {
       const isExpanded = !compactMode || node.id === focusedNodeId
+      const nodeIdNumber = parseInt(node.id, 10)
+      const isNodeSelected = !isNaN(nodeIdNumber) && selectedNodes.includes(nodeIdNumber)
 
       if (isExpanded) {
         // Render full node
         return (
           <g key={node.id} transform={`translate(${x - nodeWidth / 2}, ${y})`}>
+            {/* Selection highlight */}
+            {isNodeSelected && (
+              <rect
+                width={nodeWidth + 8}
+                height={nodeHeight + 8}
+                x={-4}
+                y={-4}
+                rx='12'
+                fill='none'
+                stroke='rgba(59, 130, 246, 0.8)'
+                strokeWidth='3'
+                strokeDasharray='5,5'
+                className='animate-pulse'
+              />
+            )}
             <rect
               width={nodeWidth}
               height={nodeHeight}
@@ -441,7 +705,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                   onNodeSelect(node.id, path)
                 }
               }}
-              onContextMenu={(e) => handleContextMenu(e, node.id)}
+              onContextMenu={e => handleContextMenu(e, node.id)}
             />
             <foreignObject width={nodeWidth} height={nodeHeight} style={{ pointerEvents: 'none', userSelect: 'none' }}>
               <div className='p-3 text-white text-sm h-full flex items-center'>
@@ -454,6 +718,19 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         // Render compact circle
         return (
           <g key={node.id}>
+            {/* Selection highlight for compact mode */}
+            {isNodeSelected && (
+              <circle
+                cx={x}
+                cy={y + circleRadius}
+                r={circleRadius + 6}
+                fill='none'
+                stroke='rgba(59, 130, 246, 0.8)'
+                strokeWidth='3'
+                strokeDasharray='5,5'
+                className='animate-pulse'
+              />
+            )}
             <circle
               cx={x}
               cy={y + circleRadius}
@@ -474,7 +751,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                   onNodeSelect(node.id, path)
                 }
               }}
-              onContextMenu={(e) => handleContextMenu(e, node.id)}
+              onContextMenu={e => handleContextMenu(e, node.id)}
             />
             {/* Add a small indicator for branch nodes */}
             {node.children && node.children.length > 1 && (
@@ -542,10 +819,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   }
 
   return (
-    <div 
-      ref={containerRef} 
+    <div
+      ref={containerRef}
       className='w-full h-screen bg-gray-900 relative overflow-hidden dark:bg-neutral-900'
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={e => e.preventDefault()}
     >
       <div className='absolute top-4 left-4 z-10 flex gap-2'>
         <button
@@ -601,6 +878,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onContextMenu={e => e.preventDefault()}
         onClick={(e: MouseEvent<SVGSVGElement>) => {
           const target = e.target as SVGElement
           if (target === e.currentTarget || target.tagName === 'svg') {
@@ -611,7 +889,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
             }
           }
         }}
-        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+        style={{ cursor: isDragging ? 'grabbing' : isSelecting ? 'crosshair' : 'grab' }}
       >
         <g transform={`translate(${pan.x + dimensions.width / 2}, ${pan.y + 100}) scale(${zoom})`}>
           <g transform={`translate(${offsetX}, ${offsetY})`}>
@@ -621,6 +899,20 @@ export const Heimdall: React.FC<HeimdallProps> = ({
             {renderNodes()}
           </g>
         </g>
+        {/* Selection rectangle */}
+        {isSelecting && (
+          <rect
+            x={Math.min(selectionStart.x, selectionEnd.x)}
+            y={Math.min(selectionStart.y, selectionEnd.y)}
+            width={Math.abs(selectionEnd.x - selectionStart.x)}
+            height={Math.abs(selectionEnd.y - selectionStart.y)}
+            fill='rgba(59, 130, 246, 0.2)'
+            stroke='rgba(59, 130, 246, 0.8)'
+            strokeWidth='2'
+            strokeDasharray='5,5'
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
       </svg>
 
       <div className='absolute bottom-4 left-4 flex flex-col gap-2'>
@@ -632,7 +924,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         </div>
         <div className='text-gray-400 text-sm flex items-center gap-2'>
           <Move size={16} />
-          <span>Drag to pan • Scroll to zoom{compactMode && ' • Click to focus'}</span>
+          <span>Drag to pan • Scroll to zoom • Right-click drag to select{compactMode && ' • Click to focus'}</span>
         </div>
       </div>
 
