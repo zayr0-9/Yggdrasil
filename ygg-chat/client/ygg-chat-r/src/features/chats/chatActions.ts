@@ -55,10 +55,8 @@ export const fetchModels = createAsyncThunk(
       }
     }
     /* 
-    Redux operates on a principle called "unidirectional data flow," 
-    which means state changes must flow through a specific pathway. 
-    You cannot directly modify the Redux store state like you would 
-    with regular JavaScript objects. Instead, you must send actions 
+    Redux operates on a principle called "unidirectional data flow,"  
+    You cannot directly modify the Redux store state instead, you must send actions 
     through the dispatch function, which then forwards them to the 
     appropriate reducers.
     */
@@ -84,37 +82,7 @@ export const fetchGeminiModels = createAsyncThunk(
     dispatch(chatSliceActions.modelsLoadingStarted())
 
     try {
-      const env = (import.meta as any).env || {}
-      const apiKey = env.VITE_GEMINI_API_KEY || env.VITE_GOOGLE_GENERATIVE_AI_API_KEY
-      console.log('Gemini API key present:', Boolean(apiKey))
-      if (!apiKey) {
-        throw new Error('Missing VITE_GEMINI_API_KEY')
-      }
-
-      const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`
-      const res = await fetch(url)
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`Gemini API error ${res.status}: ${text || res.statusText}`)
-      }
-
-      const data = await res.json()
-      const rawModels: any[] = Array.isArray(data?.models) ? data.models : []
-
-      // Filter for chat-capable models and strip the 'models/' prefix
-      const names: string[] = rawModels
-        .filter(m => {
-          const methods = m?.supportedGenerationMethods || m?.supportedActions || []
-          return Array.isArray(methods) && methods.includes('generateContent')
-        })
-        .map(m => String(m?.name || ''))
-        .filter(n => n.length > 0)
-        .map(n => n.replace(/^models\//, ''))
-
-      const preferredDefault = 'gemini-2.5-flash'
-      const defaultModel = names.includes(preferredDefault) ? preferredDefault : names[0] || ''
-
-      const payload: ModelsResponse = { models: names, default: defaultModel }
+      const payload = await apiCall<ModelsResponse>('/models/gemini')
       dispatch(chatSliceActions.modelsLoaded(payload))
       return payload
     } catch (error) {
@@ -129,17 +97,16 @@ export const fetchGeminiModels = createAsyncThunk(
 export const fetchModelsForCurrentProvider = createAsyncThunk(
   'chat/fetchModelsForCurrentProvider',
   async (force: boolean = false, { getState, dispatch, rejectWithValue }) => {
-    console.log('1---------')
     const state = getState() as RootState
     const provider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
-    console.log('2---------', provider)
+
     try {
       if (provider === 'google') {
         const res = await (dispatch as any)(fetchGeminiModels()).unwrap()
         console.log('4---------', res)
         return res
       }
-      console.log('3---------')
+
       const res = await (dispatch as any)(fetchModels(force)).unwrap()
       return res
     } catch (error) {
@@ -168,6 +135,9 @@ export const sendMessage = createAsyncThunk(
       const state = getState() as RootState
       const { messages: currentMessages } = state.chat.conversation
       const modelName = input.modelOverride || state.chat.models.selected || state.chat.models.default
+      // Map UI provider to server provider id
+      const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
+      const serverProvider = appProvider === 'google' ? 'gemini' : appProvider
       let response = null
 
       if (!modelName) {
@@ -188,6 +158,7 @@ export const sendMessage = createAsyncThunk(
             // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
             parentId: parent,
             systemPrompt: input.systemPrompt,
+            provider: serverProvider,
             repeatNum: repeatNum,
           }),
           signal: controller.signal,
@@ -206,6 +177,7 @@ export const sendMessage = createAsyncThunk(
             // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
             parentId: parent,
             systemPrompt: input.systemPrompt,
+            provider: serverProvider,
           }),
           signal: controller.signal,
         })
@@ -371,6 +343,9 @@ export const editMessageWithBranching = createAsyncThunk(
       // Find the parent of the original message to branch from
       const parentId = originalMessage.parent_id
       const modelName = modelOverride || state.chat.models.selected || state.chat.models.default
+      // Map UI provider to server provider id
+      const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
+      const serverProvider = appProvider === 'google' ? 'gemini' : appProvider
 
       if (!modelName) {
         throw new Error('No model selected')
@@ -385,6 +360,7 @@ export const editMessageWithBranching = createAsyncThunk(
           modelName,
           parentId: parentId, // Branch from the same parent as original
           systemPrompt,
+          provider: serverProvider,
         }),
         signal: controller.signal,
       })
@@ -473,6 +449,9 @@ export const sendMessageToBranch = createAsyncThunk(
 
       const state = getState() as RootState
       const modelName = modelOverride || state.chat.models.selected || state.chat.models.default
+      // Map UI provider to server provider id
+      const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
+      const serverProvider = appProvider === 'google' ? 'gemini' : appProvider
 
       if (!modelName) {
         throw new Error('No model selected')
@@ -486,6 +465,7 @@ export const sendMessageToBranch = createAsyncThunk(
           modelName,
           parentId,
           systemPrompt,
+          provider: serverProvider,
         }),
         signal: controller.signal,
       })
@@ -565,7 +545,6 @@ export const fetchMessageTree = createAsyncThunk(
     dispatch(chatSliceActions.heimdallLoadingStarted())
     try {
       const treeData = await apiCall<any>(`/conversations/${conversationId}/messages/tree`)
-      console.log(`tree data ${JSON.stringify(treeData)}`)
       dispatch(chatSliceActions.heimdallDataLoaded({ treeData }))
       return treeData
     } catch (error) {

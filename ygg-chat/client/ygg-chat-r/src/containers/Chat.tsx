@@ -14,6 +14,7 @@ import {
   selectCurrentConversationId,
   selectCurrentPath,
   selectDisplayMessages,
+  selectFocusedChatMessageId,
   selectHeimdallCompactMode,
   selectHeimdallData,
   selectHeimdallError,
@@ -51,6 +52,7 @@ function Chat() {
   const currentConversationId = useAppSelector(selectCurrentConversationId)
   const selectedPath = useAppSelector(selectCurrentPath)
   const multiReplyCount = useAppSelector(selectMultiReplyCount)
+  const focusedChatMessageId = useAppSelector(selectFocusedChatMessageId)
 
   // Conversation title editing
   const currentConversation = useAppSelector(
@@ -114,9 +116,24 @@ function Chat() {
   useEffect(() => {
     if (selectedPath && selectedPath.length > 0) {
       const targetId = selectedPath[selectedPath.length - 1]
-      const el = document.getElementById(`message-${targetId}`)
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      const tryScroll = () => {
+        const el = document.getElementById(`message-${targetId}`)
+        const container = messagesContainerRef.current
+        if (el && container) {
+          // Compute element position relative to container and center it within the scroll area
+          const containerRect = container.getBoundingClientRect()
+          const elRect = el.getBoundingClientRect()
+          const relativeTop = elRect.top - containerRect.top
+          const targetTop = container.scrollTop + relativeTop - container.clientHeight / 2 + el.clientHeight / 2
+          container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
+        }
+      }
+
+      // Defer until after DOM/layout has settled for this render
+      if (typeof window !== 'undefined' && 'requestAnimationFrame' in window) {
+        requestAnimationFrame(() => requestAnimationFrame(tryScroll))
+      } else {
+        setTimeout(tryScroll, 0)
       }
     }
   }, [selectedPath, displayMessages])
@@ -138,6 +155,13 @@ function Chat() {
       dispatch(chatSliceActions.conversationPathSet(path))
     }
   }, [hashMessageId, conversationMessages, dispatch])
+
+  useEffect(() => {
+    if (focusedChatMessageId && conversationMessages.length > 0) {
+      const path = getParentPath(conversationMessages, focusedChatMessageId)
+      dispatch(chatSliceActions.conversationPathSet(path))
+    }
+  }, [focusedChatMessageId, conversationMessages, dispatch])
 
   // Auto-select latest branch when messages first load
   useEffect(() => {
@@ -259,6 +283,7 @@ function Chat() {
     if (!nodeId || !path || path.length === 0) return // ignore clicks on empty space
     console.log('Node selected:', nodeId, 'Path:', path)
     dispatch(chatSliceActions.selectedNodePathSet(path))
+    dispatch(chatSliceActions.focusedChatMessageSet(parseInt(nodeId)))
   }
 
   const handleMessageDelete = (id: string) => {

@@ -69,6 +69,7 @@ export interface CompositionState {
 
 export interface ConversationState {
   currentConversationId: number | null
+  focusedChatMessageId: number | null
   currentPath: number[] // Array of message IDs forming current branch
   messages: Message[] // Linear messages in current path order
   bookmarked: number[] //each index contains id of a message selected

@@ -31,6 +31,48 @@ router.get(
   })
 )
 
+// Fetch Google Gemini models on the server to keep API key private
+router.get(
+  '/models/gemini',
+  asyncHandler(async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY
+      if (!apiKey) {
+        return res.status(400).json({ error: 'Missing GEMINI_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY' })
+      }
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`
+      const response = await fetch(url, { signal: AbortSignal.timeout(5000) })
+
+      if (!response.ok) {
+        const text = await response.text()
+        return res.status(response.status).json({ error: text || response.statusText })
+      }
+
+      const data = (await response.json()) as { models?: any[] }
+      const rawModels: any[] = Array.isArray(data.models) ? data.models : []
+
+      // Filter for chat-capable models and strip the 'models/' prefix
+      const names: string[] = rawModels
+        .filter(m => {
+          const methods = m?.supportedGenerationMethods || m?.supportedActions || []
+          return Array.isArray(methods) && methods.includes('generateContent')
+        })
+        .map(m => String(m?.name || ''))
+        .filter(n => n.length > 0)
+        .map(n => n.replace(/^models\//, ''))
+
+      const preferredDefault = 'gemini-2.5-flash'
+      const defaultModel = names.includes(preferredDefault) ? preferredDefault : names[0] || ''
+
+      res.json({ models: names, default: defaultModel })
+    } catch (error) {
+      console.error('Failed to fetch Gemini models:', error)
+      res.status(500).json({ error: 'Failed to fetch Gemini models' })
+    }
+  })
+)
+
 // Force refresh models cache
 router.post(
   '/models/refresh',

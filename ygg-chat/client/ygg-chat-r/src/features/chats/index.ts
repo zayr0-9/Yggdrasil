@@ -41,6 +41,7 @@ export {
   selectEffectiveModel,
   selectExcludedMessages,
   selectFilteredMessages,
+  selectFocusedChatMessageId,
   selectInputContent,
   selectInputValid,
   selectIsModelAvailable,

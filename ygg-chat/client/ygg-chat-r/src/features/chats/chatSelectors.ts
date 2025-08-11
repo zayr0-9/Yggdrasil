@@ -134,6 +134,11 @@ export const selectFilteredMessages = createSelector(
   }
 )
 
+export const selectFocusedChatMessageId = createSelector(
+  [selectConversationState],
+  conversation => conversation.focusedChatMessageId
+)
+
 // Get messages for display (either filtered by path or all messages)
 export const selectDisplayMessages = createSelector(
   [selectConversationMessages, selectCurrentPath],

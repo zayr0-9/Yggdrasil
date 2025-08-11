@@ -10,7 +10,7 @@ function getProviderModel(provider: ProviderType, model?: string): string {
     case 'ollama':
       return model || 'gpt-oss:20b' // Use ollama model as-is
     case 'gemini':
-      return 'gemini-2.5-flash' // Always use gemini-pro for Gemini
+      return model || 'gemini-2.5-flash' // Respect client-selected Gemini model, default to gemini-2.5-flash
     default:
       throw new Error(`Unknown provider: ${provider}`)
   }
