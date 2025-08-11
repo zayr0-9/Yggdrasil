@@ -107,15 +107,19 @@ function Chat() {
   // subsequent smooth scroll animation from always starting at the very bottom.
   useEffect(() => {
     // Only auto-scroll when no node/path is explicitly selected
-    if ((!selectedPath || selectedPath.length === 0) && messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    // During streaming, always keep scrolled to bottom regardless of selectedPath
+    if ((streamState.active || !selectedPath || selectedPath.length === 0) && messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      })
     }
   }, [displayMessages, streamState.buffer, streamState.active, selectedPath])
 
   // Scroll to selected node when path changes
   useEffect(() => {
     if (selectedPath && selectedPath.length > 0) {
-      const targetId = selectedPath[selectedPath.length - 1]
+      const targetId = focusedChatMessageId
       const tryScroll = () => {
         const el = document.getElementById(`message-${targetId}`)
         const container = messagesContainerRef.current
@@ -156,12 +160,12 @@ function Chat() {
     }
   }, [hashMessageId, conversationMessages, dispatch])
 
-  useEffect(() => {
-    if (focusedChatMessageId && conversationMessages.length > 0) {
-      const path = getParentPath(conversationMessages, focusedChatMessageId)
-      dispatch(chatSliceActions.conversationPathSet(path))
-    }
-  }, [focusedChatMessageId, conversationMessages, dispatch])
+  // useEffect(() => {
+  //   if (focusedChatMessageId && conversationMessages.length > 0) {
+  //     const path = getParentPath(conversationMessages, focusedChatMessageId)
+  //     dispatch(chatSliceActions.conversationPathSet(path))
+  //   }
+  // }, [focusedChatMessageId, conversationMessages, dispatch])
 
   // Auto-select latest branch when messages first load
   useEffect(() => {
@@ -179,7 +183,7 @@ function Chat() {
           cur = cur.parent_id ? idToMsg.get(cur.parent_id) : undefined
         }
         if (pathNums.length) {
-          console.log(`path nums ${pathNums}`)
+          // console.log(`path nums ${pathNums}`)
           dispatch(chatSliceActions.conversationPathSet(pathNums))
         }
       }
@@ -281,8 +285,12 @@ function Chat() {
 
   const handleNodeSelect = (nodeId: string, path: string[]) => {
     if (!nodeId || !path || path.length === 0) return // ignore clicks on empty space
-    console.log('Node selected:', nodeId, 'Path:', path)
+    // console.log('Node selected:', nodeId, 'Path:', path)
+    console.log('selected path', path)
+    dispatch(chatSliceActions.conversationPathSet(path.map(id => parseInt(id))))
     dispatch(chatSliceActions.selectedNodePathSet(path))
+
+    console.log('selected node', nodeId)
     dispatch(chatSliceActions.focusedChatMessageSet(parseInt(nodeId)))
   }
 

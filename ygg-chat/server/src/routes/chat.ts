@@ -251,9 +251,9 @@ router.get(
     // if (process.env.NODE_ENV === 'development') {
     //   debugMessageTree(messages)
     // }
-    console.log(`messages ${JSON.stringify(messages)} \n`)
+    // console.log(`messages ${JSON.stringify(messages)} \n`)
     const treeData = convertMessagesToHeimdall(messages)
-    console.log(`treeserver data ${JSON.stringify(treeData)} \n`)
+    // console.log(`treeserver data ${JSON.stringify(treeData)} \n`)
     res.json(treeData)
   })
 )
@@ -356,8 +356,9 @@ router.post(
 router.post(
   '/conversations/:id/messages',
   asyncHandler(async (req, res) => {
+    console.log('received message from client, starting generation')
     const conversationId = parseInt(req.params.id)
-    const { content, modelName, parentId: requestedParentId, provider = 'ollama' } = req.body
+    const { content, messages, modelName, parentId: requestedParentId, provider = 'ollama' } = req.body
 
     if (!content) {
       return res.status(400).json({ error: 'Message content required' })
@@ -388,6 +389,7 @@ router.post(
 
     // Save user message with proper parent ID
     const userMessage = MessageService.create(conversationId, 'user', content, parentId)
+    console.log('server | user message', userMessage)
 
     // Setup SSE headers
     res.writeHead(200, {
@@ -402,14 +404,20 @@ router.post(
     res.write(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`)
 
     try {
-      // Get conversation history for context
-      const messages = MessageService.getByConversation(conversationId)
+      // // Get conversation history for context
+      // const messages = MessageService.getByConversation(conversationId)
+      // const messages = context
+      console.log('server | messages', messages)
+
+      // Ensure latest prompt is included with prior context before generating
+      const combinedMessages = Array.isArray(messages) ? [...messages, userMessage] : [userMessage]
+      console.log('server | combined messages', combinedMessages)
 
       let assistantContent = ''
 
       // Stream AI response
       await generateResponse(
-        messages,
+        combinedMessages,
         chunk => {
           assistantContent += chunk
           res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`)

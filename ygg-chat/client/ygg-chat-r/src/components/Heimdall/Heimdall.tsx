@@ -133,8 +133,18 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       if (node.children.length === 1) {
         return findBranchEnd(node.children[0])
       }
-      // If multiple children, this node is the branch point - return it
-      return node
+      // If multiple children, choose the child with the lowest id and continue down
+      const sortedChildren = node.children.slice().sort((a, b) => {
+        const na = Number(a.id)
+        const nb = Number(b.id)
+        const aNum = !Number.isNaN(na)
+        const bNum = !Number.isNaN(nb)
+        if (aNum && bNum) return na - nb
+        if (aNum && !bNum) return -1
+        if (!aNum && bNum) return 1
+        return a.id.localeCompare(b.id)
+      })
+      return findBranchEnd(sortedChildren[0])
     }
 
     // Get the end of the current branch

@@ -192,7 +192,7 @@ export const selectDisplayMessages = createSelector(
     // Dedup and sort
     const unique = new Map<number, (typeof messages)[number]>()
     for (const m of branch) if (!unique.has(m.id)) unique.set(m.id, m)
-    console.log(`display messages ${JSON.stringify([...unique.values()])}`)
+    // console.log(`display messages ${JSON.stringify([...unique.values()])}`)
     return [...unique.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   }
 )

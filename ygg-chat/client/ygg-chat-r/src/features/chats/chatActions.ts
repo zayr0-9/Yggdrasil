@@ -134,6 +134,9 @@ export const sendMessage = createAsyncThunk(
 
       const state = getState() as RootState
       const { messages: currentMessages } = state.chat.conversation
+      const currentPathIds = state.chat.conversation.currentPath
+      const currentPathMessages = currentPathIds.map(id => currentMessages.find(m => m.id === id))
+      console.log('currentPathMessages', currentPathMessages)
       const modelName = input.modelOverride || state.chat.models.selected || state.chat.models.default
       // Map UI provider to server provider id
       const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
@@ -144,12 +147,25 @@ export const sendMessage = createAsyncThunk(
         throw new Error('No model selected')
       }
       console.log('last currentMessage - ', currentMessages?.at(-1)?.id)
+
+      console.log(
+        'finalMessage sent to the server ---------------------- ',
+        currentPathMessages.map(m => ({
+          id: m.id,
+          conversation_id: m.conversation_id,
+          parent_id: m.parent_id,
+          children_ids: m.children_ids,
+          role: m.role,
+          content: m.content,
+          created_at: m.created_at,
+        }))
+      )
       if (repeatNum > 1) {
         response = await createStreamingRequest(`/conversations/${conversationId}/messages/repeat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: currentMessages.map(m => ({
+            messages: currentPathMessages.map(m => ({
               role: m.role,
               content: m.content,
             })),
@@ -168,9 +184,14 @@ export const sendMessage = createAsyncThunk(
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: currentMessages.map(m => ({
+            messages: currentPathMessages.map(m => ({
+              id: m.id,
+              conversation_id: m.conversation_id,
+              parent_id: m.parent_id,
+              children_ids: m.children_ids,
               role: m.role,
               content: m.content,
+              created_at: m.created_at,
             })),
             content: input.content.trim(),
             modelName: modelName,
