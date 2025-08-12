@@ -35,6 +35,7 @@ const Homepage: React.FC = () => {
 
   useEffect(() => {
     dispatch(fetchConversations())
+    dispatch(chatSliceActions.heimdallDataLoaded({ treeData: null }))
   }, [dispatch])
 
   // Close dropdown when clicking outside
@@ -96,21 +97,23 @@ const Homepage: React.FC = () => {
           {/* Dropdown */}
           {isDropdownOpen &&
             (searchLoading ? (
-              <div className='absolute z-10 left-0 right-0 bg-purple-50 p-4 text-sm'>Searching...</div>
+              <div className='absolute z-10 left-0 right-0 bg-indigo-50 p-4 text-sm'>Searching...</div>
             ) : (
               searchResults.length > 0 && (
                 <ul
                   ref={dropdownRef}
-                  className='absolute z-10 left-0 right-0 max-h-60 overflow-y-auto bg-purple-50 border border-purple-100 dark:border-neutral-600 rounded shadow-lg dark:bg-neutral-700 scrollbar-thin scrollbar-track-transparent  dark:scrollbar-track-neutral-800 scrollbar-thumb-purple-200 dark:scrollbar-thumb-neutral-500'
+                  className='absolute z-10 left-0 right-0 max-h-60 overflow-y-auto bg-slate-50 border border-indigo-100 dark:border-neutral-600 rounded shadow-lg dark:bg-neutral-700 scrollbar-thin scrollbar-track-transparent  dark:scrollbar-track-neutral-800 scrollbar-thumb-indigo-200 dark:scrollbar-thumb-neutral-500'
                   style={{ colorScheme: 'dark' }}
                 >
                   {searchResults.map(res => (
                     <li
                       key={`${res.conversationId}-${res.messageId}`}
-                      className='p-3 hover:bg-purple-100 dark:bg-neutral-700 dark:hover:bg-neutral-500 cursor-pointer text-sm dark:text-neutral-200'
+                      className='p-3 hover:bg-indigo-100 dark:bg-neutral-700 dark:hover:bg-neutral-500 cursor-pointer text-sm dark:text-neutral-200'
                       onClick={() => handleResultClick(res.conversationId, res.messageId)}
                     >
-                      <div className='font-semibold'>Conv {res.conversationId}</div>
+                      <div className='font-semibold text-indigo-600 dark:text-indigo-400'>
+                        Conv {res.conversationId}
+                      </div>
                       <div className='truncate'>{res.content}</div>
                     </li>
                   ))}
@@ -130,7 +133,7 @@ const Homepage: React.FC = () => {
           {conversations.map(conv => (
             <li
               key={conv.id}
-              className='p-3 mb-4 bg-rose-100 rounded-lg cursor-pointer dark:bg-zinc-700 hover:bg-rose-50 dark:hover:bg-zinc-600'
+              className='p-3 mb-4 bg-indigo-50 rounded-lg cursor-pointer dark:bg-zinc-700 hover:bg-indigo-100 dark:hover:bg-zinc-600'
               onClick={() => handleSelect(conv)}
             >
               <div className='flex items-center justify-between'>

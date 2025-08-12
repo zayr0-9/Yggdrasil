@@ -85,7 +85,12 @@ function Chat() {
   // Fetch tree when conversation changes
   useEffect(() => {
     if (currentConversationId) {
+      // Clear previous tree to avoid stale display when switching conversations
+      dispatch(chatSliceActions.heimdallDataLoaded({ treeData: null }))
       dispatch(fetchMessageTree(currentConversationId))
+    } else {
+      // If no conversation is selected, ensure the tree is cleared
+      dispatch(chatSliceActions.heimdallDataLoaded({ treeData: null }))
     }
   }, [currentConversationId, dispatch])
 
@@ -295,6 +300,19 @@ function Chat() {
     dispatch(chatSliceActions.focusedChatMessageSet(parseInt(nodeId)))
   }
 
+  // const handleOnResend = (id: string) => {
+  //   if (currentConversationId) {
+  //     dispatch(
+  //       sendMessage({
+  //         conversationId: currentConversationId,
+  //         input: messageInput,
+  //         repeatNum: 1,
+  //         parent: parseInt(id),
+  //       })
+  //     )
+  //   }
+  // }
+
   const handleMessageDelete = (id: string) => {
     const messageId = parseInt(id)
     dispatch(chatSliceActions.messageDeleted(messageId))
@@ -365,9 +383,11 @@ function Chat() {
   ])
 
   return (
-    <div className='flex min-h-screen bg-gray-900 dark:bg-neutral-900'>
+    <div className='flex min-h-screen bg-gray-900 bg-neutral-50 dark:bg-neutral-900'>
       <div className='p-5 max-w-4xl flex-1'>
-        <h1 className='text-3xl font-bold text-white mb-6'>Ygg Chat {currentConversationId}</h1>
+        <h1 className='text-3xl font-bold text-stone-800 dark:text-stone-200 mb-6'>
+          {titleInput || 'New Conversation'} {currentConversationId}
+        </h1>
         {/* Conversation Title Editor */}
         {currentConversationId && (
           <div className='flex items-center gap-2 mb-4'>
@@ -379,11 +399,11 @@ function Chat() {
         )}
 
         {/* Messages Display */}
-        <div className='mb-6 bg-gray-800 py-4 rounded-lg dark:bg-neutral-900'>
-          <h3 className='text-lg font-semibold text-white mb-3'>Messages ({conversationMessages.length}):</h3>
+        <div className='mb-6 bg-gray-800 py-4 rounded-lg bg-neutral-50 dark:bg-neutral-900'>
+          <h3 className='text-lg font-semibold text-black mb-3 px-2'>Messages ({conversationMessages.length}):</h3>
           <div
             ref={messagesContainerRef}
-            className='border light:border-neutral-300 dark:border-neutral-700 rounded-lg py-4 h-230 overflow-y-auto p-3 bg-gray-900 dark:bg-neutral-900'
+            className='px-2 dark:border-neutral-700 border-b border-stone-200 rounded-lg py-4 h-230 overflow-y-auto p-3 bg-neutral-50 bg-slate-50 dark:bg-neutral-900'
           >
             {displayMessages.length === 0 ? (
               <p className='text-gray-500'>No messages yet...</p>
@@ -417,8 +437,8 @@ function Chat() {
         </div>
 
         {/* Message Input */}
-        <div className='mb-6 bg-gray-800 p-4 rounded-lg dark:bg-neutral-800'>
-          <h3 className='text-lg font-semibold text-white mb-3'>Send Message:</h3>
+        <div className='bg-neutral-100 p-4 rounded-lg dark:bg-neutral-800'>
+          <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>Send Message:</h3>
           <div>
             <TextArea
               value={messageInput.content}
@@ -443,7 +463,7 @@ function Chat() {
                     ? 'Sending...'
                     : 'Send'}
             </Button>
-            <div className='text-neutral-50'>Multi reply count - </div>
+            <div className='text-stone-800 dark:text-stone-200'>Multi reply count - </div>
             <TextArea
               value={multiReplyCount.toString()}
               onChange={e => dispatch(chatSliceActions.multiReplyCountSet(Number(e)))}
@@ -452,26 +472,28 @@ function Chat() {
             ></TextArea>
           </div>
           {messageInput.content.length > 0 && (
-            <small className='text-gray-400 text-xs mt-2 block'>Press Enter to send, Shift+Enter for new line</small>
+            <small className='text-stone-800 dark:text-stone-200 text-xs mt-2 block'>
+              Press Enter to send, Shift+Enter for new line
+            </small>
           )}
         </div>
 
         {/* Provider Selection */}
-        <div className='mb-6 bg-gray-800 p-4 rounded-lg dark:bg-neutral-800'>
-          <h3 className='text-lg font-semibold text-white mb-3'>Provider Selection:</h3>
+        <div className='mb-6 p-4 rounded-lg bg-neutral-100 dark:bg-neutral-800 mt-2'>
+          <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>Provider Selection:</h3>
           <div className='flex items-center gap-3 mb-3'>
             {/* TODO : implement provider refresh */}
             {/* <Button variant='primary' size='small' onClick={handleRefreshProviders}>
               Refresh Providers
             </Button> */}
 
-            <span className='text-gray-300 text-sm'>Available: {models.length} providers</span>
+            <span className='text-stone-800 dark:text-stone-200 text-sm'>Available: {models.length} providers</span>
           </div>
 
           <select
             value={providers.currentProvider || ''}
             onChange={e => handleProviderSelect(e.target.value)}
-            className='w-full max-w-md p-2 rounded bg-gray-700 text-white border border-gray-600'
+            className='w-full max-w-md p-2 rounded bg-neutral-50 dark:bg-gray-700 text-stone-800 dark:text-stone-200'
             disabled={providers.providers.length === 0}
           >
             <option value=''>Select a provider...</option>
@@ -484,21 +506,21 @@ function Chat() {
         </div>
 
         {/* Model Selection */}
-        <div className='mb-6 bg-gray-800 p-4 rounded-lg dark:bg-neutral-800'>
-          <h3 className='text-lg font-semibold text-white mb-3'>Model Selection:</h3>
+        <div className='mb-6 bg-gray-800 p-4 rounded-lg bg-neutral-100 dark:bg-neutral-800'>
+          <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>Model Selection:</h3>
           <div className='flex items-center gap-3 mb-3'>
             <Button variant='primary' size='small' onClick={handleRefreshModels}>
               Refresh Models
             </Button>
             <Button onClick={() => dispatch(chatSliceActions.heimdallCompactModeToggled())}> change mode</Button>
 
-            <span className='text-gray-300 text-sm'>Available: {models.length} models</span>
+            <span className='text-stone-800 dark:text-stone-200 text-sm'>Available: {models.length} models</span>
           </div>
 
           <select
             value={selectedModel || ''}
             onChange={e => handleModelSelect(e.target.value)}
-            className='w-full max-w-md p-2 rounded bg-gray-700 text-white border border-gray-600'
+            className='w-full max-w-md p-2 rounded bg-neutral-50 dark:bg-gray-700 text-stone-800 dark:text-stone-200'
             disabled={models.length === 0}
           >
             <option value=''>Select a model...</option>
@@ -511,8 +533,8 @@ function Chat() {
         </div>
 
         {/* Test Actions */}
-        <div className='mb-6 bg-gray-800 p-4 rounded-lg dark:bg-neutral-800'>
-          <h3 className='text-lg font-semibold text-white mb-3'>Test Actions:</h3>
+        <div className='mb-6 bg-gray-800 p-4 rounded-lg bg-neutral-100 dark:bg-neutral-800'>
+          <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>Test Actions:</h3>
           <div className='flex gap-2 flex-wrap'>
             <Button variant='secondary' size='small' onClick={() => handleInputChange('Hello, how are you?')}>
               Set Test Message
@@ -549,9 +571,9 @@ function Chat() {
         </div>
 
         {/* Test Instructions */}
-        <div className='bg-blue-900 bg-opacity-50 border border-blue-700 p-4 rounded-lg text-blue-100 dark:bg-neutral-800 dark:border-neutral-700 mb-4'>
-          <h4 className='font-semibold mb-2'>Test Instructions:</h4>
-          <ol className='list-decimal list-inside space-y-1 text-sm'>
+        <div className=' bg-stone-100 bg-opacity-50 p-4 rounded-lg dark:bg-neutral-800 dark:border-neutral-700 mb-4'>
+          <h4 className='font-semibold mb-2 text-stone-800 dark:text-stone-200'>Test Instructions:</h4>
+          <ol className='list-decimal list-inside space-y-1 text-sm text-stone-800 dark:text-stone-200'>
             <li>Make sure your server is running on localhost:3001</li>
             <li>Make sure Ollama is running on localhost:11434</li>
             <li>Click "Refresh Models" to load available models from Ollama</li>
@@ -562,15 +584,15 @@ function Chat() {
             <li>Check the Chat State panel for real-time state updates</li>
             <li>Open browser console to see detailed logs</li>
           </ol>
-          <p className='text-sm mt-2'>
+          <p className='text-sm mt-2 text-stone-800 dark:text-stone-200'>
             <strong>Note:</strong> This tests the chat Redux logic without requiring actual conversation management.
           </p>
         </div>
 
         {/* Chat State Display */}
-        <div className='bg-gray-800 p-4 mb-6 rounded-lg text-gray-300 text-sm font-mono dark:bg-neutral-800'>
-          <h3 className='text-lg font-semibold mb-3 text-white'>Chat State:</h3>
-          <div className='grid grid-cols-2 gap-2'>
+        <div className='bg-gray-800 p-4 mb-6 rounded-lg text-gray-300 text-sm font-mono bg-neutral-100 dark:bg-neutral-800'>
+          <h3 className='text-lg font-semibold mb-3 text-stone-800 dark:text-stone-200'>Chat State:</h3>
+          <div className='grid grid-cols-2 gap-2 text-stone-800 dark:text-stone-200'>
             <p>
               <strong>Models Available:</strong> {models.length}
             </p>
@@ -625,10 +647,12 @@ function Chat() {
 
       <div className='flex-1 min-w-0'>
         <Heimdall
+          key={currentConversationId ?? 'none'}
           chatData={heimdallData}
           loading={loading}
           error={error}
           compactMode={compactMode}
+          conversationId={currentConversationId}
           onNodeSelect={handleNodeSelect}
         />
       </div>

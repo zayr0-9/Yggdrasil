@@ -41,7 +41,18 @@ interface MessageActionsProps {
   editMode?: 'edit' | 'branch'
 }
 
-const MessageActions: React.FC<MessageActionsProps> = ({ onEdit, onBranch, onDelete, onCopy, onResend, onSave, onCancel, onSaveBranch, isEditing, editMode = 'edit' }) => {
+const MessageActions: React.FC<MessageActionsProps> = ({
+  onEdit,
+  onBranch,
+  onDelete,
+  onCopy,
+  onResend,
+  onSave,
+  onCancel,
+  onSaveBranch,
+  isEditing,
+  editMode = 'edit',
+}) => {
   return (
     <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200'>
       {isEditing ? (
@@ -110,7 +121,12 @@ const MessageActions: React.FC<MessageActionsProps> = ({ onEdit, onBranch, onDel
               title='Resend message'
             >
               <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 4v6h6M20 20v-6h-6M5 19a9 9 0 1114-7' />
+                <path
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  strokeWidth={2}
+                  d='M4 4v6h6M20 20v-6h-6M5 19a9 9 0 1114-7'
+                />
               </svg>
             </button>
           )}
@@ -213,25 +229,25 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     switch (role) {
       case 'user':
         return {
-          container: 'bg-gray-800 border-l-4 border-l-blue-500 dark:bg-neutral-800',
-          role: 'text-blue-400',
+          container: 'bg-gray-800 border-l-4 border-l-blue-500 bg-indigo-50 dark:bg-neutral-800',
+          role: 'text-indigo-800',
           roleText: 'User',
         }
       case 'assistant':
         return {
-          container: 'bg-gray-850 border-l-4 border-l-green-500',
-          role: 'text-green-400',
+          container: 'bg-gray-850 border-l-4 border-l-green-500 bg-lime-50 dark:bg-neutral-800',
+          role: 'text-lime-800',
           roleText: 'Assistant',
         }
       case 'system':
         return {
-          container: 'bg-gray-800 border-l-4 border-l-purple-500',
+          container: 'bg-gray-800 border-l-4 border-l-purple-500 bg-purple-50 dark:bg-neutral-800',
           role: 'text-purple-400',
           roleText: 'System',
         }
       default:
         return {
-          container: 'bg-gray-800 border-l-4 border-l-gray-500',
+          container: 'bg-gray-800 border-l-4 border-l-gray-500 bg-gray-50 dark:bg-neutral-800',
           role: 'text-gray-400',
           roleText: 'Unknown',
         }
@@ -241,9 +257,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const styles = getRoleStyles()
 
   const formatTimestamp = (dateInput: string | Date) => {
-    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
     if (isNaN(date.getTime())) {
-      return typeof dateInput === 'string' ? dateInput : '';
+      return typeof dateInput === 'string' ? dateInput : ''
     }
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
@@ -277,7 +293,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       </div>
 
       {/* Message content */}
-      <div className='text-gray-100 w-full'>
+      <div className='text-stone-800 dark:text-stone-200 w-full'>
         {editingState ? (
           <TextArea
             value={editContent}

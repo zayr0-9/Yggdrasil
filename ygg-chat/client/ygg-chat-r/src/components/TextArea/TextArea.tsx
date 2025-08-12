@@ -87,13 +87,13 @@ export const TextArea: React.FC<TextAreaProps> = ({
     adjustHeight()
   }, [])
 
-  const baseStyles = `${width} px-4 py-3 rounded-xl border transition-all duration-200 overflow-hidden dark:bg-neutral-900`
+  const baseStyles = `${width} px-4 py-3 rounded-xl transition-all duration-200 overflow-hidden bg-neutral-50 dark:bg-neutral-900`
   const labelClasses = state === 'disabled' ? 'opacity-40' : ''
 
   const stateStyles = {
-    default: `${baseStyles} bg-gray-800 text-gray-100 placeholder-gray-400 border-gray-600 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50`,
-    error: `${baseStyles} bg-gray-800 text-gray-100 placeholder-gray-400 border-red-500 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500 focus:ring-opacity-50`,
-    disabled: `${baseStyles} bg-gray-900 text-gray-500 border-gray-700 placeholder-gray-600 cursor-not-allowed`,
+    default: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-gray-400 border-gray-600 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50`,
+    error: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-gray-400 border-red-500 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500 focus:ring-opacity-50`,
+    disabled: `${baseStyles} bg-gray-900 text-stone-800 dark:text-stone-200 border-gray-700 placeholder-gray-600 cursor-not-allowed`,
   }
 
   return (
@@ -126,7 +126,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
 
         {/* Character count indicator */}
         {showCharCount && maxLength && (
-          <div className='absolute bottom-2 right-3 text-xs text-gray-500'>
+          <div className='absolute bottom-2 right-3 text-xs text-stone-800 dark:text-stone-200'>
             {value.length}/{maxLength}
           </div>
         )}

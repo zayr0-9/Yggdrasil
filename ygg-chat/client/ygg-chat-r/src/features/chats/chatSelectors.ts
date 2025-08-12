@@ -80,6 +80,12 @@ export const selectInitializationError = createSelector([selectInitializationSta
 // UI selectors
 export const selectModelSelectorOpen = createSelector([selectChatState], chat => chat.ui.modelSelectorOpen)
 
+export const HeimdallDataReset = createSelector([selectHeimdallState], h => {
+  h.treeData = null
+  h.loading = false
+  h.error = null
+})
+
 // Combined model state for UI
 export const selectModelState = createSelector(
   [selectModels, selectSelectedModel, selectDefaultModel, selectModelsLoading, selectModelsError],
@@ -146,9 +152,7 @@ export const selectDisplayMessages = createSelector(
     // Primary: use currentPath (array of selected IDs) to pick messages in the same order
     if (Array.isArray(currentPath) && currentPath.length > 0) {
       const byId = new Map(messages.map(m => [m.id, m]))
-      const selected = currentPath
-        .map(id => byId.get(id))
-        .filter((m): m is typeof messages[number] => Boolean(m))
+      const selected = currentPath.map(id => byId.get(id)).filter((m): m is (typeof messages)[number] => Boolean(m))
 
       if (selected.length > 0) return selected
 
@@ -156,17 +160,13 @@ export const selectDisplayMessages = createSelector(
       const pathSet = new Set(currentPath)
       const filtered = messages.filter(m => pathSet.has(m.id))
       if (filtered.length > 0) {
-        return filtered.sort(
-          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        )
+        return filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
       }
     }
 
     // Fallback 2: show all messages chronologically (deduped)
     const unique = new Map<number, (typeof messages)[number]>()
     for (const m of messages) if (!unique.has(m.id)) unique.set(m.id, m)
-    return [...unique.values()].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    )
+    return [...unique.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   }
 )

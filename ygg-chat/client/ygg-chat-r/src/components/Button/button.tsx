@@ -27,7 +27,8 @@ export const Button: React.FC<ButtonProps> = ({
 
   // Variant styles define the color scheme
   const variantStyles = {
-    primary: 'bg-purple-400 text-white hover:bg-purple-500 focus:ring-blue-500 dark:bg-purple-900 dark:hover:bg-purple-800',
+    primary:
+      'bg-indigo-400 text-white hover:bg-indigo-500 focus:ring-blue-500 dark:bg-indigo-900 dark:hover:bg-indigo-800',
     secondary: 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500',
     outline: 'border-2 border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-blue-500',
     danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
@@ -51,7 +52,7 @@ export const Button: React.FC<ButtonProps> = ({
     ${disabled ? disabledStyles : ''}
   `.trim()
 
-    return (
+  return (
     <button
       type={type}
       className={`${buttonClasses} ${className}`.trim()}

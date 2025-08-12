@@ -30,6 +30,7 @@ export {
 
 // Selectors - grouped by feature
 export {
+  HeimdallDataReset,
   selectBookmarkedMessages,
   // Combined selectors
   selectCanSend,
