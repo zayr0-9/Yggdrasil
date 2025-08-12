@@ -143,56 +143,30 @@ export const selectFocusedChatMessageId = createSelector(
 export const selectDisplayMessages = createSelector(
   [selectConversationMessages, selectCurrentPath],
   (messages, currentPath) => {
-    // If no branch selected, show everything chronologically (deduped)
-    if (!currentPath || currentPath.length === 0) {
-      const unique = new Map<number, (typeof messages)[number]>()
-      for (const m of messages) if (!unique.has(m.id)) unique.set(m.id, m)
-      return [...unique.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    // Primary: use currentPath (array of selected IDs) to pick messages in the same order
+    if (Array.isArray(currentPath) && currentPath.length > 0) {
+      const byId = new Map(messages.map(m => [m.id, m]))
+      const selected = currentPath
+        .map(id => byId.get(id))
+        .filter((m): m is typeof messages[number] => Boolean(m))
+
+      if (selected.length > 0) return selected
+
+      // Fallback 1: filter by IDs (order chronologically)
+      const pathSet = new Set(currentPath)
+      const filtered = messages.filter(m => pathSet.has(m.id))
+      if (filtered.length > 0) {
+        return filtered.sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        )
+      }
     }
 
-    // Build map for fast lookup
-    const map = new Map(messages.map(m => [m.id, m]))
-    const branch: typeof messages = []
-
-    // Ancestors/selected path
-    for (const id of currentPath) {
-      const m = map.get(id)
-      if (m) branch.push(m)
-    }
-
-    // Descendants (linear): walk down ONLY when there is exactly one child to avoid accidentally
-    // switching to an alternate branch. This ensures that after creating a new branch, we display
-    // the new branch path exclusively instead of continuing down an existing sibling branch.
-    let cursor = currentPath[currentPath.length - 1]
-    while (true) {
-      const node = map.get(cursor)
-      if (!node) break
-
-      // Normalise children_ids into an array of numbers
-      const childIds = Array.isArray(node.children_ids)
-        ? node.children_ids
-        : (() => {
-            try {
-              return JSON.parse((node.children_ids as unknown as string) || '[]') as number[]
-            } catch {
-              return [] as number[]
-            }
-          })()
-
-      // Stop if there are zero OR multiple children – the path is either finished or forks.
-      if (childIds.length !== 1) break
-
-      const nextChild = map.get(childIds[0])
-      if (!nextChild) break
-
-      branch.push(nextChild)
-      cursor = nextChild.id
-    }
-
-    // Dedup and sort
+    // Fallback 2: show all messages chronologically (deduped)
     const unique = new Map<number, (typeof messages)[number]>()
-    for (const m of branch) if (!unique.has(m.id)) unique.set(m.id, m)
-    // console.log(`display messages ${JSON.stringify([...unique.values()])}`)
-    return [...unique.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    for (const m of messages) if (!unique.has(m.id)) unique.set(m.id, m)
+    return [...unique.values()].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    )
   }
 )

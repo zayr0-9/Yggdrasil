@@ -9,6 +9,7 @@ import {
   fetchMessageTree,
   fetchModelsForCurrentProvider,
   initializeUserAndConversation,
+  refreshCurrentPathAfterDelete,
   selectCanSend,
   selectConversationMessages,
   selectCurrentConversationId,
@@ -299,6 +300,7 @@ function Chat() {
     dispatch(chatSliceActions.messageDeleted(messageId))
     if (currentConversationId) {
       dispatch(deleteMessage({ id: messageId, conversationId: currentConversationId }))
+      dispatch(refreshCurrentPathAfterDelete({ conversationId: currentConversationId, messageId }))
     }
     console.log(messageId)
   }

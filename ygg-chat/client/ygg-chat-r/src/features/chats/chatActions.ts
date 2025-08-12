@@ -576,6 +576,51 @@ export const fetchMessageTree = createAsyncThunk(
   }
 )
 
+// Refresh currentPath after a cascade delete (server deletes a message and its subtree)
+export const refreshCurrentPathAfterDelete = createAsyncThunk(
+  'chat/refreshCurrentPathAfterDelete',
+  async (
+    { conversationId, messageId }: { conversationId: number; messageId: number },
+    { getState, dispatch, rejectWithValue }
+  ) => {
+    try {
+      // Fetch direct children of the deleted message from the server
+      const children = await apiCall<number[]>(
+        `/conversations/${conversationId}/messages/${messageId}/children`
+      )
+
+      const state = getState() as RootState
+      const currentPath = state.chat.conversation.currentPath || []
+
+      let newPath = currentPath
+
+      // If the deleted message itself is on the path, truncate before it
+      const idxDeleted = currentPath.indexOf(messageId)
+      if (idxDeleted !== -1) {
+        newPath = currentPath.slice(0, idxDeleted)
+      } else if (children && children.length > 0) {
+        // Otherwise, if any of its direct children are on the path, truncate before the first occurrence
+        const childSet = new Set(children)
+        const firstChildIdx = currentPath.findIndex(id => childSet.has(id))
+        if (firstChildIdx !== -1) {
+          newPath = currentPath.slice(0, firstChildIdx)
+        }
+      }
+
+      // Only dispatch if the path actually changes
+      if (newPath !== currentPath) {
+        dispatch(chatSliceActions.conversationPathSet(newPath))
+      }
+
+      return { children, newPath }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to refresh path after delete'
+      return rejectWithValue(message)
+    }
+  }
+)
+
 // Initialize user and conversation
 export const initializeUserAndConversation = createAsyncThunk(
   'chat/initializeUserAndConversation',

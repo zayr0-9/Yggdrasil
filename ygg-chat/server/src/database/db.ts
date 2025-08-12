@@ -143,6 +143,7 @@ export function initializeStatements() {
       'INSERT INTO messages (conversation_id, parent_id, role, content, children_ids) VALUES (?, ?, ?, ?, ?)'
     ),
     getMessageById: db.prepare('SELECT * FROM messages WHERE id = ?'),
+    getChildrenIds: db.prepare('SELECT children_ids FROM messages WHERE id = ?'),
     getMessagesByConversation: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'),
     getLastMessage: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1'),
     deleteMessagesByConversation: db.prepare('DELETE FROM messages WHERE conversation_id = ?'),

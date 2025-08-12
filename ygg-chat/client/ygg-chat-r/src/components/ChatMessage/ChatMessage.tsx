@@ -22,6 +22,7 @@ interface ChatMessageProps {
   onBranch?: (id: string, newContent: string) => void
   onDelete?: (id: string) => void
   onCopy?: (content: string) => void
+  onResend?: (id: string) => void
   isEditing?: boolean
   width: ChatMessageWidth
   className?: string
@@ -32,6 +33,7 @@ interface MessageActionsProps {
   onBranch?: () => void
   onDelete?: () => void
   onCopy?: () => void
+  onResend?: () => void
   onSave?: () => void
   onCancel?: () => void
   onSaveBranch?: () => void
@@ -39,7 +41,7 @@ interface MessageActionsProps {
   editMode?: 'edit' | 'branch'
 }
 
-const MessageActions: React.FC<MessageActionsProps> = ({ onEdit, onBranch, onDelete, onCopy, onSave, onCancel, onSaveBranch, isEditing, editMode = 'edit' }) => {
+const MessageActions: React.FC<MessageActionsProps> = ({ onEdit, onBranch, onDelete, onCopy, onResend, onSave, onCancel, onSaveBranch, isEditing, editMode = 'edit' }) => {
   return (
     <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200'>
       {isEditing ? (
@@ -101,6 +103,17 @@ const MessageActions: React.FC<MessageActionsProps> = ({ onEdit, onBranch, onDel
               </svg>
             </button>
           )}
+          {onResend && (
+            <button
+              onClick={onResend}
+              className='p-1.5 rounded-md text-gray-400 hover:text-indigo-400 hover:bg-gray-700 transition-colors duration-150'
+              title='Resend message'
+            >
+              <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 4v6h6M20 20v-6h-6M5 19a9 9 0 1114-7' />
+              </svg>
+            </button>
+          )}
           {onDelete && (
             <button
               onClick={onDelete}
@@ -132,6 +145,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   onBranch,
   onDelete,
   onCopy,
+  onResend,
   isEditing = false,
   width = 'w-3/5',
 }) => {
@@ -186,6 +200,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const handleDelete = () => {
     if (onDelete) {
       onDelete(id)
+    }
+  }
+
+  const handleResend = () => {
+    if (onResend) {
+      onResend(id)
     }
   }
 
@@ -247,6 +267,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           onBranch={role === 'user' ? handleBranch : undefined}
           onDelete={handleDelete}
           onCopy={handleCopy}
+          onResend={role === 'assistant' ? handleResend : undefined}
           onSave={handleSave}
           onSaveBranch={handleSaveBranch}
           onCancel={handleCancel}

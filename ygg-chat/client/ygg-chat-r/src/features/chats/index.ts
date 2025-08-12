@@ -21,6 +21,7 @@ export {
   editMessageWithBranching,
   fetchModels,
   fetchModelsForCurrentProvider,
+  refreshCurrentPathAfterDelete,
   selectModel,
   sendMessage,
   sendMessageToBranch,

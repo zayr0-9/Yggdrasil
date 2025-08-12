@@ -119,6 +119,29 @@ export class MessageService {
     return statements.getLastMessage.get(conversationId) as Message | undefined
   }
 
+  static getChildrenIds(id: number): number[] {
+    const row = statements.getChildrenIds.get(id) as { children_ids: string } | undefined
+    const raw = row?.children_ids ?? '[]'
+    // Try JSON parse first (expected format like "[1,2,3]")
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map(v => Number(v))
+          .filter(n => Number.isFinite(n))
+      }
+    } catch {
+      // fall through to manual parsing
+    }
+    // Fallback: accept CSV with/without brackets
+    const cleaned = raw.replace(/^\[|\]$/g, '').trim()
+    if (!cleaned) return []
+    return cleaned
+      .split(',')
+      .map(s => parseInt(s.trim(), 10))
+      .filter(n => Number.isFinite(n))
+  }
+
   static deleteByConversation(conversationId: number): void {
     statements.deleteMessagesByConversation.run(conversationId)
   }

@@ -240,6 +240,14 @@ router.get(
   })
 )
 
+router.get(
+  '/conversations/:conversationId/messages/:messageId/children',
+  asyncHandler(async (req, res) => {
+    const { conversationId, messageId } = req.params
+    const childrenIds = MessageService.getChildrenIds(parseInt(messageId))
+    res.json(childrenIds)
+  })
+)
 //get message tree
 router.get(
   '/conversations/:id/messages/tree',
