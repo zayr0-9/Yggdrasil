@@ -23,6 +23,46 @@ router.get(
   })
 )
 
+// Fetch Anthropic models on the server to keep API key private
+router.get(
+  '/models/anthropic',
+  asyncHandler(async (req, res) => {
+    try {
+      const apiKey = process.env.ANTHROPIC_API_KEY
+      if (!apiKey) {
+        return res.status(400).json({ error: 'Missing ANTHROPIC_API_KEY' })
+      }
+
+      const response = await fetch('https://api.anthropic.com/v1/models', {
+        headers: {
+          'x-api-key': apiKey,
+          // 'anthropic-version': '2023-06-01',
+        },
+        signal: AbortSignal.timeout(5000),
+      })
+
+      if (!response.ok) {
+        const text = await response.text()
+        return res.status(response.status).json({ error: text || response.statusText })
+      }
+
+      const data = (await response.json()) as { data?: any[]; models?: any[] }
+      const list: any[] = Array.isArray(data.data) ? data.data : Array.isArray(data.models) ? data.models : []
+
+      const names: string[] = list.map(m => String(m?.id || m?.name || '')).filter(n => n.length > 0)
+
+      const preferredDefault = 'claude-3-5-sonnet-latest'
+      const defaultModel = names.includes(preferredDefault) ? preferredDefault : names[0] || ''
+
+      res.json({ models: names, default: defaultModel })
+    } catch (error) {
+      console.error('Failed to fetch Anthropic models:', error)
+      res.status(500).json({ error: 'Failed to fetch Anthropic models' })
+    }
+  })
+)
+
+//fetch models ollama
 router.get(
   '/models',
   asyncHandler(async (req, res) => {
@@ -210,8 +250,13 @@ router.patch(
       return res.status(400).json({ error: 'Title required' })
     }
 
-    const conversation = ConversationService.updateTitle(conversationId, title)
-    res.json(conversation)
+    const existing = ConversationService.getById(conversationId)
+    if (!existing) {
+      return res.status(404).json({ error: 'Conversation not found' })
+    }
+
+    const updated = ConversationService.updateTitle(conversationId, title)
+    res.json(updated)
   })
 )
 
@@ -266,9 +311,6 @@ router.get(
   })
 )
 
-// Send message with streaming response
-
-// Send message with streaming response (with repeat capability)
 // Send message with streaming response (with repeat capability)
 router.post(
   '/conversations/:id/messages/repeat',
@@ -361,6 +403,7 @@ router.post(
   })
 )
 
+// Send message with streaming response
 router.post(
   '/conversations/:id/messages',
   asyncHandler(async (req, res) => {

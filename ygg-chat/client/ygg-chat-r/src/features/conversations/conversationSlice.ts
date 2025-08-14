@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { ConversationsState, Conversation } from './conversationTypes'
 import { fetchConversations, createConversation, deleteConversation, updateConversation } from './conversationActions'
+import { updateConversationTitle } from '../chats'
 
 const initialState: ConversationsState = {
   items: [],
@@ -52,6 +53,13 @@ const conversationSlice = createSlice({
       })
       .addCase(updateConversation.fulfilled, (state, action: PayloadAction<Conversation>) => {
         state.loading = false
+        const idx = state.items.findIndex(c => c.id === action.payload.id)
+        if (idx !== -1) {
+          state.items[idx] = action.payload
+        }
+      })
+      // also accept updates coming from chat feature thunk
+      .addCase(updateConversationTitle.fulfilled, (state, action: PayloadAction<Conversation>) => {
         const idx = state.items.findIndex(c => c.id === action.payload.id)
         if (idx !== -1) {
           state.items[idx] = action.payload

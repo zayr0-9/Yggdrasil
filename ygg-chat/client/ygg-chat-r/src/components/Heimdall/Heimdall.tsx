@@ -42,21 +42,12 @@ interface HeimdallProps {
   conversationId?: number | null
 }
 
-// Default empty state when no data is provided
-const defaultEmptyNode: ChatNode = {
-  id: 'empty',
-  message: 'No conversation data available',
-  sender: 'assistant',
-  children: [],
-}
-
 export const Heimdall: React.FC<HeimdallProps> = ({
   chatData = null,
   compactMode = true,
   loading = false,
   error = null,
   onNodeSelect,
-  conversationId,
 }) => {
   const dispatch = useDispatch()
   const selectedNodes = useSelector((state: RootState) => state.chat.selectedNodes)
@@ -84,6 +75,21 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   // Ensure we only auto-center once per conversation load
   const hasCenteredRef = useRef<boolean>(false)
   const [isTransitioning, setIsTransitioning] = useState<boolean>(false)
+  // Global text selection suppression while panning (originated in Heimdall)
+  const addGlobalNoSelect = () => {
+    try {
+      document.body.classList.add('ygg-no-select')
+    } catch {}
+  }
+  const removeGlobalNoSelect = () => {
+    try {
+      document.body.classList.remove('ygg-no-select')
+    } catch {}
+  }
+  // Safety: ensure class is removed if component unmounts mid-drag
+  useEffect(() => {
+    return () => removeGlobalNoSelect()
+  }, [])
 
   // When switching conversations, drop any cached tree so a blank/new conversation
   // does not render the previous conversation's tree.
@@ -124,23 +130,21 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     }
   }, [chatData])
 
-  // Use provided data or fallback to last known (prevents flash on refresh). Finally default to empty.
-  const currentChatData = useMemo(() => chatData ?? lastDataRef.current ?? defaultEmptyNode, [chatData])
+  // Use provided data or fallback to last known (prevents flash on refresh). Do NOT show a fake empty node.
+  const currentChatData = useMemo(() => chatData ?? lastDataRef.current ?? null, [chatData])
 
   // Calculate path from root to a specific node
-  const getPathToNode = (
-    targetNodeId: string,
-    node: ChatNode = currentChatData,
-    path: string[] = []
-  ): string[] | null => {
-    const currentPath = [...path, node.id]
+  const getPathToNode = (targetNodeId: string, node?: ChatNode | null, path: string[] = []): string[] | null => {
+    const startNode = node ?? currentChatData
+    if (!startNode) return null
+    const currentPath = [...path, startNode.id]
 
-    if (node.id === targetNodeId) {
+    if (startNode.id === targetNodeId) {
       return currentPath
     }
 
-    if (node.children) {
-      for (const child of node.children) {
+    if (startNode.children) {
+      for (const child of startNode.children) {
         const result = getPathToNode(targetNodeId, child, currentPath)
         if (result) return result
       }
@@ -155,10 +159,12 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     if (!pathToNode) return []
 
     // Find the target node in the tree
-    const findNode = (nodeId: string, node: ChatNode = currentChatData): ChatNode | null => {
-      if (node.id === nodeId) return node
-      if (node.children) {
-        for (const child of node.children) {
+    const findNode = (nodeId: string, node?: ChatNode | null): ChatNode | null => {
+      const start = node ?? currentChatData
+      if (!start) return null
+      if (start.id === nodeId) return start
+      if (start.children) {
+        for (const child of start.children) {
           const found = findNode(nodeId, child)
           if (found) return found
         }
@@ -228,7 +234,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     return { totalNodes, maxDepth, branches }
   }
 
-  const stats = useMemo(() => getTreeStats(currentChatData), [currentChatData])
+  const stats = useMemo(
+    () => (currentChatData ? getTreeStats(currentChatData) : { totalNodes: 0, maxDepth: 0, branches: 0 }),
+    [currentChatData]
+  )
 
   // Calculate tree layout
   const calculateTreeLayout = (node: ChatNode): Record<string, Position> => {
@@ -261,7 +270,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
 
   // Memoize layout so it only recomputes when inputs actually change (e.g., data or spacings)
   const positions = useMemo(
-    () => calculateTreeLayout(currentChatData),
+    () => (currentChatData ? calculateTreeLayout(currentChatData) : {}),
     [currentChatData, horizontalSpacing, verticalSpacing]
   )
 
@@ -277,7 +286,11 @@ export const Heimdall: React.FC<HeimdallProps> = ({
 
   // Calculate SVG bounds (memoized)
   const bounds = useMemo(() => {
-    return Object.values(positions).reduce<Bounds>(
+    const values = Object.values(positions)
+    if (values.length === 0) {
+      return { minX: 0, maxX: 0, minY: 0, maxY: 0 }
+    }
+    return values.reduce<Bounds>(
       (acc, pos) => {
         const isExpanded = !compactMode || pos.node.id === focusedNodeId
         const halfWidth = isExpanded ? nodeWidth / 2 : circleRadius
@@ -302,8 +315,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bounds, chatData])
 
-  const offsetX = offsetRef.current ? offsetRef.current.x : -bounds.minX + 50
-  const offsetY = offsetRef.current ? offsetRef.current.y : -bounds.minY + 50
+  const hasPositions = Object.keys(positions).length > 0
+  const offsetX = hasPositions ? (offsetRef.current ? offsetRef.current.x : -bounds.minX + 50) : 0
+  const offsetY = hasPositions ? (offsetRef.current ? offsetRef.current.y : -bounds.minY + 50) : 0
 
   // Center the view on the root node once, after layout and container dimensions are ready
   useEffect(() => {
@@ -311,7 +325,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     if (!chatData) return
     if (!dimensions.width || !dimensions.height) return
     // Ensure positions are available and we haven't centered yet
-    const root = positions[currentChatData.id]
+    const id = currentChatData?.id
+    if (!id) return
+    const root = positions[id]
     if (!root) return
     if (hasCenteredRef.current) return
 
@@ -322,7 +338,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     const py = centerY - (root.y + offsetY) * s - 800 //bigger numer = more to the top
     setPan({ x: px, y: py })
     hasCenteredRef.current = true
-  }, [positions, dimensions.width, dimensions.height, zoom, offsetX, offsetY, chatData, currentChatData.id])
+  }, [positions, dimensions.width, dimensions.height, zoom, offsetX, offsetY, chatData, currentChatData?.id])
 
   useEffect(() => {
     const updateDimensions = (): void => {
@@ -585,11 +601,33 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         setIsSelecting(true)
         setSelectionStart({ x: svgX, y: svgY })
         setSelectionEnd({ x: svgX, y: svgY })
+        // Disable text selection globally during selection drag
+        addGlobalNoSelect()
+        const onEnd = () => {
+          removeGlobalNoSelect()
+          window.removeEventListener('mouseup', onEnd)
+          window.removeEventListener('touchend', onEnd)
+          window.removeEventListener('blur', onEnd)
+        }
+        window.addEventListener('mouseup', onEnd)
+        window.addEventListener('touchend', onEnd)
+        window.addEventListener('blur', onEnd)
       }
     } else if (e.button === 0) {
       // Left mouse button
       setIsDragging(true)
       setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
+      // Disable text selection globally until the drag ends anywhere
+      addGlobalNoSelect()
+      const onEnd = () => {
+        removeGlobalNoSelect()
+        window.removeEventListener('mouseup', onEnd)
+        window.removeEventListener('touchend', onEnd)
+        window.removeEventListener('blur', onEnd)
+      }
+      window.addEventListener('mouseup', onEnd)
+      window.addEventListener('touchend', onEnd)
+      window.addEventListener('blur', onEnd)
     }
   }
 
@@ -619,6 +657,8 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       setIsSelecting(false)
     }
     setIsDragging(false)
+    // Extra safety in case global listeners missed it
+    removeGlobalNoSelect()
   }
 
   // Handle right-click context menu events
@@ -653,12 +693,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     // Dispatch the nodesSelected action (filtered to the dominant branch)
     const filteredNodes = filterToDominantBranch(newSelectedNodes)
     dispatch(chatSliceActions.nodesSelected(filteredNodes))
-
-    // Also trigger the existing onNodeSelect callback if provided
-    if (onNodeSelect) {
-      const path = getPathToNode(nodeId)
-      onNodeSelect(nodeId, path || [])
-    }
+    
+    // Important: Do NOT call onNodeSelect on right-click.
+    // Right-click is used for selection only and must not update currentPath.
   }
 
   const resetView = (): void => {
@@ -669,14 +706,17 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     offsetRef.current = { x: -bounds.minX + 50, y: -bounds.minY + 50 }
 
     // Center the root node in the viewport using the new zoom
-    const root = positions[currentChatData.id]
+    const id = currentChatData?.id
+    if (!id) return
+    const root = positions[id]
+    if (!root) return
     const s = newZoom
     const ox = offsetRef.current.x
     const oy = offsetRef.current.y
     const centerX = dimensions.width / 2
     const centerY = dimensions.height / 2
-    const px = centerX - ((root?.x ?? 0) + ox) * s - centerX
-    const py = centerY - ((root?.y ?? 0) + oy) * s - 100
+    const px = centerX - ((root.x ?? 0) + ox) * s - centerX
+    const py = centerY - ((root.y ?? 0) + oy) * s - 100
     setPan({ x: px, y: py })
 
     // We've just centered explicitly
@@ -815,7 +855,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               strokeWidth='1' // Border thickness
               className={`cursor-pointer hover:opacity-90 transition-opacity duration-200 ${
                 compactMode && focusedNodeId === node.id ? 'animate-pulse' : ''
-              } ${node.sender === 'user' ? 'dark:fill-indigo-900' : 'dark:fill-lime-900'} dark:stroke-slate-700`}
+              } ${node.sender === 'user' ? 'dark:fill-indigo-900' : 'dark:fill-red-900'} dark:stroke-slate-700`}
               style={{
                 filter:
                   compactMode && focusedNodeId === node.id ? 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.5))' : 'none',
@@ -869,7 +909,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               r={circleRadius}
               fill={node.sender === 'user' ? '#64748b' : '#1e293b'}
               className={`cursor-pointer transition-transform duration-150 ${
-                node.sender === 'user' ? 'dark:fill-indigo-700' : 'dark:fill-lime-700'
+                node.sender === 'user' ? 'fill-red-300 dark:fill-indigo-700' : 'fill-indigo-300 dark:fill-red-700'
               }`}
               style={{
                 transform: selectedNode?.id === node.id ? 'scale(1.1)' : 'scale(1)',
@@ -922,10 +962,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       }}
     >
       {/* Overlays: loading, error, empty-state (non-destructive, do not unmount SVG) */}
-      <AnimatePresence>
+      {/* <AnimatePresence>
         {loading && (
           <motion.div
-            className='absolute inset-0 z-20 flex items-center justify-center bg-slate-50 text-stone-800 dark:text-stone-200'
+            className='absolute inset-0 z-20 flex items-center justify-center bg-slate-50 text-stone-800 dark:text-stone-200 dark:text-stone-200 dark:bg-neutral-900'
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -943,7 +983,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence> */}
       <AnimatePresence>
         {error && (
           <motion.div
@@ -967,29 +1007,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
-      <AnimatePresence>
-        {!error && !loading && !chatData && !lastDataRef.current && (
-          <motion.div
-            className='absolute inset-0 z-10 flex items-center justify-center bg-gray-900'
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: 'easeInOut' }}
-          >
-            <motion.div
-              className='text-white text-center max-w-md'
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -10 }}
-              transition={{ duration: 0.4, delay: 0.15, ease: 'easeOut' }}
-            >
-              <div className='text-gray-500 text-6xl mb-4'>💬</div>
-              <p className='text-lg mb-2'>No conversation selected</p>
-              <p className='text-sm text-gray-400'>Select a conversation to view its message tree</p>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
       {error && (
         <div className='absolute inset-0 z-20 flex items-center justify-center bg-slate-50 text-stone-800 dark:text-stone-200'>
           <div className='text-white text-center max-w-md'>
@@ -999,8 +1017,8 @@ export const Heimdall: React.FC<HeimdallProps> = ({
           </div>
         </div>
       )}
-      {!error && !loading && !chatData && !lastDataRef.current && (
-        <div className='absolute inset-0 z-10 flex items-center justify-center bg-slate-50 text-stone-800 dark:text-stone-200'>
+      {!error && !loading && !lastDataRef.current && (
+        <div className='absolute inset-0 z-10 flex items-center justify-center bg-slate-50 text-stone-800 dark:text-stone-200 dark:bg-neutral-900'>
           <div className='text-white text-center max-w-md'>
             <div className='text-gray-500 text-6xl mb-4'>💬</div>
             <p className='text-lg mb-2'>No conversation selected</p>
@@ -1011,40 +1029,40 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       <div className='absolute top-4 left-4 z-10 flex gap-2'>
         <button
           onClick={zoomIn}
-          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-gray-700 transition-colors'
+          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-gray-700 dark:bg-neutral-700 transition-colors'
           title='Zoom In'
         >
           <ZoomIn size={20} />
         </button>
         <button
           onClick={zoomOut}
-          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-gray-700 transition-colors'
+          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-gray-700 dark:bg-neutral-700 transition-colors'
           title='Zoom Out'
         >
           <ZoomOut size={20} />
         </button>
         <button
           onClick={resetView}
-          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-gray-700 transition-colors'
+          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-gray-700 dark:bg-neutral-700 transition-colors'
           title='Reset View'
         >
           <RotateCcw size={20} />
         </button>
       </div>
       <div className='absolute top-4 right-4 z-10 flex flex-col gap-2 items-end'>
-        <div className='bg-amber-50 dark:bg-stone-200 text-stone-800 dark:text-stone-200 px-3 py-1 rounded-lg text-sm'>
+        <div className='bg-amber-50 dark:bg-neutral-700 text-stone-800 dark:text-stone-200 px-3 py-1 rounded-lg text-sm'>
           Zoom: {Math.round(zoom * 100)}%
         </div>
         {compactMode && (
           <div className='bg-gray-800 text-white px-3 py-1 rounded-lg text-xs'>Compact Mode: Click to expand</div>
         )}
-        <div className='bg-amber-50 text-stone-800 dark:text-stone-200 px-3 py-2 rounded-lg text-xs space-y-1'>
+        <div className='bg-amber-50 dark:bg-neutral-700 text-stone-800 dark:text-stone-200 px-3 py-2 rounded-lg text-xs space-y-1'>
           <div className='flex items-center gap-2'>
-            <div className='w-3 h-3 bg-indigo-50 rounded '></div>
+            <div className='w-3 h-3 bg-indigo-300 rounded '></div>
             <span>User messages</span>
           </div>
           <div className='flex items-center gap-2'>
-            <div className='w-3 h-3 bg-lime-50 rounded'></div>
+            <div className='w-3 h-3 bg-red-200 rounded'></div>
             <span>Assistant messages</span>
           </div>
           {compactMode && (
@@ -1114,9 +1132,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       </div>
       {selectedNode && (
         <div
-          className={`absolute ${compactMode ? 'top-4' : 'top-20'} left-4 right-4 max-w-2xl bg-amber-50 text-stone-800 dark:text-stone-200 p-4 rounded-lg shadow-xl z-20 ${compactMode ? 'border-2 border-gray-600' : ''}`}
+          className={`absolute ${compactMode ? 'top-4' : 'top-20'} left-4 right-4 max-w-2xl bg-amber-50 dark:bg-neutral-800 text-stone-800 dark:text-stone-200 p-4 rounded-lg shadow-xl z-20 ${compactMode ? 'border-2 border-gray-600' : ''}`}
         >
-          <div className='text-xs text-stone-800 bg-amber-50 dark:text-stone-200 mb-1'>
+          <div className='text-xs text-stone-800 bg-amber-50 dark:bg-neutral-800 dark:text-stone-200 mb-1'>
             {selectedNode.sender === 'user' ? 'User' : 'Assistant'}
             {compactMode && focusedNodeId !== selectedNode.id && ' (Click to expand)'}
           </div>

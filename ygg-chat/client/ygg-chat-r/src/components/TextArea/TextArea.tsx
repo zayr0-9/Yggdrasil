@@ -87,6 +87,13 @@ export const TextArea: React.FC<TextAreaProps> = ({
     adjustHeight()
   }, [])
 
+  // Programmatic focus when autoFocus toggles to true (e.g., after streaming finishes)
+  useEffect(() => {
+    if (autoFocus && textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }, [autoFocus])
+
   const baseStyles = `${width} px-4 py-3 rounded-xl transition-all duration-200 overflow-hidden bg-neutral-50 dark:bg-neutral-900`
   const labelClasses = state === 'disabled' ? 'opacity-40' : ''
 

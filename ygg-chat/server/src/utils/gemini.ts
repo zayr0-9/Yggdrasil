@@ -1,9 +1,8 @@
 import { google } from '@ai-sdk/google'
 import { streamText } from 'ai'
-import { Message } from '../database/models'
 
 export async function generateResponse(
-  messages: Message[],
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
   onChunk: (chunk: string) => void,
   model: string = 'gemini-2.5-flash'
 ): Promise<void> {

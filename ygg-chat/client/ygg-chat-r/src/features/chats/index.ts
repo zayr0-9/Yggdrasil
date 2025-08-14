@@ -69,7 +69,7 @@ export {
 
 // Convenience re-exports
 // New async thunks
-export { fetchConversationMessages, fetchMessageTree, initializeUserAndConversation } from './chatActions'
+export { fetchConversationMessages, fetchMessageTree, initializeUserAndConversation, updateConversationTitle } from './chatActions'
 
 // New selectors for Heimdall and initialization
 export {

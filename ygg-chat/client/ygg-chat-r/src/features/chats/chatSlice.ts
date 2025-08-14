@@ -34,6 +34,7 @@ const initialState: ChatState = {
     buffer: '',
     messageId: null,
     error: null,
+    finished: false,
   },
   ui: {
     modelSelectorOpen: false,
@@ -126,12 +127,14 @@ export const chatSlice = createSlice({
       state.streaming.active = true
       state.streaming.buffer = ''
       state.streaming.error = null
+      state.streaming.finished = false
     },
 
     sendingCompleted: state => {
       state.composition.sending = false
       state.streaming.active = false
       state.composition.input.content = ''
+      state.streaming.finished = true
     },
 
     // Streaming - optimized buffer management

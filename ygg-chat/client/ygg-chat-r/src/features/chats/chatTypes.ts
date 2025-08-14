@@ -27,6 +27,7 @@ export interface StreamState {
   buffer: string
   messageId: number | null
   error: string | null
+  finished: boolean
 }
 
 // Model types - simplified to match server

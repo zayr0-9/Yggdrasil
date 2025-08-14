@@ -72,8 +72,9 @@ export class ConversationService {
     return statements.getConversationById.get(id) as Conversation | undefined
   }
 
-  static updateTitle(id: number, title: string): void {
+  static updateTitle(id: number, title: string): Conversation | undefined {
     statements.updateConversationTitle.run(title, id)
+    return statements.getConversationById.get(id) as Conversation | undefined
   }
 
   static touch(id: number): void {

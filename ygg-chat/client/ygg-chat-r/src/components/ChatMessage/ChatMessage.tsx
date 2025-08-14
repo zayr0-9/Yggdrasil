@@ -1,4 +1,6 @@
 import React, { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { TextArea } from '../TextArea/TextArea'
 
 type MessageRole = 'user' | 'assistant' | 'system'
@@ -86,7 +88,7 @@ const MessageActions: React.FC<MessageActionsProps> = ({
         <>
           <button
             onClick={onCopy}
-            className='p-1.5 rounded-md text-gray-400 hover:text-blue-400 hover:bg-gray-700 transition-colors duration-150'
+            className='p-1.5 rounded-md text-gray-400 hover:text-blue-400 hover:bg-neutral-300 transition-colors duration-150'
             title='Copy message'
           >
             <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -100,8 +102,8 @@ const MessageActions: React.FC<MessageActionsProps> = ({
           </button>
           {onEdit && (
             <button
-              onClick={onBranch}
-              className='p-1.5 rounded-md text-gray-400 hover:text-yellow-400 hover:bg-gray-700 transition-colors duration-150'
+              onClick={onEdit}
+              className='p-1.5 rounded-md text-gray-400 hover:text-yellow-400 hover:bg-neutral-300 transition-colors duration-150'
               title='Edit message'
             >
               <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -114,10 +116,26 @@ const MessageActions: React.FC<MessageActionsProps> = ({
               </svg>
             </button>
           )}
+          {onBranch && (
+            <button
+              onClick={onBranch}
+              className='p-1.5 rounded-md text-gray-400 hover:text-green-400 hover:bg-neutral-300 transition-colors duration-150'
+              title='Branch message'
+            >
+              <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                <path
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  strokeWidth={2}
+                  d='M6 4v8a4 4 0 004 4h4M6 8a2 2 0 100-4 2 2 0 000 4zm8 8a2 2 0 100-4 2 2 0 000 4z'
+                />
+              </svg>
+            </button>
+          )}
           {onResend && (
             <button
               onClick={onResend}
-              className='p-1.5 rounded-md text-gray-400 hover:text-indigo-400 hover:bg-gray-700 transition-colors duration-150'
+              className='p-1.5 rounded-md text-gray-400 hover:text-indigo-400 hover:bg-neutral-300 transition-colors duration-150'
               title='Resend message'
             >
               <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -133,7 +151,7 @@ const MessageActions: React.FC<MessageActionsProps> = ({
           {onDelete && (
             <button
               onClick={onDelete}
-              className='p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-gray-700 transition-colors duration-150'
+              className='p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-neutral-300 transition-colors duration-150'
               title='Delete message'
             >
               <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -189,7 +207,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   }
 
   const handleSaveBranch = () => {
-    if (onBranch && editContent.trim() !== content) {
+    if (onBranch) {
       onBranch(id, editContent.trim())
     }
     setEditingState(false)
@@ -293,7 +311,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       </div>
 
       {/* Message content */}
-      <div className='text-stone-800 dark:text-stone-200 w-full'>
+      <div className='prose max-w-none dark:prose-invert w-full'>
         {editingState ? (
           <TextArea
             value={editContent}
@@ -304,9 +322,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             autoFocus
             width='w-full'
             onKeyDown={e => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
-                handleSave()
+                if (editMode === 'branch') {
+                  handleSaveBranch()
+                } else {
+                  handleSave()
+                }
               } else if (e.key === 'Escape') {
                 e.preventDefault()
                 handleCancel()
@@ -314,12 +336,16 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             }}
           />
         ) : (
-          <div className='whitespace-pre-wrap leading-relaxed w-full'>{content}</div>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
         )}
       </div>
 
       {/* Edit instructions */}
-      {editingState && <div className='mt-2 text-xs text-gray-500'>Press Ctrl+Enter to save, Escape to cancel</div>}
+      {editingState && (
+        <div className='mt-2 text-xs text-gray-500'>
+          Press Enter to save, Shift+Enter for new line, Escape to cancel
+        </div>
+      )}
     </div>
   )
 }

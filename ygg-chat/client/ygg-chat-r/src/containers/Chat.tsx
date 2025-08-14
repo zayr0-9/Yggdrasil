@@ -29,9 +29,10 @@ import {
   selectSendingState,
   selectStreamState,
   sendMessage,
+  updateConversationTitle,
   updateMessage,
 } from '../features/chats'
-import { makeSelectConversationById, updateConversation } from '../features/conversations'
+import { fetchConversations, makeSelectConversationById } from '../features/conversations'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
 import { getParentPath } from '../utils/path'
 
@@ -54,7 +55,14 @@ function Chat() {
   const selectedPath = useAppSelector(selectCurrentPath)
   const multiReplyCount = useAppSelector(selectMultiReplyCount)
   const focusedChatMessageId = useAppSelector(selectFocusedChatMessageId)
+  // Ref for auto-scroll
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
 
+  // Heimdall state from Redux
+  const heimdallData = useAppSelector(selectHeimdallData)
+  const loading = useAppSelector(selectHeimdallLoading)
+  const error = useAppSelector(selectHeimdallError)
+  const compactMode = useAppSelector(selectHeimdallCompactMode)
   // Conversation title editing
   const currentConversation = useAppSelector(
     currentConversationId ? makeSelectConversationById(currentConversationId) : () => null
@@ -67,20 +75,71 @@ function Chat() {
 
   const titleChanged = titleInput !== (currentConversation?.title ?? '')
 
+  // Ensure we have the latest conversation titles on reload/switch
+  useEffect(() => {
+    if (currentConversationId && !currentConversation) {
+      dispatch(fetchConversations())
+    }
+  }, [currentConversationId, currentConversation, dispatch])
+
+  // Resizable split-pane state
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [leftWidthPct, setLeftWidthPct] = useState<number>(() => {
+    try {
+      const stored = typeof window !== 'undefined' ? window.localStorage.getItem('chat:leftWidthPct') : null
+      const n = stored ? parseFloat(stored) : NaN
+      return Number.isFinite(n) ? Math.min(80, Math.max(20, n)) : 55
+    } catch {
+      return 55
+    }
+  })
+  const [isResizing, setIsResizing] = useState(false)
+
+  useEffect(() => {
+    if (!isResizing) return
+
+    const clamp = (v: number) => Math.max(20, Math.min(80, v))
+
+    const handleMove = (clientX: number) => {
+      const el = containerRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const pct = clamp(((clientX - rect.left) / rect.width) * 100)
+      setLeftWidthPct(pct)
+      try {
+        window.localStorage.setItem('chat:leftWidthPct', pct.toFixed(2))
+      } catch {}
+    }
+
+    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX)
+    const onMouseUp = () => setIsResizing(false)
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches && e.touches[0]) handleMove(e.touches[0].clientX)
+    }
+    const onTouchEnd = () => setIsResizing(false)
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('touchmove', onTouchMove, { passive: false })
+    window.addEventListener('touchend', onTouchEnd)
+
+    const prevUserSelect = document.body.style.userSelect
+    document.body.style.userSelect = 'none'
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('touchend', onTouchEnd)
+      document.body.style.userSelect = prevUserSelect
+    }
+  }, [isResizing])
+
   const handleTitleSave = () => {
     if (currentConversationId && titleChanged) {
-      dispatch(updateConversation({ id: currentConversationId, title: titleInput.trim() }))
+      dispatch(updateConversationTitle({ id: currentConversationId, title: titleInput.trim() }))
     }
   }
-
-  // Ref for auto-scroll
-  const messagesContainerRef = useRef<HTMLDivElement>(null)
-
-  // Heimdall state from Redux
-  const heimdallData = useAppSelector(selectHeimdallData)
-  const loading = useAppSelector(selectHeimdallLoading)
-  const error = useAppSelector(selectHeimdallError)
-  const compactMode = useAppSelector(selectHeimdallCompactMode)
 
   // Fetch tree when conversation changes
   useEffect(() => {
@@ -106,7 +165,7 @@ function Chat() {
     if (currentConversationId) {
       dispatch(fetchMessageTree(currentConversationId))
     }
-  }, [conversationMessages, currentConversationId, dispatch])
+  }, [conversationMessages, dispatch])
 
   // Auto-scroll to bottom when messages update, but avoid doing so when a specific
   // path is selected (e.g. after clicking a node in Heimdall) to prevent the
@@ -289,6 +348,34 @@ function Chat() {
     }
   }
 
+  const handleResend = (id: string) => {
+    // Find the message by id from displayed messages first, fallback to all conversation messages
+    const numericId = parseInt(id)
+    const msg =
+      displayMessages.find(m => m.id === numericId) || conversationMessages.find(m => m.id === numericId)
+
+    if (!msg) {
+      console.warn('Resend requested for unknown message id:', id)
+      return
+    }
+
+    // For resend, branch from the PARENT user message with the parent's content
+    const parentId = msg.parent_id
+    if (!parentId) {
+      console.warn('Resend requested but message has no parent to branch from:', id)
+      return
+    }
+    const parentMsg =
+      displayMessages.find(m => m.id === parentId) || conversationMessages.find(m => m.id === parentId)
+    if (!parentMsg) {
+      console.warn('Parent message not found for resend. Parent id:', parentId)
+      return
+    }
+
+    // Use parent message id and its content to create a sibling branch (resend)
+    handleMessageBranch(parentId.toString(), parentMsg.content)
+  }
+
   const handleNodeSelect = (nodeId: string, path: string[]) => {
     if (!nodeId || !path || path.length === 0) return // ignore clicks on empty space
     // console.log('Node selected:', nodeId, 'Path:', path)
@@ -383,10 +470,10 @@ function Chat() {
   ])
 
   return (
-    <div className='flex min-h-screen bg-gray-900 bg-neutral-50 dark:bg-neutral-900'>
-      <div className='p-5 max-w-4xl flex-1'>
+    <div ref={containerRef} className='flex min-h-screen bg-gray-900 bg-neutral-50 dark:bg-neutral-900'>
+      <div className='p-5 flex-none min-w-[280px]' style={{ width: `${leftWidthPct}%` }}>
         <h1 className='text-3xl font-bold text-stone-800 dark:text-stone-200 mb-6'>
-          {titleInput || 'New Conversation'} {currentConversationId}
+          {titleInput} {currentConversationId}
         </h1>
         {/* Conversation Title Editor */}
         {currentConversationId && (
@@ -400,13 +487,15 @@ function Chat() {
 
         {/* Messages Display */}
         <div className='mb-6 bg-gray-800 py-4 rounded-lg bg-neutral-50 dark:bg-neutral-900'>
-          <h3 className='text-lg font-semibold text-black mb-3 px-2'>Messages ({conversationMessages.length}):</h3>
+          <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3 px-2'>
+            Messages ({conversationMessages.length}):
+          </h3>
           <div
             ref={messagesContainerRef}
             className='px-2 dark:border-neutral-700 border-b border-stone-200 rounded-lg py-4 h-230 overflow-y-auto p-3 bg-neutral-50 bg-slate-50 dark:bg-neutral-900'
           >
             {displayMessages.length === 0 ? (
-              <p className='text-gray-500'>No messages yet...</p>
+              <p className='text-stone-800 dark:text-stone-200'>No messages yet...</p>
             ) : (
               displayMessages.map(msg => (
                 <ChatMessage
@@ -419,6 +508,7 @@ function Chat() {
                   onEdit={handleMessageEdit}
                   onBranch={handleMessageBranch}
                   onDelete={handleMessageDelete}
+                  onResend={handleResend}
                 />
               ))
             )}
@@ -448,8 +538,10 @@ function Chat() {
               state={sendingState.sending ? 'disabled' : 'default'}
               width='w-full'
               minRows={3}
+              autoFocus={streamState.finished}
               showCharCount={true}
             />
+
             <Button
               variant={canSend && currentConversationId ? 'primary' : 'secondary'}
               disabled={!canSend || !currentConversationId}
@@ -463,46 +555,53 @@ function Chat() {
                     ? 'Sending...'
                     : 'Send'}
             </Button>
-            <div className='text-stone-800 dark:text-stone-200'>Multi reply count - </div>
-            <TextArea
-              value={multiReplyCount.toString()}
-              onChange={e => dispatch(chatSliceActions.multiReplyCountSet(Number(e)))}
-              width='w-1/6'
-              minRows={1}
-            ></TextArea>
+            <div className='flex items-center gap-3 flex-wrap mt-2'>
+              <div className='flex items-center gap-2'>
+                <div className='text-stone-800 dark:text-stone-200'>Multi reply count - </div>
+                <TextArea
+                  value={multiReplyCount.toString()}
+                  onChange={e => dispatch(chatSliceActions.multiReplyCountSet(Number(e)))}
+                  width='w-1/6'
+                  minRows={1}
+                ></TextArea>
+              </div>
+
+              <div className='flex items-center gap-3'>
+                <span className='text-stone-800 dark:text-stone-200 text-sm'>
+                  Available: {providers.providers.length} providers
+                </span>
+                <select
+                  value={providers.currentProvider || ''}
+                  onChange={e => handleProviderSelect(e.target.value)}
+                  className='max-w-md p-2 rounded bg-neutral-50 dark:bg-gray-700 text-stone-800 dark:text-stone-200'
+                  disabled={providers.providers.length === 0}
+                >
+                  <option value=''>Select a provider...</option>
+                  {providers.providers.map(provider => (
+                    <option key={provider.name} value={provider.name}>
+                      {provider.name}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  variant='primary'
+                  size='small'
+                  onClick={() => {
+                    if (currentConversationId) {
+                      dispatch(fetchMessageTree(currentConversationId))
+                    }
+                  }}
+                >
+                  Refresh Tree
+                </Button>
+              </div>
+            </div>
           </div>
           {messageInput.content.length > 0 && (
             <small className='text-stone-800 dark:text-stone-200 text-xs mt-2 block'>
               Press Enter to send, Shift+Enter for new line
             </small>
           )}
-        </div>
-
-        {/* Provider Selection */}
-        <div className='mb-6 p-4 rounded-lg bg-neutral-100 dark:bg-neutral-800 mt-2'>
-          <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>Provider Selection:</h3>
-          <div className='flex items-center gap-3 mb-3'>
-            {/* TODO : implement provider refresh */}
-            {/* <Button variant='primary' size='small' onClick={handleRefreshProviders}>
-              Refresh Providers
-            </Button> */}
-
-            <span className='text-stone-800 dark:text-stone-200 text-sm'>Available: {models.length} providers</span>
-          </div>
-
-          <select
-            value={providers.currentProvider || ''}
-            onChange={e => handleProviderSelect(e.target.value)}
-            className='w-full max-w-md p-2 rounded bg-neutral-50 dark:bg-gray-700 text-stone-800 dark:text-stone-200'
-            disabled={providers.providers.length === 0}
-          >
-            <option value=''>Select a provider...</option>
-            {providers.providers.map(provider => (
-              <option key={provider.name} value={provider.name}>
-                {provider.name}
-              </option>
-            ))}
-          </select>
         </div>
 
         {/* Model Selection */}
@@ -532,46 +631,8 @@ function Chat() {
           </select>
         </div>
 
-        {/* Test Actions */}
-        <div className='mb-6 bg-gray-800 p-4 rounded-lg bg-neutral-100 dark:bg-neutral-800'>
-          <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>Test Actions:</h3>
-          <div className='flex gap-2 flex-wrap'>
-            <Button variant='secondary' size='small' onClick={() => handleInputChange('Hello, how are you?')}>
-              Set Test Message
-            </Button>
-            <Button variant='danger' size='small' onClick={() => dispatch(chatSliceActions.inputCleared())}>
-              Clear Input
-            </Button>
-            <Button variant='outline' size='small' onClick={() => dispatch(chatSliceActions.messagesCleared())}>
-              Clear Messages
-            </Button>
-            <Button
-              variant='primary'
-              size='small'
-              onClick={() => {
-                console.log('🆕 New conversation - clearing state')
-                dispatch(chatSliceActions.conversationCleared())
-                dispatch(chatSliceActions.heimdallDataLoaded({ treeData: null }))
-              }}
-            >
-              New Conversation
-            </Button>
-            <Button
-              variant='primary'
-              size='small'
-              onClick={() => {
-                if (currentConversationId) {
-                  dispatch(fetchMessageTree(currentConversationId))
-                }
-              }}
-            >
-              Refresh Tree
-            </Button>
-          </div>
-        </div>
-
         {/* Test Instructions */}
-        <div className=' bg-stone-100 bg-opacity-50 p-4 rounded-lg dark:bg-neutral-800 dark:border-neutral-700 mb-4'>
+        {/* <div className=' bg-stone-100 bg-opacity-50 p-4 rounded-lg dark:bg-neutral-800 dark:border-neutral-700 mb-4'>
           <h4 className='font-semibold mb-2 text-stone-800 dark:text-stone-200'>Test Instructions:</h4>
           <ol className='list-decimal list-inside space-y-1 text-sm text-stone-800 dark:text-stone-200'>
             <li>Make sure your server is running on localhost:3001</li>
@@ -587,10 +648,10 @@ function Chat() {
           <p className='text-sm mt-2 text-stone-800 dark:text-stone-200'>
             <strong>Note:</strong> This tests the chat Redux logic without requiring actual conversation management.
           </p>
-        </div>
+        </div> */}
 
         {/* Chat State Display */}
-        <div className='bg-gray-800 p-4 mb-6 rounded-lg text-gray-300 text-sm font-mono bg-neutral-100 dark:bg-neutral-800'>
+        {/* <div className='bg-gray-800 p-4 mb-6 rounded-lg text-gray-300 text-sm font-mono bg-neutral-100 dark:bg-neutral-800'>
           <h3 className='text-lg font-semibold mb-3 text-stone-800 dark:text-stone-200'>Chat State:</h3>
           <div className='grid grid-cols-2 gap-2 text-stone-800 dark:text-stone-200'>
             <p>
@@ -642,8 +703,20 @@ function Chat() {
               <strong>Tree Error:</strong> {error}
             </p>
           )}
-        </div>
+        </div> */}
       </div>
+
+      <div
+        className='w-1 bg-neutral-300 dark:bg-neutral-700 hover:bg-blue-400 cursor-col-resize select-none'
+        role='separator'
+        aria-orientation='vertical'
+        onMouseDown={() => setIsResizing(true)}
+        onTouchStart={e => {
+          e.preventDefault()
+          setIsResizing(true)
+        }}
+        title='Drag to resize'
+      />
 
       <div className='flex-1 min-w-0'>
         <Heimdall

@@ -1,6 +1,7 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
 import type { RootState } from '../../store/store'
 import { apiCall, createStreamingRequest } from '../../utils/api'
+import type { Conversation } from '../conversations/conversationTypes'
 import { chatSliceActions } from './chatSlice'
 import { BranchMessagePayload, EditMessagePayload, Message, ModelsResponse, SendMessagePayload } from './chatTypes'
 // TODO: Import when conversations feature is available
@@ -93,6 +94,24 @@ export const fetchGeminiModels = createAsyncThunk(
   }
 )
 
+// Fetch Anthropic models from Anthropic API and load into ModelState.available
+export const fetchAnthropicModels = createAsyncThunk(
+  'chat/fetchAnthropicModels',
+  async (_: void, { dispatch, rejectWithValue }) => {
+    dispatch(chatSliceActions.modelsLoadingStarted())
+
+    try {
+      const payload = await apiCall<ModelsResponse>('/models/anthropic')
+      dispatch(chatSliceActions.modelsLoaded(payload))
+      return payload
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch Anthropic models'
+      dispatch(chatSliceActions.modelsError(message))
+      return rejectWithValue(message)
+    }
+  }
+)
+
 // Provider-aware models fetch orchestrator
 export const fetchModelsForCurrentProvider = createAsyncThunk(
   'chat/fetchModelsForCurrentProvider',
@@ -103,7 +122,10 @@ export const fetchModelsForCurrentProvider = createAsyncThunk(
     try {
       if (provider === 'google') {
         const res = await (dispatch as any)(fetchGeminiModels()).unwrap()
-        console.log('4---------', res)
+        return res
+      }
+      if (provider === 'anthropic') {
+        const res = await (dispatch as any)(fetchAnthropicModels()).unwrap()
         return res
       }
 
@@ -585,9 +607,7 @@ export const refreshCurrentPathAfterDelete = createAsyncThunk(
   ) => {
     try {
       // Fetch direct children of the deleted message from the server
-      const children = await apiCall<number[]>(
-        `/conversations/${conversationId}/messages/${messageId}/children`
-      )
+      const children = await apiCall<number[]>(`/conversations/${conversationId}/messages/${messageId}/children`)
 
       const state = getState() as RootState
       const currentPath = state.chat.conversation.currentPath || []
@@ -614,8 +634,7 @@ export const refreshCurrentPathAfterDelete = createAsyncThunk(
 
       return { children, newPath }
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to refresh path after delete'
+      const message = error instanceof Error ? error.message : 'Failed to refresh path after delete'
       return rejectWithValue(message)
     }
   }
@@ -644,6 +663,22 @@ export const initializeUserAndConversation = createAsyncThunk(
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to initialize'
       dispatch(chatSliceActions.initializationError(message))
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Update a conversation title (Chat feature convenience)
+export const updateConversationTitle = createAsyncThunk<Conversation, { id: number; title: string }>(
+  'chat/updateConversationTitle',
+  async ({ id, title }, { rejectWithValue }) => {
+    try {
+      return await apiCall<Conversation>(`/conversations/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title }),
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update conversation'
       return rejectWithValue(message)
     }
   }
