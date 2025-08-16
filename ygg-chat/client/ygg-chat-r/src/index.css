@@ -1,27 +1,41 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @plugin "@tailwindcss/typography";
 
 /* Markdown code styling */
-.prose pre {
-  @apply bg-gray-100 text-gray-800 border border-gray-200 rounded-lg p-3 overflow-x-auto;
+.prose pre:not(.not-prose) {
+  @apply bg-gray-100 text-gray-800 dark:bg-neutral-800 dark:text-neutral-100  p-3 overflow-x-auto;
 }
 
-.prose code {
-  @apply bg-gray-100 text-gray-800 rounded px-1 py-0.5;
+.prose :not(pre) > code {
+  @apply bg-gray-100 text-gray-800 dark:bg-neutral-800 dark:text-neutral-100 rounded px-1 py-0.5;
 }
 
-/* Avoid double-styling code inside pre */
-.prose pre code {
-  @apply bg-transparent p-0;
-}
+/* Inline code cleaned above; code inside pre is left unstyled here */
 
 /* Dark mode adjustments */
-.dark .prose pre {
+.dark .prose pre:not(.not-prose) {
   @apply bg-neutral-900 text-neutral-100 border-neutral-800;
 }
 
-.dark .prose code {
+.dark .prose :not(pre) > code {
   @apply bg-neutral-800 text-neutral-100;
+}
+
+/* code inside pre inherits pre styles; no extra styling here */
+
+/* Remove backticks that typography plugin injects for code blocks */
+.prose pre code::before,
+.prose pre code::after {
+  content: none !important;
+}
+.dark .prose pre code::before,
+.dark .prose pre code::after {
+  content: none !important;
+}
+
+/* Global safety (minimal): let pre control visuals */
+pre > code {
+  background: transparent;
 }
 
 /* Disable text selection globally while panning/drag-selecting in Heimdall */

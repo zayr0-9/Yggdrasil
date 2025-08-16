@@ -284,6 +284,57 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
+  // Custom renderer for markdown code blocks to add a copy button
+  const CodeRenderer: React.FC<any> = ({ inline, className, children, ...props }) => {
+    // Inline code: render as-is
+    if (inline) {
+      return (
+        <code className={className} {...props}>
+          {children}
+        </code>
+      )
+    }
+
+    const [copied, setCopied] = useState(false)
+    const code = String(children ?? '').replace(/\n$/, '')
+
+    const handleCopyCode = async () => {
+      try {
+        await navigator.clipboard.writeText(code)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      } catch (err) {
+        console.error('Failed to copy code block:', err)
+      }
+    }
+
+    return (
+      <div className='relative group my-3 not-prose'>
+        {role === 'assistant' && (
+          <button
+            type='button'
+            onClick={handleCopyCode}
+            title='Copy code'
+            className='absolute top-2 right-2 z-10 text-xs px-2 py-1 rounded bg-neutral-700 text-white hover:bg-neutral-600 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity duration-150'
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        )}
+        {/* code block colours */}
+        <pre
+          className={`not-prose overflow-auto rounded-lg border-0 ring-0 outline-none shadow-none bg-gray-100 text-gray-800 dark:bg-neutral-900 dark:text-neutral-100 p-3`}
+        >
+          <code
+            className={`${className ?? ''} bg-transparent p-0 m-0 border-0 shadow-none outline-none ring-0`}
+            {...props}
+          >
+            {code}
+          </code>
+        </pre>
+      </div>
+    )
+  }
+
   return (
     <div
       id={`message-${id}`}
@@ -338,7 +389,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             }}
           />
         ) : (
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeRenderer }}>
+            {content}
+          </ReactMarkdown>
         )}
       </div>
 

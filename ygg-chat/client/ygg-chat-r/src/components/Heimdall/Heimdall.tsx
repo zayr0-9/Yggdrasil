@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Move, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import type { JSX } from 'react'
-import React, { MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { chatSliceActions } from '../../features/chats/chatSlice'
 import type { RootState } from '../../store/store'
@@ -58,7 +58,6 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const [zoom, setZoom] = useState<number>(compactMode ? 1 : 1)
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState<boolean>(false)
-  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 })
   const [selectedNode, setSelectedNode] = useState<ChatNode | null>(null)
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null)
@@ -75,20 +74,115 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   // Ensure we only auto-center once per conversation load
   const hasCenteredRef = useRef<boolean>(false)
   const [isTransitioning, setIsTransitioning] = useState<boolean>(false)
+  // Refs to avoid stale state in global listeners
+  const isDraggingRef = useRef<boolean>(false)
+  const isSelectingRef = useRef<boolean>(false)
+  const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   // Global text selection suppression while panning (originated in Heimdall)
   const addGlobalNoSelect = () => {
     try {
       document.body.classList.add('ygg-no-select')
     } catch {}
   }
+
+  // Pointer Events with pointer capture for robust drag outside element
+  const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>): void => {
+    // Don't start dragging if clicking on a node
+    const target = e.target as unknown as SVGElement
+    if (target && (target.tagName === 'rect' || target.tagName === 'circle')) {
+      return
+    }
+    try { e.preventDefault() } catch {}
+    // Capture pointer so we continue to receive move/up events outside
+    try { (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId) } catch {}
+
+    if (e.button === 2) {
+      const svgRect = svgRef.current?.getBoundingClientRect()
+      if (svgRect) {
+        const svgX = e.clientX - svgRect.left
+        const svgY = e.clientY - svgRect.top
+        dispatch(chatSliceActions.nodesSelected([]))
+        setIsSelecting(true)
+        isSelectingRef.current = true
+        setSelectionStart({ x: svgX, y: svgY })
+        setSelectionEnd({ x: svgX, y: svgY })
+        addGlobalNoSelect()
+        // Fallback: also track globally in case pointer capture fails in some browsers
+        addGlobalMoveListeners()
+        const onEnd = () => {
+          removeGlobalNoSelect()
+          removeGlobalMoveListeners()
+          window.removeEventListener('mouseup', onEnd)
+          window.removeEventListener('touchend', onEnd)
+          window.removeEventListener('blur', onEnd)
+          isSelectingRef.current = false
+          isDraggingRef.current = false
+        }
+        window.addEventListener('mouseup', onEnd)
+        window.addEventListener('touchend', onEnd)
+        window.addEventListener('blur', onEnd)
+      }
+    } else if (e.button === 0) {
+      setIsDragging(true)
+      isDraggingRef.current = true
+      const ds = { x: e.clientX - pan.x, y: e.clientY - pan.y }
+      dragStartRef.current = ds
+      addGlobalNoSelect()
+      // Fallback: also track globally in case pointer capture fails in some browsers
+      addGlobalMoveListeners()
+      const onEnd = () => {
+        removeGlobalNoSelect()
+        removeGlobalMoveListeners()
+        window.removeEventListener('mouseup', onEnd)
+        window.removeEventListener('touchend', onEnd)
+        window.removeEventListener('blur', onEnd)
+        isDraggingRef.current = false
+        isSelectingRef.current = false
+      }
+      window.addEventListener('mouseup', onEnd)
+      window.addEventListener('touchend', onEnd)
+      window.addEventListener('blur', onEnd)
+    }
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>): void => {
+    if (isDraggingRef.current) {
+      setPan({ x: e.clientX - dragStartRef.current.x, y: e.clientY - dragStartRef.current.y })
+    } else if (isSelectingRef.current) {
+      const svgRect = svgRef.current?.getBoundingClientRect()
+      if (svgRect) {
+        const svgX = e.clientX - svgRect.left
+        const svgY = e.clientY - svgRect.top
+        setSelectionEnd({ x: svgX, y: svgY })
+      }
+    }
+  }
+
+  const handlePointerUp = (e: React.PointerEvent<SVGSVGElement>): void => {
+    try { (e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId) } catch {}
+    handleMouseUp()
+  }
+
+  const handlePointerCancel = (e: React.PointerEvent<SVGSVGElement>): void => {
+    try { (e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId) } catch {}
+    handleMouseUp()
+  }
   const removeGlobalNoSelect = () => {
     try {
       document.body.classList.remove('ygg-no-select')
     } catch {}
   }
-  // Safety: ensure class is removed if component unmounts mid-drag
+  // Safety: ensure global side effects are removed if component unmounts mid-drag
   useEffect(() => {
-    return () => removeGlobalNoSelect()
+    return () => {
+      removeGlobalNoSelect()
+      // Also remove any global move listeners just in case a drag was active
+      try {
+        // removeGlobalMoveListeners is declared below; function hoisting makes this safe
+        // eslint-disable-next-line @typescript-eslint/no-use-before-define
+        removeGlobalMoveListeners()
+      } catch {}
+    }
   }, [])
 
   // When switching conversations, drop any cached tree so a blank/new conversation
@@ -582,70 +676,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     return ids
   }
 
-  const handleMouseDown = (e: MouseEvent<SVGSVGElement>): void => {
-    // Don't start dragging if clicking on a node
-    const target = e.target as SVGElement
-    if (target.tagName === 'rect' || target.tagName === 'circle') {
-      return
-    }
-
-    if (e.button === 2) {
-      // Right mouse button
-      // Start selection rectangle
-      const svgRect = svgRef.current?.getBoundingClientRect()
-      if (svgRect) {
-        const svgX = e.clientX - svgRect.left
-        const svgY = e.clientY - svgRect.top
-        // Reset selection when starting a new drag-selection
-        dispatch(chatSliceActions.nodesSelected([]))
-        setIsSelecting(true)
-        setSelectionStart({ x: svgX, y: svgY })
-        setSelectionEnd({ x: svgX, y: svgY })
-        // Disable text selection globally during selection drag
-        addGlobalNoSelect()
-        const onEnd = () => {
-          removeGlobalNoSelect()
-          window.removeEventListener('mouseup', onEnd)
-          window.removeEventListener('touchend', onEnd)
-          window.removeEventListener('blur', onEnd)
-        }
-        window.addEventListener('mouseup', onEnd)
-        window.addEventListener('touchend', onEnd)
-        window.addEventListener('blur', onEnd)
-      }
-    } else if (e.button === 0) {
-      // Left mouse button
-      setIsDragging(true)
-      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
-      // Disable text selection globally until the drag ends anywhere
-      addGlobalNoSelect()
-      const onEnd = () => {
-        removeGlobalNoSelect()
-        window.removeEventListener('mouseup', onEnd)
-        window.removeEventListener('touchend', onEnd)
-        window.removeEventListener('blur', onEnd)
-      }
-      window.addEventListener('mouseup', onEnd)
-      window.addEventListener('touchend', onEnd)
-      window.addEventListener('blur', onEnd)
-    }
-  }
-
-  const handleMouseMove = (e: MouseEvent<SVGSVGElement>): void => {
-    if (isDragging) {
-      setPan({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y,
-      })
-    } else if (isSelecting) {
-      const svgRect = svgRef.current?.getBoundingClientRect()
-      if (svgRect) {
-        const svgX = e.clientX - svgRect.left
-        const svgY = e.clientY - svgRect.top
-        setSelectionEnd({ x: svgX, y: svgY })
-      }
-    }
-  }
+  // (legacy mouse handlers removed in favor of pointer events)
 
   const handleMouseUp = (): void => {
     if (isSelecting) {
@@ -655,10 +686,57 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       const filteredSelection = filterToDominantBranch(selectedNodeIds)
       dispatch(chatSliceActions.nodesSelected(filteredSelection))
       setIsSelecting(false)
+      isSelectingRef.current = false
     }
     setIsDragging(false)
+    isDraggingRef.current = false
     // Extra safety in case global listeners missed it
     removeGlobalNoSelect()
+  }
+
+  // Global move listeners to continue interactions outside the SVG
+  const onWindowMouseMove = (e: globalThis.MouseEvent): void => {
+    if (isDraggingRef.current) {
+      setPan({ x: e.clientX - dragStartRef.current.x, y: e.clientY - dragStartRef.current.y })
+    } else if (isSelectingRef.current) {
+      const svgRect = svgRef.current?.getBoundingClientRect()
+      if (svgRect) {
+        const svgX = e.clientX - svgRect.left
+        const svgY = e.clientY - svgRect.top
+        setSelectionEnd({ x: svgX, y: svgY })
+      }
+    }
+  }
+
+  const onWindowTouchMove = (e: globalThis.TouchEvent): void => {
+    // Prevent page scroll while interacting
+    if (isDraggingRef.current || isSelectingRef.current) {
+      try { e.preventDefault() } catch {}
+    }
+    if (!e.touches || e.touches.length === 0) return
+    const t = e.touches[0]
+    if (isDraggingRef.current) {
+      setPan({ x: t.clientX - dragStartRef.current.x, y: t.clientY - dragStartRef.current.y })
+    } else if (isSelectingRef.current) {
+      const svgRect = svgRef.current?.getBoundingClientRect()
+      if (svgRect) {
+        const svgX = t.clientX - svgRect.left
+        const svgY = t.clientY - svgRect.top
+        setSelectionEnd({ x: svgX, y: svgY })
+      }
+    }
+  }
+
+  const addGlobalMoveListeners = (): void => {
+    window.addEventListener('mousemove', onWindowMouseMove)
+    window.addEventListener('pointermove', onWindowMouseMove)
+    window.addEventListener('touchmove', onWindowTouchMove, { passive: false })
+  }
+
+  const removeGlobalMoveListeners = (): void => {
+    window.removeEventListener('mousemove', onWindowMouseMove)
+    window.removeEventListener('pointermove', onWindowMouseMove)
+    window.removeEventListener('touchmove', onWindowTouchMove)
   }
 
   // Handle right-click context menu events
@@ -1076,12 +1154,12 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       <svg
         ref={svgRef}
         className='w-full h-full cursor-move'
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onContextMenu={e => e.preventDefault()}
-        onClick={(e: MouseEvent<SVGSVGElement>) => {
+        onClick={e => {
           const target = e.target as SVGElement
           if (target === e.currentTarget || target.tagName === 'svg') {
             setFocusedNodeId(null)
@@ -1091,7 +1169,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
             }
           }
         }}
-        style={{ cursor: isDragging ? 'grabbing' : isSelecting ? 'crosshair' : 'grab' }}
+        style={{ cursor: isDragging ? 'grabbing' : isSelecting ? 'crosshair' : 'grab', touchAction: 'none' }}
       >
         <g transform={`translate(${pan.x + dimensions.width / 2}, ${pan.y + 100}) scale(${zoom})`}>
           <g transform={`translate(${offsetX}, ${offsetY})`}>

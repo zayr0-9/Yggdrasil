@@ -546,7 +546,7 @@ function Chat() {
         <div className='mb-6 bg-gray-800 py-4 rounded-lg bg-neutral-50 dark:bg-neutral-900'>
           <div
             ref={messagesContainerRef}
-            className='px-2 dark:border-neutral-700 border-b border-stone-200 rounded-lg py-4 h-[70vh] overflow-y-auto p-3 bg-neutral-50 bg-slate-50 dark:bg-neutral-900'
+            className='px-2 dark:border-neutral-700 border-b border-stone-200 rounded-lg py-4 h-[78vh] overflow-y-auto p-3 bg-neutral-50 bg-slate-50 dark:bg-neutral-900'
           >
             {displayMessages.length === 0 ? (
               <p className='text-stone-800 dark:text-stone-200'>No messages yet...</p>
