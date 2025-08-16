@@ -34,6 +34,7 @@ const Homepage: React.FC = () => {
   const dropdownRef = useRef<HTMLUListElement | null>(null)
 
   useEffect(() => {
+    dispatch(chatSliceActions.stateReset())
     dispatch(fetchConversations())
     dispatch(chatSliceActions.heimdallDataLoaded({ treeData: null }))
   }, [dispatch])

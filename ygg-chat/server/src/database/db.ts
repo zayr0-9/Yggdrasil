@@ -49,9 +49,29 @@ export function initializeDatabase() {
       children_ids TEXT DEFAULT '[]',
       role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
       content TEXT NOT NULL,
+      model_name TEXT DEFAULT 'unknown',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
       FOREIGN KEY (parent_id) REFERENCES messages(id) ON DELETE CASCADE
+    )
+  `)
+
+  // Message attachments table (images stored locally with optional CDN URL)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS message_attachments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id INTEGER,
+      kind TEXT NOT NULL CHECK (kind IN ('image')),
+      mime_type TEXT NOT NULL,
+      storage TEXT NOT NULL CHECK (storage IN ('file','url')) DEFAULT 'file',
+      url TEXT,             -- For CDN/object storage
+      file_path TEXT,       -- For local filesystem storage
+      width INTEGER,
+      height INTEGER,
+      size_bytes INTEGER,
+      sha256 TEXT UNIQUE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
     )
   `)
 
@@ -60,6 +80,12 @@ export function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
     CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
     CREATE INDEX IF NOT EXISTS idx_messages_parent_id ON messages(parent_id);
+  `)
+
+  // Attachment indexes
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON message_attachments(message_id);
+    CREATE INDEX IF NOT EXISTS idx_attachments_sha256 ON message_attachments(sha256);
   `)
 
   // Full Text Search virtual table
@@ -140,7 +166,7 @@ export function initializeStatements() {
 
     // Messages - Core operations
     createMessage: db.prepare(
-      'INSERT INTO messages (conversation_id, parent_id, role, content, children_ids) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO messages (conversation_id, parent_id, role, content, children_ids, model_name) VALUES (?, ?, ?, ?, ?, ?)'
     ),
     getMessageById: db.prepare('SELECT * FROM messages WHERE id = ?'),
     getChildrenIds: db.prepare('SELECT children_ids FROM messages WHERE id = ?'),
@@ -196,6 +222,22 @@ export function initializeStatements() {
       ORDER BY rank
       LIMIT ? OFFSET ?
     `),
+
+    // Attachments
+    createAttachment: db.prepare(
+      `INSERT INTO message_attachments (
+         message_id, kind, mime_type, storage, url, file_path, width, height, size_bytes, sha256
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ),
+    updateAttachmentMessageId: db.prepare(
+      'UPDATE message_attachments SET message_id = ? WHERE id = ?'
+    ),
+    getAttachmentsByMessage: db.prepare(
+      'SELECT * FROM message_attachments WHERE message_id = ? ORDER BY id ASC'
+    ),
+    getAttachmentById: db.prepare('SELECT * FROM message_attachments WHERE id = ?'),
+    getAttachmentBySha256: db.prepare('SELECT * FROM message_attachments WHERE sha256 = ?'),
+    deleteAttachmentsByMessage: db.prepare('DELETE FROM message_attachments WHERE message_id = ?'),
   }
 }
 

@@ -12,6 +12,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.4",
     "@ai-sdk/google": "^2.0.3",
+    "@ai-sdk/openai": "^2.0.14",
     "@types/better-sqlite3": "^7.6.13",
     "ai": "^5.0.6",
     "better-sqlite3": "^12.2.0",
@@ -21,6 +22,7 @@
     "express": "^4.21.2",
     "helmet": "^7.0.0",
     "morgan": "^1.10.0",
+    "multer": "^2.0.2",
     "zod": "^3.22.2"
   },
   "devDependencies": {
@@ -28,6 +30,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.23",
     "@types/morgan": "^1.9.4",
+    "@types/multer": "^2.0.0",
     "@types/node": "^20.5.9",
     "nodemon": "^3.0.1",
     "ts-node-dev": "^2.0.0",

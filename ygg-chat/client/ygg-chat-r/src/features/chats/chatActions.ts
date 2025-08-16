@@ -3,7 +3,7 @@ import type { RootState } from '../../store/store'
 import { apiCall, createStreamingRequest } from '../../utils/api'
 import type { Conversation } from '../conversations/conversationTypes'
 import { chatSliceActions } from './chatSlice'
-import { BranchMessagePayload, EditMessagePayload, Message, ModelsResponse, SendMessagePayload } from './chatTypes'
+import { Attachment, BranchMessagePayload, EditMessagePayload, Message, ModelsResponse, SendMessagePayload } from './chatTypes'
 // TODO: Import when conversations feature is available
 // import { conversationActions } from '../conversations'
 
@@ -112,6 +112,41 @@ export const fetchAnthropicModels = createAsyncThunk(
   }
 )
 
+// Fetch OpenAI models from OpenAI API and load into ModelState.available
+export const fetchOpenAIModels = createAsyncThunk(
+  'chat/fetchOpenAIModels',
+  async (_: void, { dispatch, rejectWithValue }) => {
+    dispatch(chatSliceActions.modelsLoadingStarted())
+
+    try {
+      const payload = await apiCall<ModelsResponse>('/models/openai')
+      dispatch(chatSliceActions.modelsLoaded(payload))
+      return payload
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch OpenAI models'
+      dispatch(chatSliceActions.modelsError(message))
+      return rejectWithValue(message)
+    }
+  }
+)
+// Fetch openRouter models from openRouter API and load into ModelState.available
+export const fetchOpenRouterModels = createAsyncThunk(
+  'chat/fetchOpenRouterModels',
+  async (_: void, { dispatch, rejectWithValue }) => {
+    dispatch(chatSliceActions.modelsLoadingStarted())
+
+    try {
+      const payload = await apiCall<ModelsResponse>('/models/openrouter')
+      dispatch(chatSliceActions.modelsLoaded(payload))
+      return payload
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch OpenRouter models'
+      dispatch(chatSliceActions.modelsError(message))
+      return rejectWithValue(message)
+    }
+  }
+)
+
 // Provider-aware models fetch orchestrator
 export const fetchModelsForCurrentProvider = createAsyncThunk(
   'chat/fetchModelsForCurrentProvider',
@@ -128,7 +163,14 @@ export const fetchModelsForCurrentProvider = createAsyncThunk(
         const res = await (dispatch as any)(fetchAnthropicModels()).unwrap()
         return res
       }
-
+      if (provider === 'openai') {
+        const res = await (dispatch as any)(fetchOpenAIModels()).unwrap()
+        return res
+      }
+      if (provider === 'openrouter') {
+        const res = await (dispatch as any)(fetchOpenRouterModels()).unwrap()
+        return res
+      }
       const res = await (dispatch as any)(fetchModels(force)).unwrap()
       return res
     } catch (error) {
@@ -163,6 +205,11 @@ export const sendMessage = createAsyncThunk(
       // Map UI provider to server provider id
       const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
       const serverProvider = appProvider === 'google' ? 'gemini' : appProvider
+      // Gather any image drafts (base64) to send along with the message. Nullable when empty.
+      const drafts = state.chat.composition.imageDrafts || []
+      const attachmentsBase64 = drafts.length
+        ? drafts.map(d => ({ dataUrl: d.dataUrl, name: d.name, type: d.type, size: d.size }))
+        : null
       let response = null
 
       if (!modelName) {
@@ -198,6 +245,7 @@ export const sendMessage = createAsyncThunk(
             systemPrompt: input.systemPrompt,
             provider: serverProvider,
             repeatNum: repeatNum,
+            attachmentsBase64,
           }),
           signal: controller.signal,
         })
@@ -221,6 +269,7 @@ export const sendMessage = createAsyncThunk(
             parentId: parent,
             systemPrompt: input.systemPrompt,
             provider: serverProvider,
+            attachmentsBase64,
           }),
           signal: controller.signal,
         })
@@ -258,7 +307,10 @@ export const sendMessage = createAsyncThunk(
                 if (!chunk.message.timestamp) {
                   chunk.message.timestamp = new Date().toISOString()
                 }
+                // Add to messages list
                 dispatch(chatSliceActions.messageAdded(chunk.message))
+                // And update currentPath to navigate to this new node
+                dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
               }
 
               // For streaming, accumulate or finalize per event
@@ -267,6 +319,8 @@ export const sendMessage = createAsyncThunk(
               } else if (chunk.type === 'complete' && chunk.message) {
                 // Push each assistant reply as its own message
                 dispatch(chatSliceActions.messageAdded(chunk.message))
+                // Update branch/path to point to the completed assistant message
+                dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
                 // Reset streaming buffer for next iteration
                 dispatch(chatSliceActions.streamChunkReceived({ type: 'reset' } as any))
                 messageId = chunk.message.id
@@ -389,6 +443,10 @@ export const editMessageWithBranching = createAsyncThunk(
       // Map UI provider to server provider id
       const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
       const serverProvider = appProvider === 'google' ? 'gemini' : appProvider
+      const drafts = state.chat.composition.imageDrafts || []
+      const attachmentsBase64 = drafts.length
+        ? drafts.map(d => ({ dataUrl: d.dataUrl, name: d.name, type: d.type, size: d.size }))
+        : null
 
       if (!modelName) {
         throw new Error('No model selected')
@@ -404,6 +462,7 @@ export const editMessageWithBranching = createAsyncThunk(
           parentId: parentId, // Branch from the same parent as original
           systemPrompt,
           provider: serverProvider,
+          attachmentsBase64,
         }),
         signal: controller.signal,
       })
@@ -435,6 +494,12 @@ export const editMessageWithBranching = createAsyncThunk(
 
               if (chunk.type === 'user_message' && chunk.message) {
                 userMessage = chunk.message
+                // Ensure message is in store
+                if (!chunk.message.timestamp) {
+                  chunk.message.timestamp = new Date().toISOString()
+                }
+                dispatch(chatSliceActions.messageAdded(chunk.message))
+                // And update currentPath to this new user branch node
                 dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
               }
 
@@ -442,6 +507,9 @@ export const editMessageWithBranching = createAsyncThunk(
 
               if (chunk.type === 'complete' && chunk.message) {
                 messageId = chunk.message.id
+                // Store assistant message
+                dispatch(chatSliceActions.messageAdded(chunk.message))
+                // Navigate path to completed assistant reply
                 dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
               } else if (chunk.type === 'error') {
                 throw new Error(chunk.error || 'Stream error')
@@ -495,6 +563,10 @@ export const sendMessageToBranch = createAsyncThunk(
       // Map UI provider to server provider id
       const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
       const serverProvider = appProvider === 'google' ? 'gemini' : appProvider
+      const drafts = state.chat.composition.imageDrafts || []
+      const attachmentsBase64 = drafts.length
+        ? drafts.map(d => ({ dataUrl: d.dataUrl, name: d.name, type: d.type, size: d.size }))
+        : null
 
       if (!modelName) {
         throw new Error('No model selected')
@@ -509,6 +581,7 @@ export const sendMessageToBranch = createAsyncThunk(
           parentId,
           systemPrompt,
           provider: serverProvider,
+          attachmentsBase64,
         }),
         signal: controller.signal,
       })
@@ -679,6 +752,121 @@ export const updateConversationTitle = createAsyncThunk<Conversation, { id: numb
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update conversation'
+      return rejectWithValue(message)
+    }
+  }
+)
+
+/* Attachments: upload, link, fetch, delete */
+
+// Upload an image file as multipart/form-data to /api/attachments
+export const uploadAttachment = createAsyncThunk<
+  Attachment,
+  { file: File; messageId?: number | null }
+>(
+  'chat/uploadAttachment',
+  async ({ file, messageId }, { dispatch, rejectWithValue }) => {
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      if (messageId != null) form.append('messageId', String(messageId))
+
+      const attachment = await apiCall<Attachment>('/attachments', {
+        method: 'POST',
+        body: form,
+      })
+
+      if (attachment.message_id != null) {
+        dispatch(
+          chatSliceActions.attachmentUpsertedForMessage({
+            messageId: attachment.message_id,
+            attachment,
+          })
+        )
+      }
+
+      return attachment
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to upload attachment'
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Link existing attachments to a message
+export const linkAttachmentsToMessage = createAsyncThunk<
+  Attachment[],
+  { messageId: number; attachmentIds: number[] }
+>(
+  'chat/linkAttachmentsToMessage',
+  async ({ messageId, attachmentIds }, { dispatch, rejectWithValue }) => {
+    try {
+      const attachments = await apiCall<Attachment[]>(`/messages/${messageId}/attachments`, {
+        method: 'POST',
+        body: JSON.stringify({ attachmentIds }),
+      })
+
+      dispatch(chatSliceActions.attachmentsSetForMessage({ messageId, attachments }))
+      return attachments
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to link attachments'
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Fetch attachments for a message
+export const fetchAttachmentsByMessage = createAsyncThunk<Attachment[], { messageId: number }>(
+  'chat/fetchAttachmentsByMessage',
+  async ({ messageId }, { dispatch, rejectWithValue }) => {
+    try {
+      const attachments = await apiCall<Attachment[]>(`/messages/${messageId}/attachments`)
+      dispatch(chatSliceActions.attachmentsSetForMessage({ messageId, attachments }))
+      return attachments
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch attachments'
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Delete all attachments for a message
+export const deleteAttachmentsByMessage = createAsyncThunk<
+  { deleted: number },
+  { messageId: number }
+>(
+  'chat/deleteAttachmentsByMessage',
+  async ({ messageId }, { dispatch, rejectWithValue }) => {
+    try {
+      const result = await apiCall<{ deleted: number }>(`/messages/${messageId}/attachments`, {
+        method: 'DELETE',
+      })
+      dispatch(chatSliceActions.attachmentsClearedForMessage(messageId))
+      return result
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete attachments'
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Fetch a single attachment by ID
+export const fetchAttachmentById = createAsyncThunk<Attachment, { id: number }>(
+  'chat/fetchAttachmentById',
+  async ({ id }, { dispatch, rejectWithValue }) => {
+    try {
+      const attachment = await apiCall<Attachment>(`/attachments/${id}`)
+      if (attachment.message_id != null) {
+        dispatch(
+          chatSliceActions.attachmentUpsertedForMessage({
+            messageId: attachment.message_id,
+            attachment,
+          })
+        )
+      }
+      return attachment
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch attachment'
       return rejectWithValue(message)
     }
   }

@@ -57,6 +57,19 @@ function Chat() {
   const focusedChatMessageId = useAppSelector(selectFocusedChatMessageId)
   // Ref for auto-scroll
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  // Track whether the upcoming selection change came from an explicit user click in Heimdall
+  const selectionScrollCauseRef = useRef<'user' | null>(null)
+  // Track if the user manually scrolled during the current stream; disables bottom pin until finished
+  const userScrolledDuringStreamRef = useRef<boolean>(false)
+  // Sentinel at the end of the list for robust bottom scrolling
+  const bottomRef = useRef<HTMLDivElement>(null)
+  // rAF id to coalesce frequent scroll requests during streaming
+  const scrollRafRef = useRef<number | null>(null)
+
+  // Consider the user to be "at the bottom" if within this many pixels
+  const NEAR_BOTTOM_PX = 48
+  const isNearBottom = (el: HTMLElement, threshold = NEAR_BOTTOM_PX) =>
+    el.scrollHeight - el.scrollTop - el.clientHeight <= threshold
 
   // Heimdall state from Redux
   const heimdallData = useAppSelector(selectHeimdallData)
@@ -167,23 +180,97 @@ function Chat() {
     }
   }, [conversationMessages, dispatch])
 
-  // Auto-scroll to bottom when messages update, but avoid doing so when a specific
-  // path is selected (e.g. after clicking a node in Heimdall) to prevent the
-  // subsequent smooth scroll animation from always starting at the very bottom.
+  // Auto-scroll to bottom when messages update, with refined behavior:
+  // - While streaming: only pin if the user hasn't overridden AND either near bottom or no explicit path
+  // - After streaming completes: only auto-scroll when there is no explicit selection path
   useEffect(() => {
-    // Only auto-scroll when no node/path is explicitly selected
-    // During streaming, always keep scrolled to bottom regardless of selectedPath
-    if ((streamState.active || !selectedPath || selectedPath.length === 0) && messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTo({
-        top: messagesContainerRef.current.scrollHeight,
-        behavior: 'smooth',
-      })
-    }
-  }, [displayMessages, streamState.buffer, streamState.active, selectedPath])
+    const container = messagesContainerRef.current
+    if (!container) return
+    const scrollToBottom = (behavior: ScrollBehavior) => {
+      const sentinel = bottomRef.current
+      // Prefer sentinel-based scroll to handle both container and window scroll contexts
+      if (sentinel && typeof sentinel.scrollIntoView === 'function') {
+        // Use rAF to avoid spamming during streaming updates
+        const doScroll = () => {
+          sentinel.scrollIntoView({ block: 'end', inline: 'nearest', behavior })
+        }
+        if (typeof window !== 'undefined' && 'requestAnimationFrame' in window) {
+          if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current)
+          scrollRafRef.current = requestAnimationFrame(doScroll)
+        } else {
+          doScroll()
+        }
+        return
+      }
 
-  // Scroll to selected node when path changes
+      // Fallback to direct container/window scroll
+      if (container.scrollHeight > container.clientHeight) {
+        container.scrollTo({ top: container.scrollHeight, behavior })
+      } else if (typeof window !== 'undefined') {
+        const doc = document.scrollingElement || document.documentElement
+        window.scrollTo({ top: doc.scrollHeight, behavior })
+      }
+    }
+
+    // During streaming, keep pinned unless the user opted out by scrolling away.
+    // If they scroll back near bottom, re-enable pinning and scroll.
+    if (streamState.active) {
+      if (!userScrolledDuringStreamRef.current) {
+        // Instant scroll during streaming to prevent smooth animation fighting frequent updates
+        scrollToBottom('auto')
+      } else {
+        const nearBottom = isNearBottom(container, NEAR_BOTTOM_PX)
+        if (nearBottom) {
+          userScrolledDuringStreamRef.current = false
+          scrollToBottom('auto')
+        }
+      }
+      return
+    }
+
+    // After streaming completes, only auto-scroll when there is no explicit selection path
+    const noExplicitPath = !selectedPath || selectedPath.length === 0
+    if (noExplicitPath) {
+      // Smooth scroll when not streaming
+      scrollToBottom('smooth')
+    }
+  }, [displayMessages, streamState.buffer, streamState.active, streamState.finished, selectedPath])
+
+  // Cleanup any pending rAF on unmount
   useEffect(() => {
-    if (selectedPath && selectedPath.length > 0) {
+    return () => {
+      if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current)
+    }
+  }, [])
+
+  // Listen for user scrolls; while streaming, toggle override based on proximity to bottom
+  useEffect(() => {
+    const el = messagesContainerRef.current
+    if (!el) return
+    const onScroll = (e: Event) => {
+      // Only treat as user scroll if the event is trusted (user-initiated)
+      if (e.isTrusted && streamState.active) {
+        const nearBottom = isNearBottom(el as HTMLElement, NEAR_BOTTOM_PX)
+        // If the user is near the bottom, allow auto-pinning; otherwise, suppress it
+        userScrolledDuringStreamRef.current = !nearBottom
+      }
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+    }
+  }, [streamState.active])
+
+  // Reset the user scroll override when the stream finishes
+  useEffect(() => {
+    if (streamState.finished) {
+      userScrolledDuringStreamRef.current = false
+    }
+  }, [streamState.finished])
+
+  // Scroll to selected node when path changes (only for user-initiated selections)
+  useEffect(() => {
+    if (selectionScrollCauseRef.current === 'user' && selectedPath && selectedPath.length > 0) {
       const targetId = focusedChatMessageId
       const tryScroll = () => {
         const el = document.getElementById(`message-${targetId}`)
@@ -196,6 +283,8 @@ function Chat() {
           const targetTop = container.scrollTop + relativeTop - container.clientHeight / 2 + el.clientHeight / 2
           container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
         }
+        // After handling, reset so programmatic path changes (e.g., during send/stream) won't recenter
+        selectionScrollCauseRef.current = null
       }
 
       // Defer until after DOM/layout has settled for this render
@@ -205,7 +294,7 @@ function Chat() {
         setTimeout(tryScroll, 0)
       }
     }
-  }, [selectedPath, displayMessages])
+  }, [selectedPath, focusedChatMessageId])
 
   // If URL contains a #messageId fragment, capture it once
   const location = useLocation()
@@ -218,12 +307,18 @@ function Chat() {
   }, [location.hash])
 
   // When we have messages loaded and a hashMessageId, build path to that message and set it
+  // Do NOT truncate an existing deeper path if it already includes the hash target.
   useEffect(() => {
     if (hashMessageId && conversationMessages.length > 0) {
       const path = getParentPath(conversationMessages, hashMessageId)
-      dispatch(chatSliceActions.conversationPathSet(path))
+      const alreadyIncludesTarget = Array.isArray(selectedPath) && selectedPath.includes(hashMessageId)
+      if (!alreadyIncludesTarget) {
+        dispatch(chatSliceActions.conversationPathSet(path))
+      }
+      // Ensure the focused message id is set so scrolling targets the correct element
+      dispatch(chatSliceActions.focusedChatMessageSet(hashMessageId))
     }
-  }, [hashMessageId, conversationMessages, dispatch])
+  }, [hashMessageId, conversationMessages, selectedPath, dispatch])
 
   // useEffect(() => {
   //   if (focusedChatMessageId && conversationMessages.length > 0) {
@@ -290,12 +385,12 @@ function Chat() {
   const handleModelSelect = (modelName: string) => {
     dispatch(chatSliceActions.modelSelected({ modelName, persist: true }))
   }
-
   const handleProviderSelect = (providerName: string) => {
     dispatch(chatSliceActions.providerSelected(providerName))
   }
-
   const handleSend = (value: number) => {
+    // New send: re-enable auto-pinning until the user scrolls during this stream
+    userScrolledDuringStreamRef.current = false
     if (canSend && currentConversationId) {
       // Compute parent message index (last selected path item, if any)
       const parent: number | null = selectedPath.length > 0 ? selectedPath[selectedPath.length - 1] : null
@@ -351,8 +446,7 @@ function Chat() {
   const handleResend = (id: string) => {
     // Find the message by id from displayed messages first, fallback to all conversation messages
     const numericId = parseInt(id)
-    const msg =
-      displayMessages.find(m => m.id === numericId) || conversationMessages.find(m => m.id === numericId)
+    const msg = displayMessages.find(m => m.id === numericId) || conversationMessages.find(m => m.id === numericId)
 
     if (!msg) {
       console.warn('Resend requested for unknown message id:', id)
@@ -365,8 +459,7 @@ function Chat() {
       console.warn('Resend requested but message has no parent to branch from:', id)
       return
     }
-    const parentMsg =
-      displayMessages.find(m => m.id === parentId) || conversationMessages.find(m => m.id === parentId)
+    const parentMsg = displayMessages.find(m => m.id === parentId) || conversationMessages.find(m => m.id === parentId)
     if (!parentMsg) {
       console.warn('Parent message not found for resend. Parent id:', parentId)
       return
@@ -380,6 +473,12 @@ function Chat() {
     if (!nodeId || !path || path.length === 0) return // ignore clicks on empty space
     // console.log('Node selected:', nodeId, 'Path:', path)
     console.log('selected path', path)
+    // Mark this selection as user-initiated so the scroll-to-selection effect may run
+    selectionScrollCauseRef.current = 'user'
+    // Treat user selection during streaming as an override to bottom pinning
+    if (streamState.active) {
+      userScrolledDuringStreamRef.current = true
+    }
     dispatch(chatSliceActions.conversationPathSet(path.map(id => parseInt(id))))
     dispatch(chatSliceActions.selectedNodePathSet(path))
 
@@ -430,69 +529,24 @@ function Chat() {
     dispatch(fetchModelsForCurrentProvider(true))
   }
 
-  // Add assistant message when streaming completes
-  useEffect(() => {
-    if (!streamState.active && streamState.messageId && streamState.buffer && currentConversationId) {
-      // Check if message already exists
-      const alreadyExists = conversationMessages.some(
-        msg => msg.id === streamState.messageId && msg.role === 'assistant'
-      )
-      console.log(conversationMessages)
-      if (!alreadyExists) {
-        const assistantMessage = {
-          id: streamState.messageId,
-          conversation_id: currentConversationId,
-          role: 'assistant' as const,
-          content: streamState.buffer,
-          created_at: new Date().toISOString(),
-          pastedContext: [],
-          artifacts: [],
-          parentId: null,
-          children_ids: [],
-          model_name: selectedModel,
-        }
-        dispatch(chatSliceActions.messageAdded(assistantMessage))
-      }
-
-      // Refresh tree when response completes
-      console.log('🌳 Stream complete, refreshing tree data for conversation:', currentConversationId)
-      setTimeout(() => {
-        dispatch(fetchMessageTree(currentConversationId))
-      }, 500)
-    }
-  }, [
-    streamState.active,
-    streamState.messageId,
-    streamState.buffer,
-    currentConversationId,
-    conversationMessages,
-    dispatch,
-  ])
+  // Removed obsolete streaming completion effect that synthesized assistant messages.
+  // The streaming thunks now dispatch messageAdded and messageBranchCreated directly,
+  // and reducers update currentPath appropriately. This avoids race conditions and
+  // incorrect parent linking that could break currentPath after branching.
 
   return (
     <div ref={containerRef} className='flex min-h-screen bg-gray-900 bg-neutral-50 dark:bg-neutral-900'>
       <div className='p-5 flex-none min-w-[280px]' style={{ width: `${leftWidthPct}%` }}>
-        <h1 className='text-3xl font-bold text-stone-800 dark:text-stone-200 mb-6'>
+        {/* <h1 className='text-3xl font-bold text-stone-800 dark:text-stone-200 mb-6'>
           {titleInput} {currentConversationId}
-        </h1>
-        {/* Conversation Title Editor */}
-        {currentConversationId && (
-          <div className='flex items-center gap-2 mb-4'>
-            <TextField value={titleInput} onChange={setTitleInput} placeholder='Conversation title' size='large' />
-            <Button variant='primary' size='small' disabled={!titleChanged} onClick={handleTitleSave}>
-              Save
-            </Button>
-          </div>
-        )}
+        </h1> */}
+        {/* <h1 className='text-lg font-bold text-stone-800 dark:text-stone-200'>Title</h1> */}
 
         {/* Messages Display */}
         <div className='mb-6 bg-gray-800 py-4 rounded-lg bg-neutral-50 dark:bg-neutral-900'>
-          <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3 px-2'>
-            Messages ({conversationMessages.length}):
-          </h3>
           <div
             ref={messagesContainerRef}
-            className='px-2 dark:border-neutral-700 border-b border-stone-200 rounded-lg py-4 h-230 overflow-y-auto p-3 bg-neutral-50 bg-slate-50 dark:bg-neutral-900'
+            className='px-2 dark:border-neutral-700 border-b border-stone-200 rounded-lg py-4 h-[70vh] overflow-y-auto p-3 bg-neutral-50 bg-slate-50 dark:bg-neutral-900'
           >
             {displayMessages.length === 0 ? (
               <p className='text-stone-800 dark:text-stone-200'>No messages yet...</p>
@@ -505,6 +559,7 @@ function Chat() {
                   content={msg.content}
                   timestamp={msg.created_at}
                   width='w-full'
+                  modelName={msg.model_name}
                   onEdit={handleMessageEdit}
                   onBranch={handleMessageBranch}
                   onDelete={handleMessageDelete}
@@ -520,15 +575,18 @@ function Chat() {
                 role='assistant'
                 content={streamState.buffer}
                 width='w-full'
+                modelName={selectedModel || undefined}
                 className='animate-pulse border-blue-400'
               />
             )}
+            {/* Bottom sentinel for robust scrolling */}
+            <div ref={bottomRef} data-bottom-sentinel='true' />
           </div>
         </div>
 
         {/* Message Input */}
-        <div className='bg-neutral-100 p-4 rounded-lg dark:bg-neutral-800'>
-          <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>Send Message:</h3>
+        <div className='bg-neutral-100 px-4 py-2 rounded-lg dark:bg-neutral-800'>
+          {/* <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>Send Message:</h3> */}
           <div>
             <TextArea
               value={messageInput.content}
@@ -542,6 +600,19 @@ function Chat() {
               showCharCount={true}
             />
 
+            <div className='flex items-center gap-3 flex-wrap mt-2'></div>
+          </div>
+          {messageInput.content.length > 0 && (
+            <small className='text-stone-800 dark:text-stone-200 text-xs mt-2 block'>
+              Press Enter to send, Shift+Enter for new line
+            </small>
+          )}
+        </div>
+
+        {/* Model Selection */}
+        <div className='mb-6 bg-gray-800 px-4  rounded-lg bg-neutral-100 dark:bg-neutral-800'>
+          <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-1'>Model Selection:</h3>
+          <div className='flex items-center gap-3 mb-3'>
             <Button
               variant={canSend && currentConversationId ? 'primary' : 'secondary'}
               disabled={!canSend || !currentConversationId}
@@ -555,82 +626,52 @@ function Chat() {
                     ? 'Sending...'
                     : 'Send'}
             </Button>
-            <div className='flex items-center gap-3 flex-wrap mt-2'>
-              <div className='flex items-center gap-2'>
-                <div className='text-stone-800 dark:text-stone-200'>Multi reply count - </div>
-                <TextArea
-                  value={multiReplyCount.toString()}
-                  onChange={e => dispatch(chatSliceActions.multiReplyCountSet(Number(e)))}
-                  width='w-1/6'
-                  minRows={1}
-                ></TextArea>
-              </div>
-
-              <div className='flex items-center gap-3'>
-                <span className='text-stone-800 dark:text-stone-200 text-sm'>
-                  Available: {providers.providers.length} providers
-                </span>
-                <select
-                  value={providers.currentProvider || ''}
-                  onChange={e => handleProviderSelect(e.target.value)}
-                  className='max-w-md p-2 rounded bg-neutral-50 dark:bg-gray-700 text-stone-800 dark:text-stone-200'
-                  disabled={providers.providers.length === 0}
-                >
-                  <option value=''>Select a provider...</option>
-                  {providers.providers.map(provider => (
-                    <option key={provider.name} value={provider.name}>
-                      {provider.name}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  variant='primary'
-                  size='small'
-                  onClick={() => {
-                    if (currentConversationId) {
-                      dispatch(fetchMessageTree(currentConversationId))
-                    }
-                  }}
-                >
-                  Refresh Tree
-                </Button>
-              </div>
-            </div>
-          </div>
-          {messageInput.content.length > 0 && (
-            <small className='text-stone-800 dark:text-stone-200 text-xs mt-2 block'>
-              Press Enter to send, Shift+Enter for new line
-            </small>
-          )}
-        </div>
-
-        {/* Model Selection */}
-        <div className='mb-6 bg-gray-800 p-4 rounded-lg bg-neutral-100 dark:bg-neutral-800'>
-          <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>Model Selection:</h3>
-          <div className='flex items-center gap-3 mb-3'>
             <Button variant='primary' size='small' onClick={handleRefreshModels}>
               Refresh Models
             </Button>
-            <Button onClick={() => dispatch(chatSliceActions.heimdallCompactModeToggled())}> change mode</Button>
-
+            <Button onClick={() => dispatch(chatSliceActions.heimdallCompactModeToggled())}> compact </Button>
+            <span className='text-stone-800 dark:text-stone-200 text-sm'>
+              Available: {providers.providers.length} providers
+            </span>
+            <select
+              value={providers.currentProvider || ''}
+              onChange={e => handleProviderSelect(e.target.value)}
+              className='max-w-md p-2 rounded bg-neutral-50 dark:bg-gray-700 text-stone-800 dark:text-stone-200'
+              disabled={providers.providers.length === 0}
+            >
+              <option value=''>Select a provider...</option>
+              {providers.providers.map(provider => (
+                <option key={provider.name} value={provider.name}>
+                  {provider.name}
+                </option>
+              ))}
+            </select>
             <span className='text-stone-800 dark:text-stone-200 text-sm'>Available: {models.length} models</span>
+            <select
+              value={selectedModel || ''}
+              onChange={e => handleModelSelect(e.target.value)}
+              className='w-full max-w-md p-2 rounded bg-neutral-50 dark:bg-gray-700 text-stone-800 dark:text-stone-200'
+              disabled={models.length === 0}
+            >
+              <option value=''>Select a model...</option>
+              {models.map(model => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
           </div>
-
-          <select
-            value={selectedModel || ''}
-            onChange={e => handleModelSelect(e.target.value)}
-            className='w-full max-w-md p-2 rounded bg-neutral-50 dark:bg-gray-700 text-stone-800 dark:text-stone-200'
-            disabled={models.length === 0}
-          >
-            <option value=''>Select a model...</option>
-            {models.map(model => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
         </div>
 
+        {/* Conversation Title Editor */}
+        {currentConversationId && (
+          <div className='flex items-center gap-2 mb-4'>
+            <TextField value={titleInput} onChange={setTitleInput} placeholder='Conversation title' size='large' />
+            <Button variant='primary' size='small' disabled={!titleChanged} onClick={handleTitleSave}>
+              Save
+            </Button>
+          </div>
+        )}
         {/* Test Instructions */}
         {/* <div className=' bg-stone-100 bg-opacity-50 p-4 rounded-lg dark:bg-neutral-800 dark:border-neutral-700 mb-4'>
           <h4 className='font-semibold mb-2 text-stone-800 dark:text-stone-200'>Test Instructions:</h4>

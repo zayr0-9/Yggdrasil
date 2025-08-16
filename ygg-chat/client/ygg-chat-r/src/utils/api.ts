@@ -5,9 +5,10 @@ export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/a
 
 // Core API utility function
 export const apiCall = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
+  const isFormData = options?.body && typeof FormData !== 'undefined' && options.body instanceof FormData
   const response = await fetch(`${API_BASE}${endpoint}`, {
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...options?.headers,
     },
     ...options,
@@ -51,9 +52,10 @@ export const api = {
 
 // Helper for streaming requests
 export const createStreamingRequest = (endpoint: string, options?: RequestInit): Promise<Response> => {
+  const isFormData = options?.body && typeof FormData !== 'undefined' && options.body instanceof FormData
   return fetch(`${API_BASE}${endpoint}`, {
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...options?.headers,
     },
     ...options,

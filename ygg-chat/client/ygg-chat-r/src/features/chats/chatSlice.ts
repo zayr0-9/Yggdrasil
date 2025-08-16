@@ -1,8 +1,17 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import providersList from '../../../../../shared/providers.json'
-import { ChatState, Message, MessageInput, ModelSelectionPayload, ModelsResponse, StreamChunk } from './chatTypes'
+import {
+  Attachment,
+  ChatState,
+  ImageDraft,
+  Message,
+  MessageInput,
+  ModelSelectionPayload,
+  ModelsResponse,
+  StreamChunk,
+} from './chatTypes'
 
-const initialState: ChatState = {
+const makeInitialState = (): ChatState => ({
   models: {
     available: [],
     selected: localStorage.getItem('selectedModel') || null,
@@ -27,6 +36,7 @@ const initialState: ChatState = {
     validationError: null,
     draftMessage: null,
     multiReplyCount: 1,
+    imageDrafts: [],
   },
   // activeChat:{},
   streaming: {
@@ -59,7 +69,12 @@ const initialState: ChatState = {
     userId: null,
   },
   selectedNodes: [],
-}
+  attachments: {
+    byMessage: {},
+  },
+})
+
+const initialState: ChatState = makeInitialState()
 
 export const chatSlice = createSlice({
   name: 'chat',
@@ -120,6 +135,14 @@ export const chatSlice = createSlice({
     inputCleared: state => {
       state.composition.input = initialState.composition.input
       state.composition.validationError = null
+      state.composition.imageDrafts = []
+    },
+
+    imageDraftsAppended: (state, action: PayloadAction<ImageDraft[]>) => {
+      state.composition.imageDrafts.push(...action.payload)
+    },
+    imageDraftsCleared: state => {
+      state.composition.imageDrafts = []
     },
 
     sendingStarted: state => {
@@ -134,63 +157,59 @@ export const chatSlice = createSlice({
       state.composition.sending = false
       state.streaming.active = false
       state.composition.input.content = ''
+      state.composition.imageDrafts = []
       state.streaming.finished = true
     },
 
     // Streaming - optimized buffer management
     streamChunkReceived: (state, action: PayloadAction<StreamChunk>) => {
-      const { type, content } = action.payload
-
-      if (type === 'chunk' && content) {
-        state.streaming.buffer += content
-      } else if (type === 'reset') {
+      const chunk = action.payload
+      if (chunk.type === 'reset') {
         state.streaming.buffer = ''
-      } else if (type === 'error') {
-        state.streaming.error = action.payload.error || 'Stream error'
+        state.streaming.error = null
+        return
+      }
+
+      if (chunk.type === 'chunk') {
+        state.streaming.buffer += chunk.content || ''
+      } else if (chunk.type === 'complete') {
+        state.streaming.messageId = chunk.message?.id || null
         state.streaming.active = false
-        state.composition.sending = false
+      } else if (chunk.type === 'error') {
+        state.streaming.error = chunk.error || 'Unknown stream error'
+        state.streaming.active = false
       }
     },
 
     streamCompleted: (state, action: PayloadAction<{ messageId: number }>) => {
-      state.streaming.messageId = action.payload.messageId
-
-      // Store assistant message immediately
-      if (state.streaming.buffer && state.conversation.currentConversationId) {
-        const assistantMessage = {
-          id: action.payload.messageId,
-          conversation_id: state.conversation.currentConversationId,
-          role: 'assistant' as const,
-          content: state.streaming.buffer,
-          created_at: new Date().toISOString(),
-          pastedContext: [],
-          artifacts: [],
-          parentId: state.conversation.messages.at(-1)?.id,
-          children_ids: [],
-          model_name: state.models.selected,
-        }
-        state.conversation.messages.push(assistantMessage)
-
-        // Update the current path so the UI (chat list) follows the latest assistant reply
-        if (!state.conversation.currentPath || state.conversation.currentPath.length === 0) {
-          state.conversation.currentPath = [assistantMessage.id]
-        } else if (!state.conversation.currentPath.includes(assistantMessage.id)) {
-          state.conversation.currentPath = [...state.conversation.currentPath, assistantMessage.id]
-        }
-      }
-
       state.streaming.active = false
-      state.streaming.buffer = ''
+      state.streaming.finished = true
+      state.streaming.messageId = action.payload.messageId
+      // Fallback: ensure currentPath points to the completed assistant message
+      const targetId = action.payload.messageId
+      const exists = state.conversation.messages.some(m => m.id === targetId)
+      if (exists) {
+        const buildPathToMessage = (messageId: number): number[] => {
+          const path: number[] = []
+          let currentId: number | null = messageId
+          while (currentId !== null) {
+            path.unshift(currentId)
+            const message = state.conversation.messages.find(m => m.id === currentId)
+            currentId = message?.parent_id ?? null
+          }
+          return path
+        }
+        state.conversation.currentPath = buildPathToMessage(targetId)
+      }
     },
 
     // UI - minimal
     modelSelectorToggled: state => {
       state.ui.modelSelectorOpen = !state.ui.modelSelectorOpen
     },
+
     conversationSet: (state, action: PayloadAction<number>) => {
       state.conversation.currentConversationId = action.payload
-      state.conversation.messages = []
-      state.conversation.currentPath = []
     },
 
     conversationCleared: state => {
@@ -208,34 +227,28 @@ export const chatSlice = createSlice({
     },
 
     messageAdded: (state, action: PayloadAction<Message>) => {
-      const msg = action.payload
-      state.conversation.messages.push(msg)
-
-      // Keep the currentPath in sync when new messages arrive
-      if (!state.conversation.currentPath || state.conversation.currentPath.length === 0) {
-        // No existing path – start with the first message (user or assistant)
-        state.conversation.currentPath = [msg.id]
+      const m = action.payload
+      const existing = state.conversation.messages.findIndex(x => x.id === m.id)
+      if (existing >= 0) {
+        state.conversation.messages[existing] = m
       } else {
-        const last = state.conversation.currentPath[state.conversation.currentPath.length - 1]
-        if (last !== msg.id) {
-          state.conversation.currentPath = [...state.conversation.currentPath, msg.id]
-        }
+        state.conversation.messages.push(m)
       }
     },
 
     messagesCleared: state => {
       state.conversation.messages = []
     },
+
     messageUpdated: (state, action: PayloadAction<{ id: number; content: string }>) => {
-      const message = state.conversation.messages.find(m => m.id === action.payload.id)
-      if (message) {
-        message.content = action.payload.content
-      }
-      // Reset multi-reply to default after editing
-      state.composition.multiReplyCount = 1
+      const { id, content } = action.payload
+      const msg = state.conversation.messages.find(m => m.id === id)
+      if (msg) msg.content = content
     },
+
     messageDeleted: (state, action: PayloadAction<number>) => {
-      state.conversation.messages = state.conversation.messages.filter(m => m.id !== action.payload)
+      const id = action.payload
+      state.conversation.messages = state.conversation.messages.filter(m => m.id !== id)
     },
 
     messagesLoaded: (state, action: PayloadAction<Message[]>) => {
@@ -246,22 +259,12 @@ export const chatSlice = createSlice({
     messageBranchCreated: (state, action: PayloadAction<{ newMessage: Message }>) => {
       const { newMessage } = action.payload
 
-      // Ensure children_ids is an array on both new and parent messages
       const normalizeIds = (ids: any): number[] => {
         if (Array.isArray(ids)) return ids as number[]
-        try {
-          return JSON.parse(ids || '[]') as number[]
-        } catch {
-          return []
-        }
+        if (typeof ids === 'string') return ids.split(',').map(Number)
+        return []
       }
 
-      newMessage.children_ids = normalizeIds(newMessage.children_ids)
-
-      // Add the new branched message
-      state.conversation.messages.push(newMessage)
-
-      // Update the parent's children_ids if it exists
       const parentMessage = state.conversation.messages.find(m => m.id === newMessage.parent_id)
       if (parentMessage) {
         parentMessage.children_ids = normalizeIds(parentMessage.children_ids)
@@ -339,6 +342,28 @@ export const chatSlice = createSlice({
     multiReplyCountSet: (state, action: PayloadAction<number>) => {
       state.composition.multiReplyCount = action.payload
     },
+
+    /* Attachment reducers */
+    attachmentsSetForMessage: (state, action: PayloadAction<{ messageId: number; attachments: Attachment[] }>) => {
+      const { messageId, attachments } = action.payload
+      state.attachments.byMessage[messageId] = attachments
+    },
+    attachmentUpsertedForMessage: (state, action: PayloadAction<{ messageId: number; attachment: Attachment }>) => {
+      const { messageId, attachment } = action.payload
+      const arr = state.attachments.byMessage[messageId] || []
+      const idx = arr.findIndex(a => a.id === attachment.id)
+      if (idx >= 0) {
+        arr[idx] = attachment
+      } else {
+        arr.push(attachment)
+      }
+      state.attachments.byMessage[messageId] = arr
+    },
+    attachmentsClearedForMessage: (state, action: PayloadAction<number>) => {
+      const messageId = action.payload
+      state.attachments.byMessage[messageId] = []
+    },
+    stateReset: () => makeInitialState(),
   },
 })
 

@@ -693,7 +693,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     // Dispatch the nodesSelected action (filtered to the dominant branch)
     const filteredNodes = filterToDominantBranch(newSelectedNodes)
     dispatch(chatSliceActions.nodesSelected(filteredNodes))
-    
+
     // Important: Do NOT call onNodeSelect on right-click.
     // Right-click is used for selection only and must not update currentPath.
   }
@@ -957,7 +957,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       className='w-full h-screen border-l border-stone-200 bg-stone-50 relative overflow-hidden dark:bg-neutral-900'
       onContextMenu={e => e.preventDefault()}
       style={{
-        filter: isTransitioning ? 'blur(2px)' : 'none',
+        filter: isTransitioning ? 'none' : 'none',
         transition: 'filter 100ms ease-in-out',
       }}
     >

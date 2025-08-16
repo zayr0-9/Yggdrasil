@@ -27,6 +27,7 @@ interface ChatMessageProps {
   onResend?: (id: string) => void
   isEditing?: boolean
   width: ChatMessageWidth
+  modelName?: string
   className?: string
 }
 
@@ -182,6 +183,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   onResend,
   isEditing = false,
   width = 'w-3/5',
+  modelName,
 }) => {
   const [editingState, setEditingState] = useState(isEditing)
   const [editContent, setEditContent] = useState(content)
@@ -311,14 +313,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       </div>
 
       {/* Message content */}
-      <div className='prose max-w-none dark:prose-invert w-full'>
+      <div className='prose max-w-none dark:prose-invert w-full text-base'>
         {editingState ? (
           <TextArea
             value={editContent}
             onChange={setEditContent}
             placeholder='Edit your message...'
             minRows={2}
-            maxLength={2000}
+            maxLength={20000}
             autoFocus
             width='w-full'
             onKeyDown={e => {
@@ -346,6 +348,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           Press Enter to save, Shift+Enter for new line, Escape to cancel
         </div>
       )}
+
+      {modelName && <div className='mt-2 text-[16px] text-gray-500 flex justify-end'>{modelName}</div>}
     </div>
   )
 }

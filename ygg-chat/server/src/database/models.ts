@@ -8,6 +8,88 @@ export interface User {
   created_at: string
 }
 
+export class AttachmentService {
+  /**
+   * Create an attachment record. For local files, prefer providing filePath and optional url (if served).
+   * For CDN/object storage, provide url and set storage='url'.
+   * If sha256 is provided and exists, the existing record is returned (dedupe) unless messageId is provided to relink.
+   */
+  static create(params: {
+    messageId?: number | null
+    kind: 'image'
+    mimeType: string
+    storage?: 'file' | 'url'
+    url?: string | null
+    filePath?: string | null
+    width?: number | null
+    height?: number | null
+    sizeBytes?: number | null
+    sha256?: string | null
+  }): Attachment {
+    const {
+      messageId = null,
+      kind,
+      mimeType,
+      storage,
+      url = null,
+      filePath = null,
+      width = null,
+      height = null,
+      sizeBytes = null,
+      sha256 = null,
+    } = params
+
+    // If sha256 provided, try to reuse existing
+    if (sha256) {
+      const existing = statements.getAttachmentBySha256.get(sha256) as Attachment | undefined
+      if (existing) {
+        if (messageId && existing.message_id == null) {
+          statements.updateAttachmentMessageId.run(messageId, existing.id)
+          return statements.getAttachmentById.get(existing.id) as Attachment
+        }
+        return existing
+      }
+    }
+
+    const resolvedStorage: 'file' | 'url' = storage ?? (url ? 'url' : 'file')
+    const result = statements.createAttachment.run(
+      messageId,
+      kind,
+      mimeType,
+      resolvedStorage,
+      url,
+      filePath,
+      width,
+      height,
+      sizeBytes,
+      sha256
+    )
+    return statements.getAttachmentById.get(result.lastInsertRowid) as Attachment
+  }
+
+  static getByMessage(messageId: number): Attachment[] {
+    return statements.getAttachmentsByMessage.all(messageId) as Attachment[]
+  }
+
+  static linkToMessage(attachmentId: number, messageId: number): Attachment | undefined {
+    statements.updateAttachmentMessageId.run(messageId, attachmentId)
+    return statements.getAttachmentById.get(attachmentId) as Attachment | undefined
+  }
+
+  static findBySha256(sha256: string): Attachment | undefined {
+    return statements.getAttachmentBySha256.get(sha256) as Attachment | undefined
+  }
+
+  static getById(id: number): Attachment | undefined {
+    return statements.getAttachmentById.get(id) as Attachment | undefined
+  }
+
+  static deleteByMessage(messageId: number): number {
+    const res = statements.deleteAttachmentsByMessage.run(messageId)
+    return res.changes ?? 0
+  }
+}
+
 export interface Conversation {
   id: number
   user_id: number
@@ -27,6 +109,22 @@ export interface SearchResult extends Message {
 
 export interface SearchResultWithSnippet extends Message {
   snippet: string
+}
+
+// Attachments (images) associated to messages
+export interface Attachment {
+  id: number
+  message_id: number | null
+  kind: 'image'
+  mime_type: string
+  storage: 'file' | 'url'
+  url?: string | null
+  file_path?: string | null
+  width?: number | null
+  height?: number | null
+  size_bytes?: number | null
+  sha256?: string | null
+  created_at: string
 }
 
 export class UserService {
@@ -95,10 +193,11 @@ export class MessageService {
     conversationId: number,
     role: Message['role'],
     content: string,
-    parentId: number | null = null
+    parentId: number | null = null,
+    modelName?: string
     // children: []
   ): Message {
-    const result = statements.createMessage.run(conversationId, parentId, role, content, '[]')
+    const result = statements.createMessage.run(conversationId, parentId, role, content, '[]', modelName)
     statements.updateConversationTimestamp.run(conversationId)
     return statements.getMessageById.get(result.lastInsertRowid) as Message
   }
@@ -127,9 +226,7 @@ export class MessageService {
     try {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed)) {
-        return parsed
-          .map(v => Number(v))
-          .filter(n => Number.isFinite(n))
+        return parsed.map(v => Number(v)).filter(n => Number.isFinite(n))
       }
     } catch {
       // fall through to manual parsing
@@ -155,6 +252,19 @@ export class MessageService {
   static delete(id: number): boolean {
     const result = statements.deleteMessage.run(id)
     return result.changes > 0
+  }
+
+  // Attachments helpers
+  static getAttachments(messageId: number): Attachment[] {
+    return statements.getAttachmentsByMessage.all(messageId) as Attachment[]
+  }
+
+  static linkAttachments(messageId: number, attachmentIds: number[]): Attachment[] {
+    if (!attachmentIds || attachmentIds.length === 0) return statements.getAttachmentsByMessage.all(messageId) as Attachment[]
+    for (const id of attachmentIds) {
+      statements.updateAttachmentMessageId.run(messageId, id)
+    }
+    return statements.getAttachmentsByMessage.all(messageId) as Attachment[]
   }
 
   // Full Text Search methods

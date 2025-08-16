@@ -1,11 +1,16 @@
 // server/src/routes/chat.ts
+import crypto from 'crypto'
 import express from 'express'
-import { ConversationService, MessageService, UserService } from '../database/models'
+import fs from 'fs'
+import multer from 'multer'
+import path from 'path'
+import { AttachmentService, ConversationService, MessageService, UserService } from '../database/models'
 import { asyncHandler } from '../utils/asyncHandler'
 import { convertMessagesToHeimdall } from '../utils/heimdallConverter'
 import { modelService } from '../utils/modelService'
 // import { generateResponse } from '../utils/ollama'
 import { generateResponse } from '../utils/provider'
+import { saveBase64ImageAttachmentsForMessage } from '../utils/attachments'
 
 const router = express.Router()
 
@@ -23,6 +28,90 @@ router.get(
   })
 )
 
+//Fetch openai models on the server to keep API key private
+router.get(
+  '/models/openai',
+  asyncHandler(async (req, res) => {
+    try {
+      const apiKey = process.env.OPENAI_API_KEY
+      if (!apiKey) {
+        return res.status(400).json({ error: 'Missing OPENAI_API_KEY' })
+      }
+
+      const response = await fetch('https://api.openai.com/v1/models', {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        signal: AbortSignal.timeout(5000),
+      })
+
+      if (!response.ok) {
+        const text = await response.text()
+        return res.status(response.status).json({ error: text || response.statusText })
+      }
+
+      // OpenRouter returns { data: Model[] }
+      const data = (await response.json()) as { data?: any[]; models?: any[] }
+      const rawModels: any[] = Array.isArray(data?.data) ? data.data! : Array.isArray(data?.models) ? data.models! : []
+
+      // Prefer the canonical model id; fallback to name if necessary
+      const names: string[] = rawModels.map(m => String(m?.id || m?.name || '')).filter(n => n.length > 0)
+
+      const preferredDefault = 'gpt-4o'
+      const defaultModel = names.includes(preferredDefault) ? preferredDefault : names[0] || ''
+
+      res.json({ models: names, default: defaultModel })
+    } catch (error) {
+      console.error('Error fetching OpenAI models:', error)
+      res.status(500).json({ error: 'Failed to fetch OpenAI models' })
+    }
+  })
+)
+
+//Fetch openRouter models on the server to keep API key private
+router.get(
+  '/models/openrouter',
+  asyncHandler(async (req, res) => {
+    try {
+      const apiKey = process.env.OPENROUTER_API_KEY
+      if (!apiKey) {
+        return res.status(400).json({ error: 'Missing OPENROUTER_API_KEY' })
+      }
+
+      const response = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        signal: AbortSignal.timeout(5000),
+      })
+      console.log('openrouter response', response)
+
+      if (!response.ok) {
+        const text = await response.text()
+        return res.status(response.status).json({ error: text || response.statusText })
+      }
+
+      console.log('openrouter response', response)
+
+      const data = (await response.json()) as { data?: any[]; models?: any[] }
+      const rawModels: any[] = Array.isArray(data?.data) ? data.data! : Array.isArray(data?.models) ? data.models! : []
+
+      const names: string[] = rawModels
+        .map(m => String(m?.id || m?.name || ''))
+        .filter(n => n.length > 0)
+        .map(n => n.replace(/^models\//, ''))
+
+      const preferredDefault = 'gpt-4o'
+      const defaultModel = names.includes(preferredDefault) ? preferredDefault : names[0] || ''
+
+      res.json({ models: names, default: defaultModel })
+    } catch (error) {
+      console.error('Error fetching OpenRouter models:', error)
+      res.status(500).json({ error: 'Failed to fetch OpenRouter models' })
+    }
+  })
+)
+
 // Fetch Anthropic models on the server to keep API key private
 router.get(
   '/models/anthropic',
@@ -36,7 +125,7 @@ router.get(
       const response = await fetch('https://api.anthropic.com/v1/models', {
         headers: {
           'x-api-key': apiKey,
-          // 'anthropic-version': '2023-06-01',
+          'anthropic-version': '2023-06-01',
         },
         signal: AbortSignal.timeout(5000),
       })
@@ -360,6 +449,12 @@ router.post(
     res.write(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`)
     const baseHistory = MessageService.getByConversation(conversationId)
 
+    // Decode and persist any base64 attachments (images) for the user message
+    const attachmentsBase64 = Array.isArray(req.body?.attachmentsBase64) ? req.body.attachmentsBase64 : null
+    const createdAttachments: ReturnType<typeof AttachmentService.getById>[] = attachmentsBase64
+      ? saveBase64ImageAttachmentsForMessage(userMessage.id, attachmentsBase64)
+      : []
+
     try {
       const repeats = Math.max(1, parseInt(repeatNum as string, 10) || 1)
 
@@ -373,7 +468,12 @@ router.post(
             res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk, iteration: i })}\n\n`)
           },
           provider,
-          selectedModel
+          selectedModel,
+          createdAttachments.map(a => ({
+          url: a?.url || undefined,
+          mimeType: (a as any)?.mime_type,
+          filePath: (a as any)?.file_path,
+        }))
         )
 
         if (assistantContent.trim()) {
@@ -455,6 +555,12 @@ router.post(
     res.write(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`)
 
     try {
+      // Decode and persist any base64 attachments (images)
+      const attachmentsBase64 = Array.isArray(req.body?.attachmentsBase64) ? req.body.attachmentsBase64 : null
+      const createdAttachments: ReturnType<typeof AttachmentService.getById>[] = attachmentsBase64
+        ? saveBase64ImageAttachmentsForMessage(userMessage.id, attachmentsBase64)
+        : []
+
       // // Get conversation history for context
       // const messages = MessageService.getByConversation(conversationId)
       // const messages = context
@@ -474,11 +580,22 @@ router.post(
           res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`)
         },
         provider,
+        selectedModel,
+        createdAttachments.map(a => ({
+          url: a?.url || undefined,
+          mimeType: (a as any)?.mime_type,
+          filePath: (a as any)?.file_path,
+        }))
+      )
+      console.log('selectedModel', selectedModel)
+      // Save complete assistant message with user message as parent
+      const assistantMessage = MessageService.create(
+        conversationId,
+        'assistant',
+        assistantContent,
+        userMessage.id,
         selectedModel
       )
-
-      // Save complete assistant message with user message as parent
-      const assistantMessage = MessageService.create(conversationId, 'assistant', assistantContent, userMessage.id)
 
       // Send completion event
       res.write(
@@ -647,6 +764,11 @@ router.post(
     res.write(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`)
 
     try {
+      // Decode and persist any base64 attachments (images)
+      const attachmentsBase64 = Array.isArray(req.body?.attachmentsBase64) ? req.body.attachmentsBase64 : null
+      const createdAttachments: ReturnType<typeof AttachmentService.getById>[] = attachmentsBase64
+        ? saveBase64ImageAttachmentsForMessage(userMessage.id, attachmentsBase64)
+        : []
       // Get conversation history for context
       const messages = MessageService.getByConversation(conversationId)
 
@@ -660,7 +782,12 @@ router.post(
           res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`)
         },
         provider,
-        selectedModel
+        selectedModel,
+        createdAttachments.map(a => ({
+          url: a?.url || undefined,
+          mimeType: (a as any)?.mime_type,
+          filePath: (a as any)?.file_path,
+        }))
       )
 
       // Save complete assistant message with user message as parent
@@ -732,6 +859,152 @@ router.delete(
 
     ConversationService.delete(conversationId)
     res.json({ message: 'Conversation deleted' })
+  })
+)
+
+// Attachments API
+
+// Create an attachment metadata record (local file path or CDN URL). No binary upload here.
+// Configure uploads directory and multer storage
+const uploadsDir = path.join(__dirname, 'data', 'uploads')
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true })
+}
+const storage = multer.diskStorage({
+  destination: (_req: express.Request, _file: any, cb: (error: Error | null, destination: string) => void) =>
+    cb(null, uploadsDir),
+  filename: (_req: express.Request, file: any, cb: (error: Error | null, filename: string) => void) => {
+    const ext = path.extname(file.originalname)
+    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_')
+    cb(null, `${Date.now()}_${base}${ext}`)
+  },
+})
+const upload = multer({ storage })
+
+router.post(
+  '/attachments',
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    // If a file is uploaded, save metadata and create attachment
+    const uploaded = (req as any).file as any | undefined
+    if (uploaded) {
+      const file = uploaded
+      const messageIdRaw = req.body?.messageId
+      const messageId = messageIdRaw ? parseInt(messageIdRaw) : null
+      const absolutePath = file.path
+      const filename = path.basename(absolutePath)
+      const filePathRel = path.relative(__dirname, absolutePath) // e.g. data/uploads/...
+      const sizeBytes = file.size
+      const mimeType = file.mimetype
+
+      // Compute sha256
+      const fileBuffer = fs.readFileSync(absolutePath)
+      const sha256 = crypto.createHash('sha256').update(fileBuffer).digest('hex')
+
+      const created = AttachmentService.create({
+        messageId,
+        kind: 'image',
+        mimeType,
+        storage: 'file',
+        url: `/uploads/${filename}`,
+        filePath: filePathRel,
+        width: null,
+        height: null,
+        sizeBytes,
+        sha256,
+      })
+
+      return res.status(201).json(created)
+    }
+
+    // Fallback: metadata-only mode (no binary). Maintain backward compatibility.
+    const {
+      messageId,
+      kind = 'image',
+      mimeType,
+      storage,
+      url,
+      filePath,
+      width,
+      height,
+      sizeBytes,
+      sha256,
+    } = req.body as {
+      messageId?: number | null
+      kind?: 'image'
+      mimeType?: string
+      storage?: 'file' | 'url'
+      url?: string | null
+      filePath?: string | null
+      width?: number | null
+      height?: number | null
+      sizeBytes?: number | null
+      sha256?: string | null
+    }
+
+    if (!mimeType) return res.status(400).json({ error: 'mimeType is required' })
+    if (!url && !filePath) return res.status(400).json({ error: 'Either url or filePath is required' })
+    if (kind !== 'image') return res.status(400).json({ error: 'Only kind="image" is supported' })
+
+    const created = AttachmentService.create({
+      messageId: messageId ?? null,
+      kind: 'image',
+      mimeType,
+      storage,
+      url: url ?? null,
+      filePath: filePath ?? null,
+      width: width ?? null,
+      height: height ?? null,
+      sizeBytes: sizeBytes ?? null,
+      sha256: sha256 ?? null,
+    })
+
+    res.status(201).json(created)
+  })
+)
+
+// Get a single attachment by id
+router.get(
+  '/attachments/:id',
+  asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id)
+    const found = AttachmentService.getById(id)
+    if (!found) return res.status(404).json({ error: 'Attachment not found' })
+    res.json(found)
+  })
+)
+
+// List attachments for a message
+router.get(
+  '/messages/:id/attachments',
+  asyncHandler(async (req, res) => {
+    const messageId = parseInt(req.params.id)
+    const attachments = MessageService.getAttachments(messageId)
+    res.json(attachments)
+  })
+)
+
+// Link existing attachments to a message
+router.post(
+  '/messages/:id/attachments',
+  asyncHandler(async (req, res) => {
+    const messageId = parseInt(req.params.id)
+    const { attachmentIds } = req.body as { attachmentIds?: number[] }
+    if (!Array.isArray(attachmentIds) || attachmentIds.length === 0) {
+      return res.status(400).json({ error: 'attachmentIds must be a non-empty array' })
+    }
+    const attachments = MessageService.linkAttachments(messageId, attachmentIds)
+    res.json(attachments)
+  })
+)
+
+// Delete all attachments for a message
+router.delete(
+  '/messages/:id/attachments',
+  asyncHandler(async (req, res) => {
+    const messageId = parseInt(req.params.id)
+    const deleted = AttachmentService.deleteByMessage(messageId)
+    res.json({ deleted })
   })
 )
 

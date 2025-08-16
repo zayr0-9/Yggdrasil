@@ -11,8 +11,12 @@ dotenv.config({ path: '../.env' })
 
 const app = express()
 app.use(cors())
-app.use(express.json())
+// Increase body size limits to allow base64 image attachments in JSON
+app.use(express.json({ limit: '25mb' }))
+app.use(express.urlencoded({ extended: true, limit: '25mb' }))
 app.use('/api', chatRoutes)
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')))
 
 // Ensure database file and schema exist / are up to date
 const dbPath = path.join(__dirname, 'data', 'yggdrasil.db')

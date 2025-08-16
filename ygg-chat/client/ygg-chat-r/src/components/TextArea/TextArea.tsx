@@ -1,4 +1,6 @@
-import React, { useEffect, useId, useRef } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
+import { useDispatch } from 'react-redux'
+import { chatSliceActions } from '../../features/chats/chatSlice'
 
 type textAreaState = 'default' | 'error' | 'disabled'
 type textAreaWidth = 'w-1/6' | 'w-1/4' | 'w-1/2' | 'w-3/4' | 'w-3/5' | 'w-5/6' | 'w-full' | 'max-w-3xl'
@@ -37,9 +39,11 @@ export const TextArea: React.FC<TextAreaProps> = ({
   showCharCount = false,
   ...rest
 }) => {
+  const dispatch = useDispatch()
   const id = useId()
   const errorId = `${id}-error`
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [dragOver, setDragOver] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (state !== 'disabled') {
@@ -49,6 +53,56 @@ export const TextArea: React.FC<TextAreaProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     onKeyDown?.(e)
+  }
+
+  const handleDragEnter = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (state !== 'disabled') setDragOver(true)
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (state !== 'disabled') setDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+  }
+
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+
+  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+    if (state === 'disabled') return
+
+    const files = Array.from(e.dataTransfer?.files || [])
+    const images = files.filter(f => f.type.startsWith('image/'))
+    if (images.length === 0) return
+
+    Promise.all(
+      images.map(async image => ({
+        dataUrl: await fileToDataUrl(image),
+        name: image.name,
+        type: image.type,
+        size: image.size,
+      }))
+    )
+      .then(drafts => {
+        dispatch(chatSliceActions.imageDraftsAppended(drafts))
+      })
+      .catch(err => console.error('Failed to read dropped images', err))
   }
 
   // Auto-resize functionality
@@ -119,9 +173,13 @@ export const TextArea: React.FC<TextAreaProps> = ({
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onDragEnter={handleDragEnter}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
           disabled={state === 'disabled'}
           maxLength={maxLength}
-          className={`${stateStyles[state]} ${className}`}
+          className={`${stateStyles[state]} ${dragOver ? 'border-blue-500 ring-2 ring-blue-500' : ''} ${className}`}
           aria-invalid={state === 'error'}
           aria-describedby={state === 'error' && errorMessage ? errorId : undefined}
           autoFocus={autoFocus}

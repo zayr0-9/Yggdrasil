@@ -54,6 +54,13 @@ export interface ProviderState {
 }
 
 // Message composition types
+export interface ImageDraft {
+  dataUrl: string
+  name: string
+  type: string
+  size: number
+}
+
 export interface MessageInput {
   content: string
   modelOverride?: string
@@ -66,6 +73,7 @@ export interface CompositionState {
   validationError: string | null
   draftMessage: String | null
   multiReplyCount: number
+  imageDrafts: ImageDraft[] // base64-encoded images + metadata from drag/drop
 }
 
 export interface ConversationState {
@@ -110,6 +118,7 @@ export interface ChatState {
   heimdall: HeimdallState
   initialization: InitializationState
   selectedNodes: number[]
+  attachments: AttachmentsState
 }
 
 // Action payloads
@@ -149,3 +158,23 @@ export interface ModelsResponse {
 
 // Re-export for backward compatibility if needed
 export type Model = string
+
+// Attachment types (mirror server `Attachment` interface)
+export interface Attachment {
+  id: number
+  message_id: number | null
+  kind: 'image'
+  mime_type: string
+  storage: 'file' | 'url'
+  url?: string | null
+  file_path?: string | null
+  width?: number | null
+  height?: number | null
+  size_bytes?: number | null
+  sha256?: string | null
+  created_at: string
+}
+
+export interface AttachmentsState {
+  byMessage: Record<number, Attachment[]>
+}
