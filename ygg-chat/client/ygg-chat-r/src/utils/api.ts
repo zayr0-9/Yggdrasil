@@ -1,30 +1,63 @@
-// import { ChatRequest, ChatResponse, ChatMessage } from '../../../shared/types';
+// utils/api.ts
 
-// const API_BASE_URL =  'http://localhost:3001';
-// //import.meta.env.VITE_API_URL ||
-// export const chatApi = {
-//   async sendMessage(request: ChatRequest): Promise<ChatResponse> {
-//     const response = await fetch(`${API_BASE_URL}/api/chat`, {
-//       method: 'POST',
-//       headers: { 'Content-Type': 'application/json' },
-//       body: JSON.stringify(request)
-//     });
+// Base configuration
+export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
-//     if (!response.ok) {
-//       const error = await response.json();
-//       throw new Error(error.error || 'Failed to send message');
-//     }
+// Core API utility function
+export const apiCall = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
+  const isFormData = options?.body && typeof FormData !== 'undefined' && options.body instanceof FormData
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    headers: {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...options?.headers,
+    },
+    ...options,
+  })
 
-//     return response.json();
-//   },
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`)
+  }
 
-//   async getChatHistory(chatId: string): Promise<ChatMessage[]> {
-//     const response = await fetch(`${API_BASE_URL}/api/chat/${chatId}`);
+  return response.json()
+}
 
-//     if (!response.ok) {
-//       throw new Error('Failed to load chat history');
-//     }
+// Convenience methods for common HTTP operations
+export const api = {
+  get: <T>(endpoint: string, options?: RequestInit) => apiCall<T>(endpoint, { ...options, method: 'GET' }),
 
-//     return response.json();
-//   }
-// };
+  post: <T>(endpoint: string, data?: any, options?: RequestInit) =>
+    apiCall<T>(endpoint, {
+      ...options,
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+    }),
+
+  patch: <T>(endpoint: string, data?: any, options?: RequestInit) =>
+    apiCall<T>(endpoint, {
+      ...options,
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    }),
+
+  put: <T>(endpoint: string, data?: any, options?: RequestInit) =>
+    apiCall<T>(endpoint, {
+      ...options,
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+    }),
+
+  delete: <T>(endpoint: string, options?: RequestInit) => apiCall<T>(endpoint, { ...options, method: 'DELETE' }),
+}
+
+// Helper for streaming requests
+export const createStreamingRequest = (endpoint: string, options?: RequestInit): Promise<Response> => {
+  const isFormData = options?.body && typeof FormData !== 'undefined' && options.body instanceof FormData
+  return fetch(`${API_BASE}${endpoint}`, {
+    headers: {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...options?.headers,
+    },
+    ...options,
+  })
+}

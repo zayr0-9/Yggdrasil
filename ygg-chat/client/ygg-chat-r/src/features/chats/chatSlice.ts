@@ -1,7 +1,17 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import { ChatState, MessageInput, ModelSelectionPayload, ModelsResponse, StreamChunk } from './chatTypes'
+import providersList from '../../../../../shared/providers.json'
+import {
+  Attachment,
+  ChatState,
+  ImageDraft,
+  Message,
+  MessageInput,
+  ModelSelectionPayload,
+  ModelsResponse,
+  StreamChunk,
+} from './chatTypes'
 
-const initialState: ChatState = {
+const makeInitialState = (): ChatState => ({
   models: {
     available: [],
     selected: localStorage.getItem('selectedModel') || null,
@@ -9,6 +19,12 @@ const initialState: ChatState = {
     loading: false,
     error: null,
     lastRefresh: null,
+  },
+  providerState: {
+    providers: Object.values(providersList.providers),
+    currentProvider: localStorage.getItem('currentProvider') || null,
+    loading: false,
+    error: null,
   },
   composition: {
     input: {
@@ -18,22 +34,57 @@ const initialState: ChatState = {
     },
     sending: false,
     validationError: null,
+    draftMessage: null,
+    multiReplyCount: 1,
+    imageDrafts: [],
   },
+  // activeChat:{},
   streaming: {
     active: false,
     buffer: '',
     messageId: null,
     error: null,
+    finished: false,
   },
   ui: {
     modelSelectorOpen: false,
   },
-}
+  conversation: {
+    currentConversationId: null,
+    focusedChatMessageId: null,
+    currentPath: [],
+    messages: [],
+    bookmarked: [],
+    excludedMessages: [],
+  },
+  heimdall: {
+    treeData: null,
+    loading: false,
+    error: null,
+    compactMode: false,
+  },
+  initialization: {
+    loading: false,
+    error: null,
+    userId: null,
+  },
+  selectedNodes: [],
+  attachments: {
+    byMessage: {},
+  },
+})
+
+const initialState: ChatState = makeInitialState()
 
 export const chatSlice = createSlice({
   name: 'chat',
   initialState,
   reducers: {
+    //provider management
+    providerSelected: (state, action: PayloadAction<string>) => {
+      state.providerState.currentProvider = action.payload
+      localStorage.setItem('currentProvider', action.payload)
+    },
     // Model management - simplified for string models
     modelsLoaded: (state, action: PayloadAction<ModelsResponse>) => {
       state.models.available = action.payload.models
@@ -74,7 +125,7 @@ export const chatSlice = createSlice({
       const content = state.composition.input.content.trim()
       if (content.length === 0) {
         state.composition.validationError = null
-      } else if (content.length > 4000) {
+      } else if (content.length > 20000) {
         state.composition.validationError = 'Message too long'
       } else {
         state.composition.validationError = null
@@ -84,6 +135,14 @@ export const chatSlice = createSlice({
     inputCleared: state => {
       state.composition.input = initialState.composition.input
       state.composition.validationError = null
+      state.composition.imageDrafts = []
+    },
+
+    imageDraftsAppended: (state, action: PayloadAction<ImageDraft[]>) => {
+      state.composition.imageDrafts.push(...action.payload)
+    },
+    imageDraftsCleared: state => {
+      state.composition.imageDrafts = []
     },
 
     sendingStarted: state => {
@@ -91,39 +150,222 @@ export const chatSlice = createSlice({
       state.streaming.active = true
       state.streaming.buffer = ''
       state.streaming.error = null
+      state.streaming.finished = false
     },
 
     sendingCompleted: state => {
       state.composition.sending = false
       state.streaming.active = false
       state.composition.input.content = ''
+      state.composition.imageDrafts = []
+      state.streaming.finished = true
     },
 
     // Streaming - optimized buffer management
     streamChunkReceived: (state, action: PayloadAction<StreamChunk>) => {
-      const { type, content } = action.payload
+      const chunk = action.payload
+      if (chunk.type === 'reset') {
+        state.streaming.buffer = ''
+        state.streaming.error = null
+        return
+      }
 
-      if (type === 'chunk' && content) {
-        state.streaming.buffer += content
-      } else if (type === 'error') {
-        state.streaming.error = action.payload.error || 'Stream error'
+      if (chunk.type === 'chunk') {
+        state.streaming.buffer += chunk.content || ''
+      } else if (chunk.type === 'complete') {
+        state.streaming.messageId = chunk.message?.id || null
         state.streaming.active = false
-        state.composition.sending = false
+      } else if (chunk.type === 'error') {
+        state.streaming.error = chunk.error || 'Unknown stream error'
+        state.streaming.active = false
       }
     },
 
     streamCompleted: (state, action: PayloadAction<{ messageId: number }>) => {
-      //   state.streaming.messageId = action.payload.messageId
       state.streaming.active = false
-      state.streaming.buffer = ''
+      state.streaming.finished = true
+      state.streaming.messageId = action.payload.messageId
+      // Fallback: ensure currentPath points to the completed assistant message
+      const targetId = action.payload.messageId
+      const exists = state.conversation.messages.some(m => m.id === targetId)
+      if (exists) {
+        const buildPathToMessage = (messageId: number): number[] => {
+          const path: number[] = []
+          let currentId: number | null = messageId
+          while (currentId !== null) {
+            path.unshift(currentId)
+            const message = state.conversation.messages.find(m => m.id === currentId)
+            currentId = message?.parent_id ?? null
+          }
+          return path
+        }
+        state.conversation.currentPath = buildPathToMessage(targetId)
+      }
     },
 
     // UI - minimal
     modelSelectorToggled: state => {
       state.ui.modelSelectorOpen = !state.ui.modelSelectorOpen
     },
+
+    conversationSet: (state, action: PayloadAction<number>) => {
+      state.conversation.currentConversationId = action.payload
+    },
+
+    conversationCleared: state => {
+      state.conversation.currentConversationId = null
+      state.conversation.messages = []
+      state.conversation.currentPath = []
+    },
+
+    nodesSelected: (state, action: PayloadAction<number[]>) => {
+      state.selectedNodes = action.payload
+    },
+
+    focusedChatMessageSet: (state, action: PayloadAction<number>) => {
+      state.conversation.focusedChatMessageId = action.payload
+    },
+
+    messageAdded: (state, action: PayloadAction<Message>) => {
+      const m = action.payload
+      const existing = state.conversation.messages.findIndex(x => x.id === m.id)
+      if (existing >= 0) {
+        state.conversation.messages[existing] = m
+      } else {
+        state.conversation.messages.push(m)
+      }
+    },
+
+    messagesCleared: state => {
+      state.conversation.messages = []
+    },
+
+    messageUpdated: (state, action: PayloadAction<{ id: number; content: string }>) => {
+      const { id, content } = action.payload
+      const msg = state.conversation.messages.find(m => m.id === id)
+      if (msg) msg.content = content
+    },
+
+    messageDeleted: (state, action: PayloadAction<number>) => {
+      const id = action.payload
+      state.conversation.messages = state.conversation.messages.filter(m => m.id !== id)
+    },
+
+    messagesLoaded: (state, action: PayloadAction<Message[]>) => {
+      state.conversation.messages = action.payload
+    },
+
+    // Branching support
+    messageBranchCreated: (state, action: PayloadAction<{ newMessage: Message }>) => {
+      const { newMessage } = action.payload
+
+      const normalizeIds = (ids: any): number[] => {
+        if (Array.isArray(ids)) return ids as number[]
+        if (typeof ids === 'string') return ids.split(',').map(Number)
+        return []
+      }
+
+      const parentMessage = state.conversation.messages.find(m => m.id === newMessage.parent_id)
+      if (parentMessage) {
+        parentMessage.children_ids = normalizeIds(parentMessage.children_ids)
+        if (!parentMessage.children_ids.includes(newMessage.id)) {
+          parentMessage.children_ids.push(newMessage.id)
+        }
+      }
+
+      // Auto-navigate current path to new branch by building complete path from root
+      // This ensures we switch cleanly to the new branch without leftover messages
+      const buildPathToMessage = (messageId: number): number[] => {
+        const path: number[] = []
+        let currentId: number | null = messageId
+
+        // Walk up the parent chain to build the complete path
+        while (currentId !== null) {
+          path.unshift(currentId)
+          const message = state.conversation.messages.find(m => m.id === currentId)
+          currentId = message?.parent_id ?? null
+        }
+
+        return path
+      }
+
+      state.conversation.currentPath = buildPathToMessage(newMessage.id)
+    },
+
+    // Set current path for navigation through branches
+    conversationPathSet: (state, action: PayloadAction<number[]>) => {
+      state.conversation.currentPath = action.payload
+    },
+
+    // Set selected node path (string IDs from Heimdall)
+    selectedNodePathSet: (state, action: PayloadAction<string[]>) => {
+      // Convert string IDs to numbers for consistency with message IDs
+      const numericPath = action.payload
+        .filter(id => id !== 'empty' && id !== '') // Filter out empty/default nodes
+        .map(id => parseInt(id))
+        .filter(id => !isNaN(id)) // Filter out invalid numbers
+      state.conversation.currentPath = numericPath
+    },
+
+    /* Heimdall tree reducers */
+    heimdallLoadingStarted: state => {
+      state.heimdall.loading = true
+      state.heimdall.error = null
+    },
+    heimdallDataLoaded: (state, action: PayloadAction<{ treeData: any }>) => {
+      state.heimdall.treeData = action.payload.treeData
+      state.heimdall.loading = false
+      state.heimdall.error = null
+    },
+    heimdallError: (state, action: PayloadAction<string>) => {
+      state.heimdall.error = action.payload
+      state.heimdall.loading = false
+    },
+    heimdallCompactModeToggled: state => {
+      state.heimdall.compactMode = !state.heimdall.compactMode
+    },
+
+    /* Initialization reducers */
+    initializationStarted: state => {
+      state.initialization.loading = true
+      state.initialization.error = null
+    },
+    initializationCompleted: (state, action: PayloadAction<{ userId: number; conversationId: number }>) => {
+      state.initialization.loading = false
+      state.initialization.userId = action.payload.userId
+      state.conversation.currentConversationId = action.payload.conversationId
+    },
+    initializationError: (state, action: PayloadAction<string>) => {
+      state.initialization.loading = false
+      state.initialization.error = action.payload
+    },
+    multiReplyCountSet: (state, action: PayloadAction<number>) => {
+      state.composition.multiReplyCount = action.payload
+    },
+
+    /* Attachment reducers */
+    attachmentsSetForMessage: (state, action: PayloadAction<{ messageId: number; attachments: Attachment[] }>) => {
+      const { messageId, attachments } = action.payload
+      state.attachments.byMessage[messageId] = attachments
+    },
+    attachmentUpsertedForMessage: (state, action: PayloadAction<{ messageId: number; attachment: Attachment }>) => {
+      const { messageId, attachment } = action.payload
+      const arr = state.attachments.byMessage[messageId] || []
+      const idx = arr.findIndex(a => a.id === attachment.id)
+      if (idx >= 0) {
+        arr[idx] = attachment
+      } else {
+        arr.push(attachment)
+      }
+      state.attachments.byMessage[messageId] = arr
+    },
+    attachmentsClearedForMessage: (state, action: PayloadAction<number>) => {
+      const messageId = action.payload
+      state.attachments.byMessage[messageId] = []
+    },
+    stateReset: () => makeInitialState(),
   },
 })
 
-export const chatActions = chatSlice.actions
+export const chatSliceActions = chatSlice.actions
 export default chatSlice.reducer

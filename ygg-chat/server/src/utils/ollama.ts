@@ -30,8 +30,8 @@ export async function generateResponse(
       stream: true,
     })
   )
-
-  const response = await fetch('http://localhost:11434/api/chat', {
+  //changed from localhost to 172.31.32.1 to run from wsl
+  const response = await fetch('http://172.31.32.1:11434/api/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

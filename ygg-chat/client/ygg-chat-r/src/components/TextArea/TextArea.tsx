@@ -1,4 +1,6 @@
-import React, { useEffect, useId, useRef } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
+import { useDispatch } from 'react-redux'
+import { chatSliceActions } from '../../features/chats/chatSlice'
 
 type textAreaState = 'default' | 'error' | 'disabled'
 type textAreaWidth = 'w-1/6' | 'w-1/4' | 'w-1/2' | 'w-3/4' | 'w-3/5' | 'w-5/6' | 'w-full' | 'max-w-3xl'
@@ -28,18 +30,20 @@ export const TextArea: React.FC<TextAreaProps> = ({
   onKeyDown,
   state = 'default',
   errorMessage,
-  maxLength = 2000,
+  maxLength = 20000,
   width = 'max-w-3xl',
   className = '',
   minRows = 1,
-  // maxRows = 10,
+  maxRows = 10,
   autoFocus = false,
   showCharCount = false,
   ...rest
 }) => {
+  const dispatch = useDispatch()
   const id = useId()
   const errorId = `${id}-error`
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [dragOver, setDragOver] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (state !== 'disabled') {
@@ -49,6 +53,56 @@ export const TextArea: React.FC<TextAreaProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     onKeyDown?.(e)
+  }
+
+  const handleDragEnter = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (state !== 'disabled') setDragOver(true)
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (state !== 'disabled') setDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+  }
+
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+
+  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+    if (state === 'disabled') return
+
+    const files = Array.from(e.dataTransfer?.files || [])
+    const images = files.filter(f => f.type.startsWith('image/'))
+    if (images.length === 0) return
+
+    Promise.all(
+      images.map(async image => ({
+        dataUrl: await fileToDataUrl(image),
+        name: image.name,
+        type: image.type,
+        size: image.size,
+      }))
+    )
+      .then(drafts => {
+        dispatch(chatSliceActions.imageDraftsAppended(drafts))
+      })
+      .catch(err => console.error('Failed to read dropped images', err))
   }
 
   // Auto-resize functionality
@@ -61,9 +115,17 @@ export const TextArea: React.FC<TextAreaProps> = ({
       // Calculate the number of lines
       const lineHeight = 24 // Approximate line height in pixels
       const minHeight = minRows * lineHeight + 16 // 16px for padding
+      const maxHeight = maxRows ? maxRows * lineHeight + 16 : undefined
 
       const scrollHeight = textarea.scrollHeight
-      const newHeight = Math.max(scrollHeight, minHeight)
+      let newHeight = Math.max(scrollHeight, minHeight)
+
+      if (maxHeight && newHeight > maxHeight) {
+        newHeight = maxHeight
+        textarea.style.overflowY = 'auto'
+      } else {
+        textarea.style.overflowY = 'hidden'
+      }
 
       textarea.style.height = `${newHeight}px`
     }
@@ -79,13 +141,20 @@ export const TextArea: React.FC<TextAreaProps> = ({
     adjustHeight()
   }, [])
 
-  const baseStyles = `${width} px-4 py-3 rounded-xl border transition-all duration-200 overflow-hidden`
+  // Programmatic focus when autoFocus toggles to true (e.g., after streaming finishes)
+  useEffect(() => {
+    if (autoFocus && textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }, [autoFocus])
+
+  const baseStyles = `${width} px-4 py-3 rounded-xl transition-all duration-200 overflow-hidden bg-neutral-50 dark:bg-neutral-900`
   const labelClasses = state === 'disabled' ? 'opacity-40' : ''
 
   const stateStyles = {
-    default: `${baseStyles} bg-gray-800 text-gray-100 placeholder-gray-400 border-gray-600 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50`,
-    error: `${baseStyles} bg-gray-800 text-gray-100 placeholder-gray-400 border-red-500 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500 focus:ring-opacity-50`,
-    disabled: `${baseStyles} bg-gray-900 text-gray-500 border-gray-700 placeholder-gray-600 cursor-not-allowed`,
+    default: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-gray-400 border-gray-600 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50`,
+    error: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-gray-400 border-red-500 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500 focus:ring-opacity-50`,
+    disabled: `${baseStyles} bg-gray-900 text-stone-800 dark:text-stone-200 border-gray-700 placeholder-gray-600 cursor-not-allowed`,
   }
 
   return (
@@ -104,9 +173,13 @@ export const TextArea: React.FC<TextAreaProps> = ({
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onDragEnter={handleDragEnter}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
           disabled={state === 'disabled'}
           maxLength={maxLength}
-          className={`${stateStyles[state]} ${className}`}
+          className={`${stateStyles[state]} ${dragOver ? 'border-blue-500 ring-2 ring-blue-500' : ''} ${className}`}
           aria-invalid={state === 'error'}
           aria-describedby={state === 'error' && errorMessage ? errorId : undefined}
           autoFocus={autoFocus}
@@ -118,7 +191,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
 
         {/* Character count indicator */}
         {showCharCount && maxLength && (
-          <div className='absolute bottom-2 right-3 text-xs text-gray-500'>
+          <div className='absolute bottom-2 right-3 text-xs text-stone-800 dark:text-stone-200'>
             {value.length}/{maxLength}
           </div>
         )}

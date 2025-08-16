@@ -2,7 +2,14 @@
 import Database from 'better-sqlite3'
 import path from 'path'
 
-const DB_PATH = path.join(__dirname, '../data', 'yggdrasil.db')
+import fs from 'fs'
+
+const DATA_DIR = path.join(__dirname, '../data')
+// Ensure the data directory exists before opening the database file
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true })
+}
+const DB_PATH = path.join(DATA_DIR, 'yggdrasil.db')
 
 export const db = new Database(DB_PATH)
 
@@ -33,15 +40,38 @@ export function initializeDatabase() {
     )
   `)
 
-  // Messages table
+  // Messages table with hybrid parent_id + children_ids design
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       conversation_id INTEGER NOT NULL,
+      parent_id INTEGER,
+      children_ids TEXT DEFAULT '[]',
       role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
       content TEXT NOT NULL,
+      model_name TEXT DEFAULT 'unknown',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_id) REFERENCES messages(id) ON DELETE CASCADE
+    )
+  `)
+
+  // Message attachments table (images stored locally with optional CDN URL)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS message_attachments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id INTEGER,
+      kind TEXT NOT NULL CHECK (kind IN ('image')),
+      mime_type TEXT NOT NULL,
+      storage TEXT NOT NULL CHECK (storage IN ('file','url')) DEFAULT 'file',
+      url TEXT,             -- For CDN/object storage
+      file_path TEXT,       -- For local filesystem storage
+      width INTEGER,
+      height INTEGER,
+      size_bytes INTEGER,
+      sha256 TEXT UNIQUE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
     )
   `)
 
@@ -49,6 +79,61 @@ export function initializeDatabase() {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
     CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_parent_id ON messages(parent_id);
+  `)
+
+  // Attachment indexes
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON message_attachments(message_id);
+    CREATE INDEX IF NOT EXISTS idx_attachments_sha256 ON message_attachments(sha256);
+  `)
+
+  // Full Text Search virtual table
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+      content, 
+      conversation_id UNINDEXED,
+      message_id UNINDEXED,
+      tokenize = 'porter unicode61'
+    )
+  `)
+
+  // Triggers to maintain children_ids integrity
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS messages_children_insert AFTER INSERT ON messages 
+    WHEN NEW.parent_id IS NOT NULL
+    BEGIN
+      UPDATE messages 
+      SET children_ids = (
+        SELECT CASE 
+          WHEN children_ids = '[]' OR children_ids = '' THEN '[' || NEW.id || ']'
+          ELSE SUBSTR(children_ids, 1, LENGTH(children_ids)-1) || ',' || NEW.id || ']'
+        END
+        FROM messages WHERE id = NEW.parent_id
+      )
+      WHERE id = NEW.parent_id;
+    END;
+  `)
+
+  // Triggers to keep FTS table in sync with messages table
+  db.exec(`
+    -- Insert trigger
+    CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+      INSERT INTO messages_fts(content, conversation_id, message_id) 
+      VALUES (new.content, new.conversation_id, new.id);
+    END;
+
+    -- Update trigger  
+    CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
+      UPDATE messages_fts 
+      SET content = new.content 
+      WHERE message_id = new.id;
+    END;
+
+    -- Delete trigger
+    CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+      DELETE FROM messages_fts WHERE message_id = old.id;
+    END;
   `)
 
   // Initialize prepared statements after tables exist
@@ -58,12 +143,11 @@ export function initializeDatabase() {
 // Prepared statements - initialized after tables exist
 export let statements: any = {}
 
-function initializeStatements() {
+export function initializeStatements() {
   statements = {
     // Users
     createUser: db.prepare('INSERT INTO users (username) VALUES (?)'),
     getAllUsers: db.prepare('SELECT * FROM users ORDER BY created_at DESC'),
-
     getUserById: db.prepare('SELECT * FROM users WHERE id = ?'),
     getUserByUsername: db.prepare('SELECT * FROM users WHERE username = ?'),
     updateUser: db.prepare('UPDATE users SET username = ? WHERE id = ?'),
@@ -80,12 +164,90 @@ function initializeStatements() {
     deleteConversation: db.prepare('DELETE FROM conversations WHERE id = ?'),
     deleteConversationsByUser: db.prepare('DELETE FROM conversations WHERE user_id = ?'),
 
-    // Messages
-    createMessage: db.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)'),
+    // Messages - Core operations
+    createMessage: db.prepare(
+      'INSERT INTO messages (conversation_id, parent_id, role, content, children_ids, model_name) VALUES (?, ?, ?, ?, ?, ?)'
+    ),
+    getMessageById: db.prepare('SELECT * FROM messages WHERE id = ?'),
+    getChildrenIds: db.prepare('SELECT children_ids FROM messages WHERE id = ?'),
     getMessagesByConversation: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'),
-    getLastMessage: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1'),
+    getLastMessage: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1'),
     deleteMessagesByConversation: db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
+    updateMessage: db.prepare('UPDATE messages SET content = ? WHERE id = ?'),
+    deleteMessage: db.prepare('DELETE FROM messages WHERE id = ?'),
+
+    // Messages - Optimized branch operations using children_ids
+
+    // Messages - Tree operations (simplified with children_ids)
+    getMessageTree: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'),
+
+    // Full Text Search operations
+    searchMessages: db.prepare(`
+      SELECT m.*, highlight(messages_fts, 0, '<mark>', '</mark>') as highlighted
+      FROM messages m
+      JOIN messages_fts ON m.id = messages_fts.message_id
+      WHERE messages_fts MATCH ? AND m.conversation_id = ?
+      ORDER BY rank
+    `),
+
+    searchAllUserMessages: db.prepare(`
+      SELECT m.*, c.title as conversation_title, 
+             highlight(messages_fts, 0, '<mark>', '</mark>') as highlighted
+      FROM messages m
+      JOIN messages_fts ON m.id = messages_fts.message_id
+      JOIN conversations c ON m.conversation_id = c.id
+      WHERE messages_fts MATCH ? AND c.user_id = ?
+      ORDER BY rank
+      LIMIT 50
+    `),
+
+    // Advanced FTS with snippets (shows context around matches)
+    searchMessagesWithSnippet: db.prepare(`
+      SELECT m.*, 
+             snippet(messages_fts, 0, '<mark>', '</mark>', '...', 32) as snippet
+      FROM messages m
+      JOIN messages_fts ON m.id = messages_fts.message_id
+      WHERE messages_fts MATCH ? AND m.conversation_id = ?
+      ORDER BY rank
+    `),
+
+    // Search with pagination
+    searchAllUserMessagesPaginated: db.prepare(`
+      SELECT m.*, c.title as conversation_title, 
+             highlight(messages_fts, 0, '<mark>', '</mark>') as highlighted
+      FROM messages m
+      JOIN messages_fts ON m.id = messages_fts.message_id
+      JOIN conversations c ON m.conversation_id = c.id
+      WHERE messages_fts MATCH ? AND c.user_id = ?
+      ORDER BY rank
+      LIMIT ? OFFSET ?
+    `),
+
+    // Attachments
+    createAttachment: db.prepare(
+      `INSERT INTO message_attachments (
+         message_id, kind, mime_type, storage, url, file_path, width, height, size_bytes, sha256
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ),
+    updateAttachmentMessageId: db.prepare(
+      'UPDATE message_attachments SET message_id = ? WHERE id = ?'
+    ),
+    getAttachmentsByMessage: db.prepare(
+      'SELECT * FROM message_attachments WHERE message_id = ? ORDER BY id ASC'
+    ),
+    getAttachmentById: db.prepare('SELECT * FROM message_attachments WHERE id = ?'),
+    getAttachmentBySha256: db.prepare('SELECT * FROM message_attachments WHERE sha256 = ?'),
+    deleteAttachmentsByMessage: db.prepare('DELETE FROM message_attachments WHERE message_id = ?'),
   }
+}
+
+// Utility function to rebuild FTS index (useful after bulk imports)
+export function rebuildFTSIndex() {
+  db.exec(`
+    DELETE FROM messages_fts;
+    INSERT INTO messages_fts(content, conversation_id, message_id)
+    SELECT content, conversation_id, id FROM messages;
+  `)
 }
 
 // Graceful shutdown

@@ -44,7 +44,7 @@ coverage/
 /server/.cache
 /server/tsconfig.tsbuildinfo
 /server/src/data/yggdrasil.db
-
+*.db
 # Client app
 /web/node_modules/
 /web/dist/
@@ -58,3 +58,12 @@ coverage/
 *.local
 *.tmp
 *.swp
+
+# Server app
+ygg-chat/server/node_modules/
+ygg-chat/server/dist/
+ygg-chat/server/.env
+ygg-chat/server/*.log
+ygg-chat/server/.cache
+ygg-chat/server/tsconfig.tsbuildinfo
+ygg-chat/server/src/data/yggdrasil.db

@@ -1,15 +1,32 @@
 import cors from 'cors'
+import dotenv from 'dotenv'
 import express from 'express'
-import { initializeDatabase } from './database/db'
+import fs from 'fs'
+import path from 'path'
+import { initializeDatabase, initializeStatements } from './database/db'
 import chatRoutes from './routes/chat'
 import { modelService } from './utils/modelService'
 
+dotenv.config({ path: '../.env' })
+
 const app = express()
 app.use(cors())
-app.use(express.json())
+// Increase body size limits to allow base64 image attachments in JSON
+app.use(express.json({ limit: '25mb' }))
+app.use(express.urlencoded({ extended: true, limit: '25mb' }))
 app.use('/api', chatRoutes)
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')))
 
+// Ensure database file and schema exist / are up to date
+const dbPath = path.join(__dirname, 'data', 'yggdrasil.db')
+if (!fs.existsSync(dbPath)) {
+  console.log('Database file not found, creating new database...')
+}
+// Initialize / migrate schema (CREATE TABLE IF NOT EXISTS is idempotent)
 initializeDatabase()
+// Prepare statements (requires tables to exist)
+initializeStatements()
 ;(async () => {
   await modelService.getAvailableModels() // Force cache population
   console.log('Models discovered:', await modelService.getAvailableModels())
