@@ -576,7 +576,7 @@ function Chat() {
                 content={streamState.buffer}
                 width='w-full'
                 modelName={selectedModel || undefined}
-                className='animate-pulse border-blue-400'
+                className=''
               />
             )}
             {/* Bottom sentinel for robust scrolling */}

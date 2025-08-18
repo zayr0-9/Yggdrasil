@@ -184,6 +184,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   isEditing = false,
   width = 'w-3/5',
   modelName,
+  className,
 }) => {
   const [editingState, setEditingState] = useState(isEditing)
   const [editContent, setEditContent] = useState(content)
@@ -338,7 +339,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   return (
     <div
       id={`message-${id}`}
-      className={`group rounded-lg p-4 mb-4 ${styles.container} ${width} transition-all duration-200 hover:bg-opacity-80`}
+      className={`group rounded-lg p-4 mb-4 ${styles.container} ${width} transition-all duration-200 hover:bg-opacity-80 ${className ?? ''}`}
     >
       {/* Header with role and actions */}
       <div className='flex items-center justify-between mb-3'>

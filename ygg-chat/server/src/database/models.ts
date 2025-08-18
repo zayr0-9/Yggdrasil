@@ -39,13 +39,15 @@ export class AttachmentService {
       sha256 = null,
     } = params
 
-    // If sha256 provided, try to reuse existing
+    // If sha256 provided, try to reuse existing (dedupe)
     if (sha256) {
       const existing = statements.getAttachmentBySha256.get(sha256) as Attachment | undefined
       if (existing) {
-        if (messageId && existing.message_id == null) {
-          statements.updateAttachmentMessageId.run(messageId, existing.id)
-          return statements.getAttachmentById.get(existing.id) as Attachment
+        // Link via join table if a messageId is provided
+        if (messageId) {
+          statements.linkAttachmentToMessage.run(messageId, existing.id)
+          // Return with message context for backward compatibility
+          return { ...existing, message_id: messageId }
         }
         return existing
       }
@@ -64,7 +66,13 @@ export class AttachmentService {
       sizeBytes,
       sha256
     )
-    return statements.getAttachmentById.get(result.lastInsertRowid) as Attachment
+    const created = statements.getAttachmentById.get(result.lastInsertRowid) as Attachment
+    // Create link if messageId provided
+    if (messageId) {
+      statements.linkAttachmentToMessage.run(messageId, created.id)
+      return { ...created, message_id: messageId }
+    }
+    return created
   }
 
   static getByMessage(messageId: number): Attachment[] {
@@ -72,8 +80,9 @@ export class AttachmentService {
   }
 
   static linkToMessage(attachmentId: number, messageId: number): Attachment | undefined {
-    statements.updateAttachmentMessageId.run(messageId, attachmentId)
-    return statements.getAttachmentById.get(attachmentId) as Attachment | undefined
+    statements.linkAttachmentToMessage.run(messageId, attachmentId)
+    const base = statements.getAttachmentById.get(attachmentId) as Attachment | undefined
+    return base ? { ...base, message_id: messageId } : undefined
   }
 
   static findBySha256(sha256: string): Attachment | undefined {
@@ -82,6 +91,11 @@ export class AttachmentService {
 
   static getById(id: number): Attachment | undefined {
     return statements.getAttachmentById.get(id) as Attachment | undefined
+  }
+
+  static unlinkFromMessage(messageId: number, attachmentId: number): number {
+    const res = statements.unlinkAttachmentFromMessage.run(messageId, attachmentId)
+    return res.changes ?? 0
   }
 
   static deleteByMessage(messageId: number): number {
@@ -260,10 +274,16 @@ export class MessageService {
   }
 
   static linkAttachments(messageId: number, attachmentIds: number[]): Attachment[] {
-    if (!attachmentIds || attachmentIds.length === 0) return statements.getAttachmentsByMessage.all(messageId) as Attachment[]
+    if (!attachmentIds || attachmentIds.length === 0)
+      return statements.getAttachmentsByMessage.all(messageId) as Attachment[]
     for (const id of attachmentIds) {
-      statements.updateAttachmentMessageId.run(messageId, id)
+      statements.linkAttachmentToMessage.run(messageId, id)
     }
+    return statements.getAttachmentsByMessage.all(messageId) as Attachment[]
+  }
+
+  static unlinkAttachment(messageId: number, attachmentId: number): Attachment[] {
+    statements.unlinkAttachmentFromMessage.run(messageId, attachmentId)
     return statements.getAttachmentsByMessage.all(messageId) as Attachment[]
   }
 

@@ -75,6 +75,19 @@ export function initializeDatabase() {
     )
   `)
 
+  // Join table to support many-to-many links between messages and attachments
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS message_attachment_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id INTEGER NOT NULL,
+      attachment_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+      FOREIGN KEY (attachment_id) REFERENCES message_attachments(id) ON DELETE CASCADE,
+      UNIQUE(message_id, attachment_id)
+    )
+  `)
+
   // Indexes
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
@@ -86,6 +99,12 @@ export function initializeDatabase() {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON message_attachments(message_id);
     CREATE INDEX IF NOT EXISTS idx_attachments_sha256 ON message_attachments(sha256);
+  `)
+
+  // Indexes for join table
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_mal_message_id ON message_attachment_links(message_id);
+    CREATE INDEX IF NOT EXISTS idx_mal_attachment_id ON message_attachment_links(attachment_id);
   `)
 
   // Full Text Search virtual table
@@ -138,6 +157,12 @@ export function initializeDatabase() {
 
   // Initialize prepared statements after tables exist
   initializeStatements()
+
+  // Backfill join table from legacy message_id values for existing attachments
+  db.exec(`
+    INSERT OR IGNORE INTO message_attachment_links (message_id, attachment_id)
+    SELECT message_id, id FROM message_attachments WHERE message_id IS NOT NULL;
+  `)
 }
 
 // Prepared statements - initialized after tables exist
@@ -229,15 +254,61 @@ export function initializeStatements() {
          message_id, kind, mime_type, storage, url, file_path, width, height, size_bytes, sha256
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ),
+    // Legacy setter retained but no longer used in new code paths
     updateAttachmentMessageId: db.prepare(
       'UPDATE message_attachments SET message_id = ? WHERE id = ?'
     ),
+    // Many-to-many operations via join table
+    linkAttachmentToMessage: db.prepare(
+      'INSERT OR IGNORE INTO message_attachment_links (message_id, attachment_id) VALUES (?, ?)'
+    ),
+    deleteLinksByMessage: db.prepare(
+      'DELETE FROM message_attachment_links WHERE message_id = ?'
+    ),
+    unlinkAttachmentFromMessage: db.prepare(
+      'DELETE FROM message_attachment_links WHERE message_id = ? AND attachment_id = ?'
+    ),
     getAttachmentsByMessage: db.prepare(
-      'SELECT * FROM message_attachments WHERE message_id = ? ORDER BY id ASC'
+      `SELECT
+         ma.id,
+         mal.message_id AS message_id,
+         ma.kind,
+         ma.mime_type,
+         ma.storage,
+         ma.url,
+         ma.file_path,
+         ma.width,
+         ma.height,
+         ma.size_bytes,
+         ma.sha256,
+         ma.created_at
+       FROM message_attachment_links mal
+       JOIN message_attachments ma ON ma.id = mal.attachment_id
+       WHERE mal.message_id = ?
+       ORDER BY ma.id ASC`
     ),
     getAttachmentById: db.prepare('SELECT * FROM message_attachments WHERE id = ?'),
     getAttachmentBySha256: db.prepare('SELECT * FROM message_attachments WHERE sha256 = ?'),
-    deleteAttachmentsByMessage: db.prepare('DELETE FROM message_attachments WHERE message_id = ?'),
+    // Legacy deleter replaced by link deletion to preserve shared attachments
+    deleteAttachmentsByMessage: db.prepare('DELETE FROM message_attachment_links WHERE message_id = ?'),
+    getAttachmentForMessage: db.prepare(
+      `SELECT
+         ma.id,
+         mal.message_id AS message_id,
+         ma.kind,
+         ma.mime_type,
+         ma.storage,
+         ma.url,
+         ma.file_path,
+         ma.width,
+         ma.height,
+         ma.size_bytes,
+         ma.sha256,
+         ma.created_at
+       FROM message_attachment_links mal
+       JOIN message_attachments ma ON ma.id = mal.attachment_id
+       WHERE mal.message_id = ? AND mal.attachment_id = ?`
+    ),
   }
 }
 

@@ -1,7 +1,7 @@
 // server/src/utils/attachments.ts
-import path from 'path'
-import fs from 'fs'
 import crypto from 'crypto'
+import fs from 'fs'
+import path from 'path'
 import { AttachmentService } from '../database/models'
 
 export type Base64AttachmentInput = {
@@ -34,10 +34,7 @@ function extFromMimeOrName(mimeType: string, name?: string): string {
   return hinted || '.bin'
 }
 
-export function saveBase64ImageAttachmentsForMessage(
-  messageId: number,
-  items: Base64AttachmentInput[]
-) {
+export function saveBase64ImageAttachmentsForMessage(messageId: number, items: Base64AttachmentInput[]) {
   const created: ReturnType<typeof AttachmentService.getById>[] = []
   if (!Array.isArray(items) || items.length === 0) return created
 
@@ -53,6 +50,13 @@ export function saveBase64ImageAttachmentsForMessage(
       const base64 = match[2]
       const buffer = Buffer.from(base64, 'base64')
       const sha256 = crypto.createHash('sha256').update(buffer).digest('hex')
+      // If an attachment with this hash already exists, just link it to this message and skip writing a new file
+      const existing = AttachmentService.findBySha256(sha256)
+      if (existing) {
+        const linked = AttachmentService.linkToMessage(existing.id, messageId)
+        if (linked) created.push(linked)
+        continue
+      }
       const safeBase = (item.name || 'image').replace(/[^a-zA-Z0-9-_]/g, '_')
       const ext = extFromMimeOrName(mimeType, item.name)
       const filename = `${Date.now()}_${safeBase}${ext}`
@@ -62,7 +66,6 @@ export function saveBase64ImageAttachmentsForMessage(
 
       // filePath relative to server/src (so it looks like 'data/uploads/filename')
       const filePathRel = path.relative(rootSrcDir, absolutePath)
-
       const createdRow = AttachmentService.create({
         messageId,
         kind: 'image',

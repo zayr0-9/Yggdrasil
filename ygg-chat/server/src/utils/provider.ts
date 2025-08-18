@@ -32,11 +32,12 @@ export async function generateResponse(
   const providerModel = getProviderModel(provider, model)
 
   // Build a simple textual note for attachments when providers are text-only in our current setup
-  const attachmentNote = Array.isArray(attachments) && attachments.length > 0
-    ? `Attached ${attachments.length} image(s):\n${attachments
-        .map((a, idx) => `  ${idx + 1}. ${a.url || '(inline image)'}${a.mimeType ? ` (${a.mimeType})` : ''}`)
-        .join('\n')}`
-    : ''
+  const attachmentNote =
+    Array.isArray(attachments) && attachments.length > 0
+      ? `Attached ${attachments.length} image(s):\n${attachments
+          .map((a, idx) => `  ${idx + 1}. ${a.url || '(inline image)'}${a.mimeType ? ` (${a.mimeType})` : ''}`)
+          .join('\n')}`
+      : ''
 
   // Prepare messages for AI SDK providers (text-only content objects)
   const aiSdkMessages = messages
@@ -59,17 +60,24 @@ export async function generateResponse(
       }
     }
     // If no user message found, append a synthetic trailing user note
-    return ([...cloned, { ...cloned[cloned.length - 1], role: 'user', content: attachmentNote }] as any) as Message[]
+    return [...cloned, { ...cloned[cloned.length - 1], role: 'user', content: attachmentNote }] as any as Message[]
   })()
 
   switch (provider) {
     case 'ollama':
       return ollamaGenerate(ollamaMessagesWithNote, onChunk, providerModel)
-    case 'gemini':
-      return geminiGenerate(aiSdkMessagesWithNote, onChunk, providerModel)
+    case 'gemini': {
+      // Forward attachments so Gemini can inline images
+      const geminiAttachments = (attachments || []).map(a => ({ mimeType: a.mimeType, filePath: a.filePath }))
+      return geminiGenerate(aiSdkMessages, onChunk, providerModel, geminiAttachments)
+    }
     case 'anthropic': {
       // For Anthropic, forward attachments so we can construct image+text content parts
-      const anthroAttachments = (attachments || []).map(a => ({ url: a.url, mimeType: a.mimeType, filePath: a.filePath }))
+      const anthroAttachments = (attachments || []).map(a => ({
+        url: a.url,
+        mimeType: a.mimeType,
+        filePath: a.filePath,
+      }))
       return anthropicGenerate(aiSdkMessages, onChunk, providerModel, anthroAttachments)
     }
     case 'openai':
