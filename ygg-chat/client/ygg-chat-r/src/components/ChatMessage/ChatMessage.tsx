@@ -46,6 +46,7 @@ interface MessageActionsProps {
   onSaveBranch?: () => void
   isEditing: boolean
   editMode?: 'edit' | 'branch'
+  copied?: boolean
 }
 
 const MessageActions: React.FC<MessageActionsProps> = ({
@@ -59,6 +60,7 @@ const MessageActions: React.FC<MessageActionsProps> = ({
   onSaveBranch,
   isEditing,
   editMode = 'edit',
+  copied = false,
 }) => {
   return (
     <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200'>
@@ -93,17 +95,27 @@ const MessageActions: React.FC<MessageActionsProps> = ({
         <>
           <button
             onClick={onCopy}
-            className='p-1.5 rounded-md text-gray-400 hover:text-blue-400 hover:bg-neutral-300 transition-colors duration-150'
-            title='Copy message'
+            className={`p-1.5 rounded-md transition-colors duration-150 ${
+              copied
+                ? 'text-green-500 hover:text-green-500 hover:bg-neutral-300'
+                : 'text-gray-400 hover:text-blue-400 hover:bg-neutral-300'
+            }`}
+            title={copied ? 'Copied' : 'Copy message'}
           >
-            <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-              <path
-                strokeLinecap='round'
-                strokeLinejoin='round'
-                strokeWidth={2}
-                d='M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z'
-              />
-            </svg>
+            {copied ? (
+              <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+              </svg>
+            ) : (
+              <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                <path
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  strokeWidth={2}
+                  d='M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z'
+                />
+              </svg>
+            )}
           </button>
           {onEdit && (
             <button
@@ -195,6 +207,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const [editingState, setEditingState] = useState(isEditing)
   const [editContent, setEditContent] = useState(content)
   const [editMode, setEditMode] = useState<'edit' | 'branch'>('edit')
+  const [copied, setCopied] = useState(false)
 
   const handleEdit = () => {
     dispatch(chatSliceActions.editingBranchSet(false))
@@ -243,15 +256,47 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     setEditMode('edit')
   }
 
+  const copyPlainText = async (text: string) => {
+    // Try async clipboard API first
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(text)
+        return true
+      }
+    } catch (_) {
+      // fall through to fallback
+    }
+
+    // Fallback for non-secure contexts or older browsers
+    try {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      textarea.style.left = '-9999px'
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+      // @ts-ignore - Deprecated API used intentionally as a safe fallback when Clipboard API is unavailable
+      const ok = document.execCommand('copy')
+      document.body.removeChild(textarea)
+      return ok
+    } catch (err) {
+      console.error('Copy fallback failed:', err)
+      return false
+    }
+  }
+
   const handleCopy = async () => {
     if (onCopy) {
       onCopy(content)
+    }
+    const ok = await copyPlainText(content)
+    if (ok) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
     } else {
-      try {
-        await navigator.clipboard.writeText(content)
-      } catch (err) {
-        console.error('Failed to copy message:', err)
-      }
+      console.error('Failed to copy message')
     }
   }
 
@@ -385,6 +430,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           onCancel={handleCancel}
           isEditing={editingState}
           editMode={editMode}
+          copied={copied}
         />
       </div>
 

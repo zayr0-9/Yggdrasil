@@ -52,6 +52,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const dispatch = useDispatch()
   const selectedNodes = useSelector((state: RootState) => state.chat.selectedNodes)
   const allMessages = useSelector((state: RootState) => state.chat.conversation.messages)
+  const currentPathIds = useSelector((state: RootState) => state.chat.conversation.currentPath)
 
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -386,6 +387,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     () => (currentChatData ? calculateTreeLayout(currentChatData) : {}),
     [currentChatData, horizontalSpacing, verticalSpacing]
   )
+
+  // Memoized set for quick membership checks of nodes on the current conversation path
+  const currentPathSet = useMemo(() => new Set(currentPathIds ?? []), [currentPathIds])
 
   // After each render commit, mark current nodes as seen.
   // On first paint, prime the set and disable initial animations.
@@ -972,6 +976,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       const isExpanded = !compactMode || node.id === focusedNodeId
       const nodeIdNumber = parseInt(node.id, 10)
       const isNodeSelected = !isNaN(nodeIdNumber) && selectedNodes.includes(nodeIdNumber)
+      const isOnCurrentPath = !isNaN(nodeIdNumber) && currentPathSet.has(nodeIdNumber)
       const isNew = !firstPaintRef.current && !seenNodeIdsRef.current.has(node.id)
 
       if (isExpanded) {
@@ -985,6 +990,20 @@ export const Heimdall: React.FC<HeimdallProps> = ({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
           >
+            {/* Current path highlight (rendered first so selection can appear above) */}
+            {isOnCurrentPath && (
+              <rect
+                width={nodeWidth + 12}
+                height={nodeHeight + 12}
+                x={-6}
+                y={-6}
+                rx='14'
+                fill='none'
+                stroke='oklch(0.9456 0.0247 208 / 85.55%)'
+                strokeWidth='3'
+                className='animate-pulse-slow'
+              />
+            )}
             {/* Selection highlight */}
             {isNodeSelected && (
               <rect
@@ -1044,6 +1063,18 @@ export const Heimdall: React.FC<HeimdallProps> = ({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
           >
+            {/* Current path highlight for compact mode */}
+            {isOnCurrentPath && (
+              <circle
+                cx={x}
+                cy={y + circleRadius}
+                r={circleRadius + 8}
+                fill='none'
+                stroke='rgba(16, 185, 129, 0.9)'
+                strokeWidth='3'
+                className='animate-pulse-slow'
+              />
+            )}
             {/* Selection highlight for compact mode */}
             {isNodeSelected && (
               <circle
