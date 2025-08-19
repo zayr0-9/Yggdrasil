@@ -61,3 +61,14 @@ export const createStreamingRequest = (endpoint: string, options?: RequestInit):
     ...options,
   })
 }
+
+// Specific helpers for conversation system prompt endpoints
+export type SystemPromptGetResponse = { systemPrompt: string | null }
+export type SystemPromptPatchResponse = { id: number; system_prompt: string | null }
+
+export const getConversationSystemPrompt = (conversationId: number) =>
+  api.get<SystemPromptGetResponse>(`/conversations/${conversationId}/system-prompt`)
+
+export const patchConversationSystemPrompt = (conversationId: number, systemPrompt: string | null) =>
+  api.patch<SystemPromptPatchResponse>(`/conversations/${conversationId}/system-prompt`, { systemPrompt })
+

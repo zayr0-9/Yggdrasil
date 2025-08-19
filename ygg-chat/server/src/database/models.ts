@@ -109,6 +109,7 @@ export interface Conversation {
   user_id: number
   title: string | null
   model_name: string
+  system_prompt?: string | null
   created_at: string
   updated_at: string
 }
@@ -181,6 +182,16 @@ export class ConversationService {
   }
 
   static getById(id: number): Conversation | undefined {
+    return statements.getConversationById.get(id) as Conversation | undefined
+  }
+
+  static getSystemPrompt(id: number): string | null {
+    const row = statements.getConversationSystemPrompt.get(id) as { system_prompt: string | null } | undefined
+    return row?.system_prompt ?? null
+  }
+
+  static updateSystemPrompt(id: number, prompt: string | null): Conversation | undefined {
+    statements.updateConversationSystemPrompt.run(prompt, id)
     return statements.getConversationById.get(id) as Conversation | undefined
   }
 

@@ -95,9 +95,13 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     if (target && (target.tagName === 'rect' || target.tagName === 'circle')) {
       return
     }
-    try { e.preventDefault() } catch {}
+    try {
+      e.preventDefault()
+    } catch {}
     // Capture pointer so we continue to receive move/up events outside
-    try { (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId) } catch {}
+    try {
+      ;(e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId)
+    } catch {}
 
     if (e.button === 2) {
       const svgRect = svgRef.current?.getBoundingClientRect()
@@ -162,12 +166,16 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   }
 
   const handlePointerUp = (e: React.PointerEvent<SVGSVGElement>): void => {
-    try { (e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId) } catch {}
+    try {
+      ;(e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId)
+    } catch {}
     handleMouseUp()
   }
 
   const handlePointerCancel = (e: React.PointerEvent<SVGSVGElement>): void => {
-    try { (e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId) } catch {}
+    try {
+      ;(e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId)
+    } catch {}
     handleMouseUp()
   }
   const removeGlobalNoSelect = () => {
@@ -436,14 +444,25 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     if (!root) return
     if (hasCenteredRef.current) return
 
-    const s = zoom
+    // Compute a zoom that fits the current tree bounds into the available viewport
+    const contentW = Math.max(1, bounds.maxX - bounds.minX + 100) // add some horizontal padding
+    const contentH = Math.max(1, bounds.maxY - bounds.minY + 140) // add some vertical padding
+    const availW = Math.max(1, dimensions.width - 120)
+    const availH = Math.max(1, dimensions.height - 180) // account for top controls/help
+    const fitZoom = Math.min(availW / contentW, availH / contentH)
+    const targetZoom = Math.max(0.1, Math.min(3, fitZoom))
+
+    setZoom(targetZoom)
+
+    // Center the root node with the computed zoom
+    const s = targetZoom
     const centerX = dimensions.width / 2
     const centerY = dimensions.height / 2
     const px = centerX - (root.x + offsetX) * s - centerX
-    const py = centerY - (root.y + offsetY) * s - 800 //bigger numer = more to the top
+    const py = centerY - (root.y + offsetY) * s - 300
     setPan({ x: px, y: py })
     hasCenteredRef.current = true
-  }, [positions, dimensions.width, dimensions.height, zoom, offsetX, offsetY, chatData, currentChatData?.id])
+  }, [positions, bounds, dimensions.width, dimensions.height, zoom, offsetX, offsetY, chatData, currentChatData?.id])
 
   useEffect(() => {
     const updateDimensions = (): void => {
@@ -758,7 +777,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const onWindowTouchMove = (e: globalThis.TouchEvent): void => {
     // Prevent page scroll while interacting
     if (isDraggingRef.current || isSelectingRef.current) {
-      try { e.preventDefault() } catch {}
+      try {
+        e.preventDefault()
+      } catch {}
     }
     if (!e.touches || e.touches.length === 0) return
     const t = e.touches[0]
@@ -824,7 +845,13 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   }
 
   const resetView = (): void => {
-    const newZoom = compactMode ? 1 : 0.6
+    // Fit-to-screen zoom based on current bounds and container dimensions
+    const contentW = Math.max(1, bounds.maxX - bounds.minX + 100)
+    const contentH = Math.max(1, bounds.maxY - bounds.minY + 140)
+    const availW = Math.max(1, dimensions.width - 120)
+    const availH = Math.max(1, dimensions.height - 180)
+    const fitZoom = Math.min(availW / contentW, availH / contentH)
+    const newZoom = Math.max(0.1, Math.min(3, fitZoom))
     setZoom(newZoom)
     setFocusedNodeId(null)
     // Recompute base offset based on current bounds

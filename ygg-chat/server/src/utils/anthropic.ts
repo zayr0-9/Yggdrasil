@@ -4,13 +4,13 @@ import fs from 'fs'
 import path from 'path'
 
 export async function generateResponse(
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
   onChunk: (chunk: string) => void,
   model: string = 'claude-3-5-sonnet-latest',
   attachments?: Array<{ mimeType?: string; filePath?: string }>
 ): Promise<void> {
   // Build Anthropic-compatible messages. Start with simple messages
-  let formattedMessages: any[] = messages.map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content }))
+  let formattedMessages: any[] = messages.map(msg => ({ role: msg.role as 'user' | 'assistant' | 'system', content: msg.content }))
 
   const imageAtts = (attachments || []).filter(a => a.filePath)
   if (imageAtts.length > 0) {

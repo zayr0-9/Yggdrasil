@@ -1,9 +1,23 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
 import type { RootState } from '../../store/store'
-import { apiCall, createStreamingRequest, API_BASE } from '../../utils/api'
+import {
+  API_BASE,
+  apiCall,
+  createStreamingRequest,
+  getConversationSystemPrompt,
+  patchConversationSystemPrompt,
+  type SystemPromptPatchResponse,
+} from '../../utils/api'
 import type { Conversation } from '../conversations/conversationTypes'
 import { chatSliceActions } from './chatSlice'
-import { Attachment, BranchMessagePayload, EditMessagePayload, Message, ModelsResponse, SendMessagePayload } from './chatTypes'
+import {
+  Attachment,
+  BranchMessagePayload,
+  EditMessagePayload,
+  Message,
+  ModelsResponse,
+  SendMessagePayload,
+} from './chatTypes'
 // TODO: Import when conversations feature is available
 // import { conversationActions } from '../conversations'
 
@@ -269,7 +283,7 @@ export const sendMessage = createAsyncThunk(
             modelName: modelName,
             // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
             parentId: parent,
-            systemPrompt: input.systemPrompt,
+            systemPrompt: state.chat.systemPrompt,
             provider: serverProvider,
             repeatNum: repeatNum,
             attachmentsBase64,
@@ -294,7 +308,7 @@ export const sendMessage = createAsyncThunk(
             modelName: modelName,
             // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
             parentId: parent,
-            systemPrompt: input.systemPrompt,
+            systemPrompt: state.chat.systemPrompt,
             provider: serverProvider,
             attachmentsBase64,
           }),
@@ -502,9 +516,7 @@ export const editMessageWithBranching = createAsyncThunk(
       const existingMinusDeleted = artifactsExisting.filter(a => !deletedBackup.includes(a))
       const draftDataUrls = drafts.map(d => d.dataUrl)
       const combinedArtifacts = [...existingMinusDeleted, ...draftDataUrls]
-      const attachmentsBase64 = combinedArtifacts.length
-        ? combinedArtifacts.map(dataUrl => ({ dataUrl }))
-        : null
+      const attachmentsBase64 = combinedArtifacts.length ? combinedArtifacts.map(dataUrl => ({ dataUrl })) : null
 
       // Before sending, reflect current image drafts in the UI by appending them
       // to the artifacts of the message being branched from.
@@ -837,13 +849,43 @@ export const updateConversationTitle = createAsyncThunk<Conversation, { id: numb
   }
 )
 
+// Fetch the conversation system prompt and store in state.chat.systemPrompt
+export const fetchSystemPrompt = createAsyncThunk<string | null, number>(
+  'chat/fetchSystemPrompt',
+  async (conversationId, { dispatch, rejectWithValue }) => {
+    try {
+      const res = await getConversationSystemPrompt(conversationId)
+      const value = typeof res.systemPrompt === 'string' ? res.systemPrompt : null
+      dispatch(chatSliceActions.systemPromptSet(value))
+      return value
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch system prompt'
+      return rejectWithValue(message) as any
+    }
+  }
+)
+
+// Update the conversation system prompt on the server and reflect in state
+export const updateSystemPrompt = createAsyncThunk<SystemPromptPatchResponse, { id: number; systemPrompt: string | null }>(
+  'chat/updateSystemPrompt',
+  async ({ id, systemPrompt }, { dispatch, rejectWithValue }) => {
+    try {
+      const updated = await patchConversationSystemPrompt(id, systemPrompt)
+      // Server returns updated Conversation with snake_case system_prompt
+      // Mirror to client state
+      dispatch(chatSliceActions.systemPromptSet((updated as any).system_prompt ?? null))
+      return updated
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update system prompt'
+      return rejectWithValue(message) as any
+    }
+  }
+)
+
 /* Attachments: upload, link, fetch, delete */
 
 // Upload an image file as multipart/form-data to /api/attachments
-export const uploadAttachment = createAsyncThunk<
-  Attachment,
-  { file: File; messageId?: number | null }
->(
+export const uploadAttachment = createAsyncThunk<Attachment, { file: File; messageId?: number | null }>(
   'chat/uploadAttachment',
   async ({ file, messageId }, { dispatch, rejectWithValue }) => {
     try {
@@ -874,10 +916,7 @@ export const uploadAttachment = createAsyncThunk<
 )
 
 // Link existing attachments to a message
-export const linkAttachmentsToMessage = createAsyncThunk<
-  Attachment[],
-  { messageId: number; attachmentIds: number[] }
->(
+export const linkAttachmentsToMessage = createAsyncThunk<Attachment[], { messageId: number; attachmentIds: number[] }>(
   'chat/linkAttachmentsToMessage',
   async ({ messageId, attachmentIds }, { dispatch, rejectWithValue }) => {
     try {
@@ -931,10 +970,7 @@ export const fetchAttachmentsByMessage = createAsyncThunk<Attachment[], { messag
 )
 
 // Delete all attachments for a message
-export const deleteAttachmentsByMessage = createAsyncThunk<
-  { deleted: number },
-  { messageId: number }
->(
+export const deleteAttachmentsByMessage = createAsyncThunk<{ deleted: number }, { messageId: number }>(
   'chat/deleteAttachmentsByMessage',
   async ({ messageId }, { dispatch, rejectWithValue }) => {
     try {

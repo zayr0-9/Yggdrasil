@@ -10,7 +10,8 @@ interface OllamaMessage {
 export async function generateResponse(
   messages: Message[],
   onChunk: (chunk: string) => void,
-  model?: string
+  model?: string,
+  systemPrompt?: string
 ): Promise<void> {
   // Use provided model or get default
   const selectedModel = model || (await modelService.getDefaultModel())
@@ -22,25 +23,22 @@ export async function generateResponse(
     content: msg.content,
   }))
 
-  console.log(
-    'Sending to ollama:',
-    JSON.stringify({
-      model: selectedModel,
-      messages: ollamaMessages,
-      stream: true,
-    })
-  )
+  const requestBody: any = {
+    model: selectedModel,
+    messages: ollamaMessages,
+    stream: true,
+  }
+  if (systemPrompt && systemPrompt.trim().length > 0) {
+    requestBody.system = systemPrompt
+  }
+  console.log('Sending to ollama:', JSON.stringify(requestBody))
   //changed from localhost to 172.31.32.1 to run from wsl
   const response = await fetch('http://172.31.32.1:11434/api/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model: selectedModel,
-      messages: ollamaMessages,
-      stream: true,
-    }),
+    body: JSON.stringify(requestBody),
   })
 
   if (!response.ok) {

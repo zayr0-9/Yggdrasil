@@ -26,6 +26,8 @@ export {
   sendMessage,
   sendMessageToBranch,
   updateMessage,
+  fetchSystemPrompt,
+  updateSystemPrompt,
 } from './chatActions'
 
 // Selectors - grouped by feature
@@ -85,3 +87,4 @@ export {
 } from './chatSelectors'
 
 export { chatSliceActions as actions } from './chatSlice'
+

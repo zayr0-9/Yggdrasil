@@ -34,6 +34,7 @@ export function initializeDatabase() {
       user_id INTEGER NOT NULL,
       title TEXT,
       model_name TEXT DEFAULT 'gemma3:4b',
+      system_prompt TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -182,8 +183,12 @@ export function initializeStatements() {
     createConversation: db.prepare('INSERT INTO conversations (user_id, title, model_name) VALUES (?, ?, ?)'),
     getConversationsByUser: db.prepare('SELECT * FROM conversations WHERE user_id = ? ORDER BY updated_at DESC'),
     getConversationById: db.prepare('SELECT * FROM conversations WHERE id = ?'),
+    getConversationSystemPrompt: db.prepare('SELECT system_prompt FROM conversations WHERE id = ?'),
     updateConversationTitle: db.prepare(
       'UPDATE conversations SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ),
+    updateConversationSystemPrompt: db.prepare(
+      'UPDATE conversations SET system_prompt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
     ),
     updateConversationTimestamp: db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?'),
     deleteConversation: db.prepare('DELETE FROM conversations WHERE id = ?'),

@@ -349,6 +349,43 @@ router.patch(
   })
 )
 
+// Get conversation system prompt
+router.get(
+  '/conversations/:id/system-prompt',
+  asyncHandler(async (req, res) => {
+    const conversationId = parseInt(req.params.id)
+    const conversation = ConversationService.getById(conversationId)
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' })
+    }
+    const systemPrompt = ConversationService.getSystemPrompt(conversationId)
+    res.json({ systemPrompt })
+  })
+)
+
+// Update conversation system prompt
+router.patch(
+  '/conversations/:id/system-prompt',
+  asyncHandler(async (req, res) => {
+    const conversationId = parseInt(req.params.id)
+    const { systemPrompt } = req.body as { systemPrompt?: string | null }
+
+    // Validate existence
+    const existing = ConversationService.getById(conversationId)
+    if (!existing) {
+      return res.status(404).json({ error: 'Conversation not found' })
+    }
+
+    // Validate payload: allow string or null to clear; undefined is invalid
+    if (typeof systemPrompt === 'undefined') {
+      return res.status(400).json({ error: 'systemPrompt is required (string or null)' })
+    }
+
+    const updated = ConversationService.updateSystemPrompt(conversationId, systemPrompt ?? null)
+    res.json(updated)
+  })
+)
+
 //delete conversation
 router.delete(
   '/conversations/:id/',
@@ -405,7 +442,8 @@ router.post(
   '/conversations/:id/messages/repeat',
   asyncHandler(async (req, res) => {
     const conversationId = parseInt(req.params.id)
-    const { content, modelName, parentId: requestedParentId, repeatNum = 1, provider = 'ollama' } = req.body
+    const { content, modelName, parentId: requestedParentId, repeatNum = 1, provider = 'ollama', systemPrompt } =
+      req.body
 
     if (!content) {
       return res.status(400).json({ error: 'Message content required' })
@@ -473,7 +511,8 @@ router.post(
             url: a?.url || undefined,
             mimeType: (a as any)?.mime_type,
             filePath: (a as any)?.file_path,
-          }))
+          })),
+          systemPrompt
         )
 
         if (assistantContent.trim()) {
@@ -509,7 +548,7 @@ router.post(
   asyncHandler(async (req, res) => {
     console.log('received message from client, starting generation')
     const conversationId = parseInt(req.params.id)
-    const { content, messages, modelName, parentId: requestedParentId, provider = 'ollama' } = req.body
+    const { content, messages, modelName, parentId: requestedParentId, provider = 'ollama', systemPrompt } = req.body
 
     if (!content) {
       return res.status(400).json({ error: 'Message content required' })
@@ -585,7 +624,8 @@ router.post(
           url: a?.url || undefined,
           mimeType: (a as any)?.mime_type,
           filePath: (a as any)?.file_path,
-        }))
+        })),
+        systemPrompt
       )
       // console.log('selectedModel', selectedModel)
       // Save complete assistant message with user message as parent
@@ -628,7 +668,8 @@ router.post(
   '/conversations/:id/messages/repeat',
   asyncHandler(async (req, res) => {
     const conversationId = parseInt(req.params.id)
-    const { content, modelName, parentId: requestedParentId, repeatNum = 1, provider = 'ollama' } = req.body
+    const { content, modelName, parentId: requestedParentId, repeatNum = 1, provider = 'ollama', systemPrompt } =
+      req.body
 
     if (!content) {
       return res.status(400).json({ error: 'Message content required' })
@@ -685,7 +726,9 @@ router.post(
             res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk, iteration: i })}\n\n`)
           },
           provider,
-          selectedModel
+          selectedModel,
+          undefined,
+          systemPrompt
         )
 
         if (assistantContent.trim()) {
@@ -719,7 +762,7 @@ router.post(
   '/conversations/:id/messages',
   asyncHandler(async (req, res) => {
     const conversationId = parseInt(req.params.id)
-    const { content, modelName, parentId: requestedParentId, provider = 'ollama' } = req.body
+    const { content, modelName, parentId: requestedParentId, provider = 'ollama', systemPrompt } = req.body
 
     if (!content) {
       return res.status(400).json({ error: 'Message content required' })
@@ -787,7 +830,8 @@ router.post(
           url: a?.url || undefined,
           mimeType: (a as any)?.mime_type,
           filePath: (a as any)?.file_path,
-        }))
+        })),
+        systemPrompt
       )
 
       // Save complete assistant message with user message as parent

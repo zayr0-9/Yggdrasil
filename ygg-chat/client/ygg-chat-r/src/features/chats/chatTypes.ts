@@ -64,7 +64,6 @@ export interface ImageDraft {
 export interface MessageInput {
   content: string
   modelOverride?: string
-  systemPrompt?: string
 }
 
 export interface CompositionState {
@@ -120,6 +119,7 @@ export interface ChatState {
   initialization: InitializationState
   selectedNodes: number[]
   attachments: AttachmentsState
+  systemPrompt: string | null
 }
 
 // Action payloads

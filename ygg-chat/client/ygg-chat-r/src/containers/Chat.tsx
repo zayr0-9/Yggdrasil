@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
-import { Button, ChatMessage, Heimdall, InputTextArea, TextField } from '../components'
+import { Button, ChatMessage, Heimdall, InputTextArea, TextField, SettingsPane } from '../components'
 import {
   chatSliceActions,
   deleteMessage,
@@ -8,6 +8,7 @@ import {
   fetchConversationMessages,
   fetchMessageTree,
   fetchModelsForCurrentProvider,
+  fetchSystemPrompt,
   initializeUserAndConversation,
   refreshCurrentPathAfterDelete,
   selectCanSend,
@@ -107,6 +108,7 @@ function Chat() {
     }
   })
   const [isResizing, setIsResizing] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   useEffect(() => {
     if (!isResizing) return
@@ -170,6 +172,15 @@ function Chat() {
   useEffect(() => {
     if (currentConversationId) {
       dispatch(fetchConversationMessages(currentConversationId))
+    }
+  }, [currentConversationId, dispatch])
+
+  // Fetch system prompt when conversation changes; clear when none selected
+  useEffect(() => {
+    if (currentConversationId) {
+      dispatch(fetchSystemPrompt(currentConversationId))
+    } else {
+      dispatch(chatSliceActions.systemPromptSet(null))
     }
   }, [currentConversationId, dispatch])
 
@@ -630,6 +641,9 @@ function Chat() {
             <Button variant='primary' size='small' onClick={handleRefreshModels}>
               Refresh Models
             </Button>
+            <Button variant='secondary' size='small' onClick={() => setSettingsOpen(true)}>
+              Settings
+            </Button>
             <Button onClick={() => dispatch(chatSliceActions.heimdallCompactModeToggled())}> compact </Button>
             <span className='text-stone-800 dark:text-stone-200 text-sm'>
               Available: {providers.providers.length} providers
@@ -771,6 +785,7 @@ function Chat() {
           onNodeSelect={handleNodeSelect}
         />
       </div>
+      <SettingsPane open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }

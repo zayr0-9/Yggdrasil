@@ -4,13 +4,13 @@ import fs from 'fs'
 import path from 'path'
 
 export async function generateResponse(
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
   onChunk: (chunk: string) => void,
   model: string = 'gemini-2.5-flash',
   attachments?: Array<{ mimeType?: string; filePath?: string }>
 ): Promise<void> {
   // Start with simple role/content messages
-  let formattedMessages: any[] = messages.map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content }))
+  let formattedMessages: any[] = messages.map(msg => ({ role: msg.role as 'user' | 'assistant' | 'system', content: msg.content }))
 
   const imageAtts = (attachments || []).filter(a => a.filePath)
   if (imageAtts.length > 0) {

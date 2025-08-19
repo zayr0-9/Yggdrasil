@@ -30,7 +30,6 @@ const makeInitialState = (): ChatState => ({
     input: {
       content: '',
       modelOverride: undefined,
-      systemPrompt: undefined,
     },
     sending: false,
     validationError: null,
@@ -74,6 +73,7 @@ const makeInitialState = (): ChatState => ({
     byMessage: {},
     backup: {},
   },
+  systemPrompt: null,
 })
 
 const initialState: ChatState = makeInitialState()
@@ -419,6 +419,9 @@ export const chatSlice = createSlice({
         const existing = Array.isArray(msg.artifacts) ? msg.artifacts : []
         msg.artifacts = [...existing, ...artifacts]
       }
+    },
+    systemPromptSet: (state, action: PayloadAction<string | null>) => {
+      state.systemPrompt = action.payload
     },
     stateReset: () => makeInitialState(),
   },
