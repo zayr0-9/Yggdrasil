@@ -37,6 +37,7 @@ const makeInitialState = (): ChatState => ({
     draftMessage: null,
     multiReplyCount: 1,
     imageDrafts: [],
+    editingBranch: false,
   },
   // activeChat:{},
   streaming: {
@@ -71,6 +72,7 @@ const makeInitialState = (): ChatState => ({
   selectedNodes: [],
   attachments: {
     byMessage: {},
+    backup: {},
   },
 })
 
@@ -139,10 +141,21 @@ export const chatSlice = createSlice({
     },
 
     imageDraftsAppended: (state, action: PayloadAction<ImageDraft[]>) => {
-      state.composition.imageDrafts.push(...action.payload)
+      const existing = new Set(state.composition.imageDrafts.map(d => d.dataUrl))
+      for (const draft of action.payload) {
+        if (!existing.has(draft.dataUrl)) {
+          state.composition.imageDrafts.push(draft)
+          existing.add(draft.dataUrl)
+        }
+      }
     },
     imageDraftsCleared: state => {
       state.composition.imageDrafts = []
+    },
+
+    // Branch editing flag
+    editingBranchSet: (state, action: PayloadAction<boolean>) => {
+      state.composition.editingBranch = action.payload
     },
 
     sendingStarted: state => {
@@ -362,6 +375,50 @@ export const chatSlice = createSlice({
     attachmentsClearedForMessage: (state, action: PayloadAction<number>) => {
       const messageId = action.payload
       state.attachments.byMessage[messageId] = []
+    },
+    // When editing a branch, allow removing an artifact image while backing it up for potential restore
+    messageArtifactDeleted: (state, action: PayloadAction<{ messageId: number; index: number }>) => {
+      const { messageId, index } = action.payload
+      const msg = state.conversation.messages.find(m => m.id === messageId)
+      if (!msg || !Array.isArray(msg.artifacts)) return
+      if (index < 0 || index >= msg.artifacts.length) return
+      const removed = msg.artifacts.splice(index, 1)[0]
+      if (!state.attachments.backup[messageId]) state.attachments.backup[messageId] = []
+      // Store removed artifact (base64) in backup bucket for this message
+      state.attachments.backup[messageId].push(removed)
+    },
+    // Restore backed up artifacts to the message (used on cancel)
+    messageArtifactsRestoreFromBackup: (state, action: PayloadAction<{ messageId: number }>) => {
+      const { messageId } = action.payload
+      const backup = state.attachments.backup[messageId]
+      if (!backup || backup.length === 0) return
+      const msg = state.conversation.messages.find(m => m.id === messageId)
+      if (!msg) return
+      const current = Array.isArray(msg.artifacts) ? msg.artifacts : []
+      msg.artifacts = [...current, ...backup]
+      state.attachments.backup[messageId] = []
+    },
+    // Clear backup explicitly (used after creating branch)
+    messageArtifactsBackupCleared: (state, action: PayloadAction<{ messageId: number }>) => {
+      const { messageId } = action.payload
+      state.attachments.backup[messageId] = []
+    },
+    // Update a message's artifacts (e.g., after fetching attachments)
+    messageArtifactsSet: (state, action: PayloadAction<{ messageId: number; artifacts: string[] }>) => {
+      const { messageId, artifacts } = action.payload
+      const msg = state.conversation.messages.find(m => m.id === messageId)
+      if (msg) {
+        msg.artifacts = artifacts
+      }
+    },
+    // Append artifacts to a message (e.g., when user adds image drafts)
+    messageArtifactsAppended: (state, action: PayloadAction<{ messageId: number; artifacts: string[] }>) => {
+      const { messageId, artifacts } = action.payload
+      const msg = state.conversation.messages.find(m => m.id === messageId)
+      if (msg) {
+        const existing = Array.isArray(msg.artifacts) ? msg.artifacts : []
+        msg.artifacts = [...existing, ...artifacts]
+      }
     },
     stateReset: () => makeInitialState(),
   },

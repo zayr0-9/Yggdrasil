@@ -61,7 +61,7 @@ export async function generateResponse(
       : [{ type: 'text', text: String(formattedMessages[lastUserIdx].content || '') }]
     formattedMessages[lastUserIdx] = { role: 'user', content: [...parts, ...existing] }
   }
-
+  console.log(formattedMessages.find(m => m.role === 'user'))
   const { textStream } = await streamText({ model: google(model), messages: formattedMessages as any })
   /*max_tokens, 
   "thinking": {

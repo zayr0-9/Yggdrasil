@@ -1,6 +1,7 @@
 export { Button } from './Button/button'
 export { ChatMessage } from './ChatMessage/ChatMessage'
 export { Heimdall } from './Heimdall/Heimdall'
+export { InputTextArea } from './InputTextArea/InputTextArea'
 export { TextArea } from './TextArea/TextArea'
 export { TextField } from './TextField/TextField'
 // export { ChatInputWithSend } from './components/ChatInputWithSend/ChatInputWithSend'

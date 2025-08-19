@@ -1,6 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
 import type { RootState } from '../../store/store'
-import { apiCall, createStreamingRequest } from '../../utils/api'
+import { apiCall, createStreamingRequest, API_BASE } from '../../utils/api'
 import type { Conversation } from '../conversations/conversationTypes'
 import { chatSliceActions } from './chatSlice'
 import { Attachment, BranchMessagePayload, EditMessagePayload, Message, ModelsResponse, SendMessagePayload } from './chatTypes'
@@ -41,6 +41,33 @@ typescriptconst myAsyncThunk = createAsyncThunk(
 
 //   return response.json()
 // }
+// Helper: convert Blob to data URL
+const blobToDataURL = (blob: Blob): Promise<string> =>
+  new Promise(resolve => {
+    const reader = new FileReader()
+    reader.onloadend = () => resolve(reader.result as string)
+    reader.readAsDataURL(blob)
+  })
+
+// Resolve an attachment's accessible URL from url or file_path
+const resolveAttachmentUrl = (urlOrPath?: string | null, filePath?: string | null): string | null => {
+  const origin = API_BASE.replace(/\/?api\/?$/, '')
+  if (urlOrPath) {
+    if (/^https?:\/\//i.test(urlOrPath)) return urlOrPath
+    if (urlOrPath.startsWith('/')) return `${origin}${urlOrPath}`
+  }
+  if (filePath) {
+    const fp = filePath.replace(/\\/g, '/')
+    if (fp.startsWith('data/uploads/')) {
+      const filename = fp.split('/').pop() || ''
+      if (filename) return `${origin}/uploads/${filename}`
+    }
+    // Fallbacks
+    if (fp.startsWith('/')) return `${origin}${fp}`
+    return `${origin}/${fp}`
+  }
+  return null
+}
 // Model operations - cached and optimized
 export const fetchModels = createAsyncThunk(
   'chat/fetchModels',
@@ -311,6 +338,15 @@ export const sendMessage = createAsyncThunk(
                 dispatch(chatSliceActions.messageAdded(chunk.message))
                 // And update currentPath to navigate to this new node
                 dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
+                // Live-update: append current image drafts to this new user message's artifacts
+                if (drafts.length > 0) {
+                  dispatch(
+                    chatSliceActions.messageArtifactsAppended({
+                      messageId: chunk.message.id,
+                      artifacts: drafts.map(d => d.dataUrl),
+                    })
+                  )
+                }
               }
 
               // For streaming, accumulate or finalize per event
@@ -392,8 +428,22 @@ export const fetchConversationMessages = createAsyncThunk(
   'chat/fetchConversationMessages',
   async (conversationId: number, { dispatch, rejectWithValue }) => {
     try {
-      const messages = await apiCall<Message[]>(`/conversations/${conversationId}/messages`)
+      const raw = await apiCall<Message[]>(`/conversations/${conversationId}/messages`)
+      // Ensure client-only fields exist
+      const messages: Message[] = (raw || []).map(m => ({
+        ...m,
+        pastedContext: Array.isArray((m as any).pastedContext) ? (m as any).pastedContext : [],
+        artifacts: Array.isArray((m as any).artifacts) ? (m as any).artifacts : [],
+      }))
+
       dispatch(chatSliceActions.messagesLoaded(messages))
+
+      // Two-step: fetch attachments for each message
+      for (const msg of messages) {
+        // Fire-and-forget; errors handled inside thunk
+        dispatch(fetchAttachmentsByMessage({ messageId: msg.id }))
+      }
+
       return messages
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch messages')
@@ -444,9 +494,28 @@ export const editMessageWithBranching = createAsyncThunk(
       const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
       const serverProvider = appProvider === 'google' ? 'gemini' : appProvider
       const drafts = state.chat.composition.imageDrafts || []
-      const attachmentsBase64 = drafts.length
-        ? drafts.map(d => ({ dataUrl: d.dataUrl, name: d.name, type: d.type, size: d.size }))
+      // Build attachments: existing artifacts minus deleted (backup) + current drafts
+      const artifactsExisting: string[] = Array.isArray(originalMessage.artifacts)
+        ? (originalMessage.artifacts as string[])
+        : []
+      const deletedBackup: string[] = state.chat.attachments.backup?.[originalMessageId] || []
+      const existingMinusDeleted = artifactsExisting.filter(a => !deletedBackup.includes(a))
+      const draftDataUrls = drafts.map(d => d.dataUrl)
+      const combinedArtifacts = [...existingMinusDeleted, ...draftDataUrls]
+      const attachmentsBase64 = combinedArtifacts.length
+        ? combinedArtifacts.map(dataUrl => ({ dataUrl }))
         : null
+
+      // Before sending, reflect current image drafts in the UI by appending them
+      // to the artifacts of the message being branched from.
+      if (drafts.length > 0) {
+        dispatch(
+          chatSliceActions.messageArtifactsAppended({
+            messageId: originalMessageId,
+            artifacts: drafts.map(d => d.dataUrl),
+          })
+        )
+      }
 
       if (!modelName) {
         throw new Error('No model selected')
@@ -501,6 +570,15 @@ export const editMessageWithBranching = createAsyncThunk(
                 dispatch(chatSliceActions.messageAdded(chunk.message))
                 // And update currentPath to this new user branch node
                 dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
+                // Live-update: append current image drafts to this new user message's artifacts
+                if (drafts.length > 0) {
+                  dispatch(
+                    chatSliceActions.messageArtifactsAppended({
+                      messageId: chunk.message.id,
+                      artifacts: drafts.map(d => d.dataUrl),
+                    })
+                  )
+                }
               }
 
               dispatch(chatSliceActions.streamChunkReceived(chunk))
@@ -525,6 +603,8 @@ export const editMessageWithBranching = createAsyncThunk(
 
       if (messageId) {
         dispatch(chatSliceActions.streamCompleted({ messageId }))
+        // Clear backup after successfully creating the branch
+        dispatch(chatSliceActions.messageArtifactsBackupCleared({ messageId: originalMessageId }))
       }
 
       dispatch(chatSliceActions.sendingCompleted())
@@ -822,6 +902,26 @@ export const fetchAttachmentsByMessage = createAsyncThunk<Attachment[], { messag
     try {
       const attachments = await apiCall<Attachment[]>(`/messages/${messageId}/attachments`)
       dispatch(chatSliceActions.attachmentsSetForMessage({ messageId, attachments }))
+      // Fetch binaries and convert to base64 data URLs
+      const dataUrls: string[] = (
+        await Promise.all(
+          (attachments || []).map(async a => {
+            const url = resolveAttachmentUrl(a.url, a.file_path)
+            if (!url) return null
+            try {
+              const res = await fetch(url)
+              if (!res.ok) return null
+              const blob = await res.blob()
+              const dataUrl = await blobToDataURL(blob)
+              return dataUrl
+            } catch {
+              return null
+            }
+          })
+        )
+      ).filter((x): x is string => Boolean(x))
+
+      dispatch(chatSliceActions.messageArtifactsSet({ messageId, artifacts: dataUrls }))
       return attachments
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch attachments'

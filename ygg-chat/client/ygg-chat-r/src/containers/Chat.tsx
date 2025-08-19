@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
-import { Button, ChatMessage, Heimdall, TextArea, TextField } from '../components'
+import { Button, ChatMessage, Heimdall, InputTextArea, TextField } from '../components'
 import {
   chatSliceActions,
   deleteMessage,
@@ -560,6 +560,7 @@ function Chat() {
                   timestamp={msg.created_at}
                   width='w-full'
                   modelName={msg.model_name}
+                  artifacts={msg.artifacts}
                   onEdit={handleMessageEdit}
                   onBranch={handleMessageBranch}
                   onDelete={handleMessageDelete}
@@ -588,7 +589,7 @@ function Chat() {
         <div className='bg-neutral-100 px-4 py-2 rounded-lg dark:bg-neutral-800'>
           {/* <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>Send Message:</h3> */}
           <div>
-            <TextArea
+            <InputTextArea
               value={messageInput.content}
               onChange={handleInputChange}
               onKeyDown={handleKeyPress}
