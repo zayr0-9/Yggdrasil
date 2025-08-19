@@ -9,8 +9,8 @@ import { asyncHandler } from '../utils/asyncHandler'
 import { convertMessagesToHeimdall } from '../utils/heimdallConverter'
 import { modelService } from '../utils/modelService'
 // import { generateResponse } from '../utils/ollama'
-import { generateResponse } from '../utils/provider'
 import { saveBase64ImageAttachmentsForMessage } from '../utils/attachments'
+import { generateResponse } from '../utils/provider'
 
 const router = express.Router()
 
@@ -470,10 +470,10 @@ router.post(
           provider,
           selectedModel,
           createdAttachments.map(a => ({
-          url: a?.url || undefined,
-          mimeType: (a as any)?.mime_type,
-          filePath: (a as any)?.file_path,
-        }))
+            url: a?.url || undefined,
+            mimeType: (a as any)?.mime_type,
+            filePath: (a as any)?.file_path,
+          }))
         )
 
         if (assistantContent.trim()) {
@@ -529,7 +529,7 @@ router.post(
     if (requestedParentId !== undefined) {
       const parentMessage = MessageService.getById(requestedParentId)
       parentId = parentMessage ? requestedParentId : null
-      console.log(`server | parent id - ${parentId}`)
+      // console.log(`server | parent id - ${parentId}`)
     } else {
       const lastMessage = MessageService.getLastMessage(conversationId)
       if (lastMessage) {
@@ -540,7 +540,7 @@ router.post(
 
     // Save user message with proper parent ID
     const userMessage = MessageService.create(conversationId, 'user', content, parentId)
-    console.log('server | user message', userMessage)
+    // console.log('server | user message', userMessage)
 
     // Setup SSE headers
     res.writeHead(200, {
@@ -564,11 +564,11 @@ router.post(
       // // Get conversation history for context
       // const messages = MessageService.getByConversation(conversationId)
       // const messages = context
-      console.log('server | messages', messages)
+      // console.log('server | messages', messages)
 
       // Ensure latest prompt is included with prior context before generating
       const combinedMessages = Array.isArray(messages) ? [...messages, userMessage] : [userMessage]
-      console.log('server | combined messages', combinedMessages)
+      // console.log('server | combined messages', combinedMessages)
 
       let assistantContent = ''
 
@@ -587,7 +587,7 @@ router.post(
           filePath: (a as any)?.file_path,
         }))
       )
-      console.log('selectedModel', selectedModel)
+      // console.log('selectedModel', selectedModel)
       // Save complete assistant message with user message as parent
       const assistantMessage = MessageService.create(
         conversationId,
@@ -1005,6 +1005,20 @@ router.delete(
     const messageId = parseInt(req.params.id)
     const deleted = AttachmentService.deleteByMessage(messageId)
     res.json({ deleted })
+  })
+)
+
+// Unlink a single attachment from a message (preserve shared attachments)
+router.delete(
+  '/messages/:id/attachments/:attachmentId',
+  asyncHandler(async (req, res) => {
+    const messageId = parseInt(req.params.id)
+    const attachmentId = parseInt(req.params.attachmentId)
+    if (!Number.isFinite(messageId) || !Number.isFinite(attachmentId)) {
+      return res.status(400).json({ error: 'Invalid ids' })
+    }
+    const updated = MessageService.unlinkAttachment(messageId, attachmentId)
+    res.json(updated)
   })
 )
 

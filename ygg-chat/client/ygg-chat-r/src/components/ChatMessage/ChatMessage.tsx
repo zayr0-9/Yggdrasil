@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { TextArea } from '../TextArea/TextArea'
+import { useDispatch } from 'react-redux'
+import { chatSliceActions } from '../../features/chats/chatSlice'
 
 type MessageRole = 'user' | 'assistant' | 'system'
 // Updated to use valid Tailwind classes
@@ -29,6 +31,7 @@ interface ChatMessageProps {
   width: ChatMessageWidth
   modelName?: string
   className?: string
+  artifacts?: string[]
 }
 
 interface MessageActionsProps {
@@ -184,18 +187,23 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   isEditing = false,
   width = 'w-3/5',
   modelName,
+  className,
+  artifacts = [],
 }) => {
+  const dispatch = useDispatch()
   const [editingState, setEditingState] = useState(isEditing)
   const [editContent, setEditContent] = useState(content)
   const [editMode, setEditMode] = useState<'edit' | 'branch'>('edit')
 
   const handleEdit = () => {
+    dispatch(chatSliceActions.editingBranchSet(false))
     setEditingState(true)
     setEditContent(content)
     setEditMode('edit')
   }
 
   const handleBranch = () => {
+    dispatch(chatSliceActions.editingBranchSet(true))
     setEditingState(true)
     setEditContent(content)
     setEditMode('branch')
@@ -205,6 +213,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     if (onEdit && editContent.trim() !== content) {
       onEdit(id, editContent.trim())
     }
+    dispatch(chatSliceActions.editingBranchSet(false))
     setEditingState(false)
   }
 
@@ -212,11 +221,23 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     if (onBranch) {
       onBranch(id, editContent.trim())
     }
+    dispatch(chatSliceActions.editingBranchSet(false))
+    // Clear any image drafts after branching is initiated
+    dispatch(chatSliceActions.imageDraftsCleared())
     setEditingState(false)
   }
 
   const handleCancel = () => {
     setEditContent(content)
+    dispatch(chatSliceActions.editingBranchSet(false))
+    if (editMode === 'branch') {
+      dispatch(chatSliceActions.imageDraftsCleared())
+      // Restore any artifacts deleted during branch editing
+      const numericId = Number(id)
+      if (!Number.isNaN(numericId)) {
+        dispatch(chatSliceActions.messageArtifactsRestoreFromBackup({ messageId: numericId }))
+      }
+    }
     setEditingState(false)
     setEditMode('edit')
   }
@@ -275,6 +296,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   }
 
   const styles = getRoleStyles()
+
+  const handleDeleteArtifact = (index: number) => {
+    const numericId = Number(id)
+    if (Number.isNaN(numericId)) return
+    dispatch(chatSliceActions.messageArtifactDeleted({ messageId: numericId, index }))
+  }
 
   const formatTimestamp = (dateInput: string | Date) => {
     const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
@@ -338,7 +365,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   return (
     <div
       id={`message-${id}`}
-      className={`group rounded-lg p-4 mb-4 ${styles.container} ${width} transition-all duration-200 hover:bg-opacity-80`}
+      className={`group rounded-lg p-4 mb-4 ${styles.container} ${width} transition-all duration-200 hover:bg-opacity-80 ${className ?? ''}`}
     >
       {/* Header with role and actions */}
       <div className='flex items-center justify-between mb-3'>
@@ -394,6 +421,38 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           </ReactMarkdown>
         )}
       </div>
+
+      {/* Artifacts (images) */}
+      {Array.isArray(artifacts) && artifacts.length > 0 && (
+        <div className='mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3'>
+          {artifacts.map((dataUrl, idx) => (
+            <div
+              key={`${id}-artifact-${idx}`}
+              className='relative rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900'
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={dataUrl}
+                alt={`attachment-${idx}`}
+                className='w-full h-64 object-contain bg-neutral-100 dark:bg-neutral-800'
+                loading='lazy'
+              />
+              {editingState && editMode === 'branch' && (
+                <button
+                  type='button'
+                  title='Remove image'
+                  onClick={() => handleDeleteArtifact(idx)}
+                  className='absolute top-2 right-2 z-10 p-1.5 rounded-md bg-neutral-800/70 text-white hover:bg-neutral-700'
+                >
+                  <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
+                  </svg>
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Edit instructions */}
       {editingState && (

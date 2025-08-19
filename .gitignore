@@ -35,7 +35,7 @@ coverage/
 /.next/
 /.expo/
 /.iron-node
-
+ygg-chat/server/src/data/uploads/
 # Server app
 /server/node_modules/
 /server/dist/

@@ -24,7 +24,7 @@ interface TextAreaProps {
   showCharCount?: boolean
 }
 
-export const TextArea: React.FC<TextAreaProps> = ({
+export const InputTextArea: React.FC<TextAreaProps> = ({
   label,
   placeholder = 'Type your message...',
   value = '',
@@ -44,6 +44,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
   const dispatch = useDispatch()
   const focusedMessageId = useSelector(selectFocusedChatMessageId)
   const imageDrafts = useSelector((s: RootState) => s.chat.composition.imageDrafts)
+  const editingBranch = useSelector((s: RootState) => s.chat.composition.editingBranch)
   const id = useId()
   const errorId = `${id}-error`
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -209,8 +210,8 @@ export const TextArea: React.FC<TextAreaProps> = ({
         )}
       </div>
 
-      {/* Image draft previews */}
-      {imageDrafts && imageDrafts.length > 0 && (
+      {/* Image draft previews (hidden while editing a branch) */}
+      {!editingBranch && imageDrafts && imageDrafts.length > 0 && (
         <div className='mt-2 flex flex-wrap gap-2'>
           {imageDrafts.map((img, idx) => (
             <div

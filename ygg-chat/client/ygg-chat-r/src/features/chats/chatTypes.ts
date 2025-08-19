@@ -74,6 +74,7 @@ export interface CompositionState {
   draftMessage: String | null
   multiReplyCount: number
   imageDrafts: ImageDraft[] // base64-encoded images + metadata from drag/drop
+  editingBranch: boolean // true when user is editing a branch; controls UI like hiding image drafts
 }
 
 export interface ConversationState {
@@ -177,4 +178,6 @@ export interface Attachment {
 
 export interface AttachmentsState {
   byMessage: Record<number, Attachment[]>
+  // Backup of deleted image artifacts (as base64 data URLs) per message during branch editing
+  backup: Record<number, string[]>
 }
