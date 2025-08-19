@@ -78,6 +78,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const isDraggingRef = useRef<boolean>(false)
   const isSelectingRef = useRef<boolean>(false)
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  // Refs for latest zoom and pan to avoid stale closures inside wheel listener
+  const zoomRef = useRef<number>(zoom)
+  const panRef = useRef<{ x: number; y: number }>(pan)
   // Global text selection suppression while panning (originated in Heimdall)
   const addGlobalNoSelect = () => {
     try {
@@ -184,6 +187,14 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       } catch {}
     }
   }, [])
+
+  // Keep refs in sync with latest state for out-of-react listeners
+  useEffect(() => {
+    zoomRef.current = zoom
+  }, [zoom])
+  useEffect(() => {
+    panRef.current = pan
+  }, [pan])
 
   // When switching conversations, drop any cached tree so a blank/new conversation
   // does not render the previous conversation's tree.
@@ -457,9 +468,45 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       e.preventDefault()
       e.stopPropagation()
 
-      // Handle zoom
+      // Handle zoom centered at the cursor position
+      const svgEl = svgRef.current
+      if (!svgEl) {
+        const deltaFallback = e.deltaY > 0 ? 0.9 : 1.1
+        setZoom(prev => Math.max(0.1, Math.min(3, prev * deltaFallback)))
+        return
+      }
+
+      const rect = svgEl.getBoundingClientRect()
+      const cursorX = e.clientX - rect.left
+      const cursorY = e.clientY - rect.top
+
+      const currentZoom = zoomRef.current
       const delta = e.deltaY > 0 ? 0.9 : 1.1
-      setZoom(prev => Math.max(0.1, Math.min(3, prev * delta)))
+      const newZoom = Math.max(0.1, Math.min(3, currentZoom * delta))
+
+      // No change
+      if (newZoom === currentZoom) return
+
+      const currentPan = panRef.current
+
+      // Outer group transform components (derive width from current SVG rect to avoid stale dimensions)
+      const tx = currentPan.x + rect.width / 2
+      const ty = currentPan.y + 100
+
+      // Use stable inner offset if available, else fall back to computed values
+      const ox = offsetRef.current ? offsetRef.current.x : offsetX
+      const oy = offsetRef.current ? offsetRef.current.y : offsetY
+
+      // Convert cursor screen position to world coordinates under current transform
+      const worldX = (cursorX - tx) / currentZoom - ox
+      const worldY = (cursorY - ty) / currentZoom - oy
+
+      // Compute new pan so that the same world point stays under the cursor after zoom
+      const newPanX = cursorX - (worldX + ox) * newZoom - rect.width / 2
+      const newPanY = cursorY - (worldY + oy) * newZoom - 100
+
+      setZoom(newZoom)
+      setPan({ x: newPanX, y: newPanY })
     }
 
     // Add wheel listener with passive: false to allow preventDefault
