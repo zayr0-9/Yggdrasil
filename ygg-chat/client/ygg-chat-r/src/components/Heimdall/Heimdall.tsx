@@ -450,7 +450,8 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     const availW = Math.max(1, dimensions.width - 120)
     const availH = Math.max(1, dimensions.height - 180) // account for top controls/help
     const fitZoom = Math.min(availW / contentW, availH / contentH)
-    const targetZoom = Math.max(0.1, Math.min(3, fitZoom))
+    const preferredMaxInitialZoom = 0.8
+    const targetZoom = Math.max(0.1, Math.min(3, Math.min(fitZoom, preferredMaxInitialZoom)))
 
     setZoom(targetZoom)
 
@@ -851,7 +852,8 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     const availW = Math.max(1, dimensions.width - 120)
     const availH = Math.max(1, dimensions.height - 180)
     const fitZoom = Math.min(availW / contentW, availH / contentH)
-    const newZoom = Math.max(0.1, Math.min(3, fitZoom))
+    const preferredMaxInitialZoom = 0.8
+    const newZoom = Math.max(0.1, Math.min(3, Math.min(fitZoom, preferredMaxInitialZoom)))
     setZoom(newZoom)
     setFocusedNodeId(null)
     // Recompute base offset based on current bounds

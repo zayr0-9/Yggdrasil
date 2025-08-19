@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
-import { Button, ChatMessage, Heimdall, InputTextArea, TextField, SettingsPane } from '../components'
+import { Button, ChatMessage, Heimdall, InputTextArea, SettingsPane, TextField } from '../components'
 import {
   chatSliceActions,
   deleteMessage,
@@ -763,7 +763,7 @@ function Chat() {
       </div>
 
       <div
-        className='w-1 bg-neutral-300 dark:bg-neutral-700 hover:bg-blue-400 cursor-col-resize select-none'
+        className='w-2 bg-neutral-300 dark:bg-neutral-700 hover:bg-blue-400 cursor-col-resize select-none'
         role='separator'
         aria-orientation='vertical'
         onMouseDown={() => setIsResizing(true)}

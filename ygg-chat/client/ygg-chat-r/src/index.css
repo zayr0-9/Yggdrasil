@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 @plugin "@tailwindcss/typography";
+/* Highlight.js theme for rehype-highlight (dark) */
+@import 'highlight.js/styles/github-dark.css';
 
 /* Markdown code styling */
 .prose pre:not(.not-prose) {
@@ -7,7 +9,18 @@
 }
 
 .prose :not(pre) > code {
-  @apply bg-gray-100 text-gray-800 dark:bg-neutral-800 dark:text-neutral-100 rounded px-1 py-0.5;
+  /* Inline code should be visually distinct from blocks and stay inline */
+  @apply inline bg-gray-200 text-gray-800 dark:bg-neutral-900 dark:text-neutral-100 rounded px-1 py-0.5 whitespace-pre-wrap;
+  /* Ensure background/padding only wrap the actual text across soft wraps */
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Safety net: handle nested inline code (e.g., p > strong > code) and force inline layout */
+.prose :not(pre) code {
+  display: inline !important;
+  width: auto !important;
+  max-width: max-content;
 }
 
 /* Inline code cleaned above; code inside pre is left unstyled here */
@@ -21,6 +34,25 @@
   @apply bg-neutral-800 text-neutral-100;
 }
 
+/* Ensure nested inline code stays inline in dark mode too */
+.dark .prose :not(pre) code {
+  display: inline !important;
+  width: auto !important;
+}
+
+/* Fix: Remove highlight.js background/padding on code element inside blocks. We style the <pre> instead. */
+.prose pre code.hljs {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+/* Nuke any nested token backgrounds inside highlighted code */
+.prose pre code.hljs *,
+.prose pre .hljs *,
+.prose pre .hljs {
+  background: transparent !important;
+}
+
 /* code inside pre inherits pre styles; no extra styling here */
 
 /* Remove backticks that typography plugin injects for code blocks */
@@ -30,6 +62,12 @@
 }
 .dark .prose pre code::before,
 .dark .prose pre code::after {
+  content: none !important;
+}
+
+/* Also remove injected backticks for inline code */
+.prose :not(pre) > code::before,
+.prose :not(pre) > code::after {
   content: none !important;
 }
 

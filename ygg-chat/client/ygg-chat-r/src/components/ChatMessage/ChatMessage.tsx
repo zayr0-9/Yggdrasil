@@ -1,9 +1,10 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { TextArea } from '../TextArea/TextArea'
 import { useDispatch } from 'react-redux'
 import { chatSliceActions } from '../../features/chats/chatSlice'
+import rehypeHighlight from 'rehype-highlight'
 
 type MessageRole = 'user' | 'assistant' | 'system'
 // Updated to use valid Tailwind classes
@@ -313,7 +314,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   // Custom renderer for markdown code blocks to add a copy button
   const CodeRenderer: React.FC<any> = ({ inline, className, children, ...props }) => {
-    // Inline code: render as-is
+    const [copied, setCopied] = useState(false)
+    const codeRef = useRef<HTMLElement | null>(null)
+
+    // Inline code: render as-is; rehype-highlight does not target inline code
     if (inline) {
       return (
         <code className={className} {...props}>
@@ -322,12 +326,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       )
     }
 
-    const [copied, setCopied] = useState(false)
-    const code = String(children ?? '').replace(/\n$/, '')
-
     const handleCopyCode = async () => {
       try {
-        await navigator.clipboard.writeText(code)
+        const plain = codeRef.current?.innerText ?? ''
+        await navigator.clipboard.writeText(plain)
         setCopied(true)
         setTimeout(() => setCopied(false), 1500)
       } catch (err) {
@@ -347,15 +349,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             {copied ? 'Copied' : 'Copy'}
           </button>
         )}
-        {/* code block colours */}
-        <pre
-          className={`not-prose overflow-auto rounded-lg border-0 ring-0 outline-none shadow-none bg-gray-100 text-gray-800 dark:bg-neutral-900 dark:text-neutral-100 p-3`}
-        >
-          <code
-            className={`${className ?? ''} bg-transparent p-0 m-0 border-0 shadow-none outline-none ring-0`}
-            {...props}
-          >
-            {code}
+        {/* code block container */}
+        <pre className={`not-prose overflow-auto rounded-lg border-0 ring-0 outline-none shadow-none bg-gray-100 text-gray-800 dark:bg-neutral-900 dark:text-neutral-100 p-3`}>
+          {/* Preserve highlighted markup produced by rehype-highlight */}
+          <code ref={codeRef} className={`${className ?? ''} bg-transparent p-0 m-0 border-0 shadow-none outline-none ring-0`} {...props}>
+            {children}
           </code>
         </pre>
       </div>
@@ -416,7 +414,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             }}
           />
         ) : (
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeRenderer }}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ code: CodeRenderer }}>
             {content}
           </ReactMarkdown>
         )}
