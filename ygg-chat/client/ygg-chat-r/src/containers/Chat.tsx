@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { Button, ChatMessage, Heimdall, InputTextArea, SettingsPane, TextField } from '../components'
 import {
+  abortStreaming,
   chatSliceActions,
   deleteMessage,
   editMessageWithBranching,
@@ -245,7 +246,14 @@ function Chat() {
       // Smooth scroll when not streaming
       scrollToBottom('smooth')
     }
-  }, [displayMessages, streamState.buffer, streamState.active, streamState.finished, selectedPath])
+  }, [
+    displayMessages,
+    streamState.buffer,
+    streamState.thinkingBuffer,
+    streamState.active,
+    streamState.finished,
+    selectedPath,
+  ])
 
   // Cleanup any pending rAF on unmount
   useEffect(() => {
@@ -404,15 +412,15 @@ function Chat() {
     userScrolledDuringStreamRef.current = false
     if (canSend && currentConversationId) {
       // Compute parent message index (last selected path item, if any)
-      const parent: number | null = selectedPath.length > 0 ? selectedPath[selectedPath.length - 1] : null
+      const parent: number = selectedPath.length > 0 ? selectedPath[selectedPath.length - 1] : 0
 
       // Dispatch a single sendMessage with repeatNum set to value.
       dispatch(
         sendMessage({
           conversationId: currentConversationId,
           input: messageInput,
+          parent,
           repeatNum: value,
-          parent: parent ?? undefined,
         })
       )
     } else if (!currentConversationId) {
@@ -420,20 +428,11 @@ function Chat() {
     }
   }
 
-  // Handle sending message
-  // const handleSend = () => {
-  //   if (canSend && currentConversationId) {
-  //     // Send message
-  //     dispatch(
-  //       sendMessage({
-  //         conversationId: currentConversationId,
-  //         input: messageInput,
-  //       })
-  //     )
-  //   } else if (!currentConversationId) {
-  //     console.error('📤 No conversation ID available')
-  //   }
-  // }
+  const handleStopGeneration = () => {
+    if (streamState.streamingMessageId) {
+      dispatch(abortStreaming({ messageId: streamState.streamingMessageId }))
+    }
+  }
 
   const handleMessageEdit = (id: string, newContent: string) => {
     dispatch(chatSliceActions.messageUpdated({ id: parseInt(id), content: newContent }))
@@ -568,6 +567,7 @@ function Chat() {
                   id={msg.id.toString()}
                   role={msg.role}
                   content={msg.content}
+                  thinking={msg.thinking_block}
                   timestamp={msg.created_at}
                   width='w-full'
                   modelName={msg.model_name}
@@ -581,11 +581,12 @@ function Chat() {
             )}
 
             {/* Show streaming content */}
-            {streamState.active && streamState.buffer && (
+            {streamState.active && (Boolean(streamState.buffer) || Boolean(streamState.thinkingBuffer)) && (
               <ChatMessage
                 id='streaming'
                 role='assistant'
                 content={streamState.buffer}
+                thinking={streamState.thinkingBuffer}
                 width='w-full'
                 modelName={selectedModel || undefined}
                 className=''
@@ -638,6 +639,16 @@ function Chat() {
                     ? 'Sending...'
                     : 'Send'}
             </Button>
+            {streamState.active && (
+              <Button
+                variant='secondary'
+                onClick={handleStopGeneration}
+                className='ml-2'
+                disabled={!streamState.streamingMessageId}
+              >
+                Stop
+              </Button>
+            )}
             <Button variant='primary' size='small' onClick={handleRefreshModels}>
               Refresh Models
             </Button>

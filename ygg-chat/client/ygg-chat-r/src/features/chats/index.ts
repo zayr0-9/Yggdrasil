@@ -17,6 +17,7 @@ export { default as chatReducer, chatSliceActions } from './chatSlice'
 
 // Async actions
 export {
+  abortStreaming,
   deleteMessage,
   editMessageWithBranching,
   fetchModels,

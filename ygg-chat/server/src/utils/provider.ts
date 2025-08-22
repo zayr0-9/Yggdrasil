@@ -28,7 +28,8 @@ export async function generateResponse(
   provider: ProviderType,
   model?: string,
   attachments?: Array<{ url?: string; mimeType?: string; filePath?: string }>,
-  systemPrompt?: string
+  systemPrompt?: string,
+  abortSignal?: AbortSignal
 ): Promise<void> {
   const providerModel = getProviderModel(provider, model)
 
@@ -87,7 +88,7 @@ export async function generateResponse(
     case 'gemini': {
       // Forward attachments so Gemini can inline images
       const geminiAttachments = (attachments || []).map(a => ({ mimeType: a.mimeType, filePath: a.filePath }))
-      return geminiGenerate(aiSdkForGemini, onChunk, providerModel, geminiAttachments)
+      return geminiGenerate(aiSdkForGemini, onChunk, providerModel, geminiAttachments, abortSignal)
     }
     case 'anthropic': {
       // For Anthropic, forward attachments so we can construct image+text content parts

@@ -42,9 +42,11 @@ const makeInitialState = (): ChatState => ({
   streaming: {
     active: false,
     buffer: '',
+    thinkingBuffer: '',
     messageId: null,
     error: null,
     finished: false,
+    streamingMessageId: null,
   },
   ui: {
     modelSelectorOpen: false,
@@ -162,8 +164,10 @@ export const chatSlice = createSlice({
       state.composition.sending = true
       state.streaming.active = true
       state.streaming.buffer = ''
+      state.streaming.thinkingBuffer = ''
       state.streaming.error = null
       state.streaming.finished = false
+      state.streaming.streamingMessageId = null
     },
 
     sendingCompleted: state => {
@@ -172,6 +176,14 @@ export const chatSlice = createSlice({
       state.composition.input.content = ''
       state.composition.imageDrafts = []
       state.streaming.finished = true
+      state.streaming.streamingMessageId = null
+    },
+
+    streamingAborted: state => {
+      state.composition.sending = false
+      state.streaming.active = false
+      state.streaming.error = 'Generation aborted'
+      state.streaming.streamingMessageId = null
     },
 
     // Streaming - optimized buffer management
@@ -179,18 +191,29 @@ export const chatSlice = createSlice({
       const chunk = action.payload
       if (chunk.type === 'reset') {
         state.streaming.buffer = ''
+        state.streaming.thinkingBuffer = ''
         state.streaming.error = null
         return
       }
 
-      if (chunk.type === 'chunk') {
-        state.streaming.buffer += chunk.content || ''
+      if (chunk.type === 'generation_started') {
+        state.streaming.streamingMessageId = chunk.messageId || null
+      } else if (chunk.type === 'chunk') {
+        if (chunk.part === 'reasoning') {
+          const delta = chunk.delta ?? chunk.content ?? ''
+          state.streaming.thinkingBuffer += delta
+        } else {
+          const delta = chunk.delta ?? chunk.content ?? ''
+          state.streaming.buffer += delta
+        }
       } else if (chunk.type === 'complete') {
         state.streaming.messageId = chunk.message?.id || null
         state.streaming.active = false
+        state.streaming.streamingMessageId = null
       } else if (chunk.type === 'error') {
         state.streaming.error = chunk.error || 'Unknown stream error'
         state.streaming.active = false
+        state.streaming.streamingMessageId = null
       }
     },
 

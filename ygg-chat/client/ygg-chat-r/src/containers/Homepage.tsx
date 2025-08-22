@@ -84,7 +84,12 @@ const Homepage: React.FC = () => {
   return (
     <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900'>
       <div className='p-6 max-w-3xl mx-auto'>
-        <h1 className='text-2xl font-bold mb-4 dark:text-neutral-100'>Conversations</h1>
+        <div className='flex items-center justify-between mb-4'>
+          <h1 className='text-2xl font-bold dark:text-neutral-100'>Conversations</h1>
+          <Button variant='outline' size='small' onClick={() => navigate('/settings')}>
+            Settings
+          </Button>
+        </div>
 
         {/* Search Field */}
         <div className='mb-6 relative'>

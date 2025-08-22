@@ -49,6 +49,8 @@ export const selectStreamState = createSelector([selectChatState], chat => chat.
 
 export const selectStreamBuffer = createSelector([selectStreamState], stream => stream.buffer)
 
+export const selectThinkingBuffer = createSelector([selectStreamState], stream => stream.thinkingBuffer)
+
 export const selectStreamError = createSelector([selectStreamState], stream => stream.error)
 
 export const selectIsStreaming = createSelector([selectStreamState], stream => stream.active)

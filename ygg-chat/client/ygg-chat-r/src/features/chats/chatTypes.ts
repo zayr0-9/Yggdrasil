@@ -16,18 +16,28 @@ export interface miniMessage {
 
 // Stream-specific types
 export interface StreamChunk {
-  type: 'chunk' | 'complete' | 'error' | 'user_message' | 'reset'
+  type: 'chunk' | 'complete' | 'error' | 'user_message' | 'reset' | 'generation_started'
   content?: string
+  // delta is used for token-level updates from the server
+  delta?: string
+  // part distinguishes normal text from reasoning tokens
+  part?: 'text' | 'reasoning'
   message?: Message
   error?: string
+  // optional iteration index for multi-reply endpoints
+  iteration?: number
+  messageId?: number
 }
 
 export interface StreamState {
   active: boolean
   buffer: string
+  // separate buffer for reasoning/thinking tokens while streaming
+  thinkingBuffer: string
   messageId: number | null
   error: string | null
   finished: boolean
+  streamingMessageId: number | null
 }
 
 // Model types - simplified to match server

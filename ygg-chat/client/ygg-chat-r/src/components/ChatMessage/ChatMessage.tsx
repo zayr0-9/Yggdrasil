@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import { TextArea } from '../TextArea/TextArea'
 import { useDispatch } from 'react-redux'
-import { chatSliceActions } from '../../features/chats/chatSlice'
 import rehypeHighlight from 'rehype-highlight'
+import remarkGfm from 'remark-gfm'
+import { chatSliceActions } from '../../features/chats/chatSlice'
+import { Button } from '../Button/button'
+import { TextArea } from '../TextArea/TextArea'
 
 type MessageRole = 'user' | 'assistant' | 'system'
 // Updated to use valid Tailwind classes
@@ -22,6 +23,7 @@ interface ChatMessageProps {
   id: string
   role: MessageRole
   content: string
+  thinking?: string
   timestamp?: string | Date
   onEdit?: (id: string, newContent: string) => void
   onBranch?: (id: string, newContent: string) => void
@@ -191,6 +193,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   id,
   role,
   content,
+  thinking,
   timestamp,
   onEdit,
   onBranch,
@@ -208,6 +211,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const [editContent, setEditContent] = useState(content)
   const [editMode, setEditMode] = useState<'edit' | 'branch'>('edit')
   const [copied, setCopied] = useState(false)
+  // Toggle visibility of the reasoning/thinking block
+  const [showThinking, setShowThinking] = useState(true)
 
   const handleEdit = () => {
     dispatch(chatSliceActions.editingBranchSet(false))
@@ -256,6 +261,37 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     setEditMode('edit')
   }
 
+  const handleCopy = async () => {
+    if (onCopy) {
+      onCopy(content)
+    }
+    const ok = await copyPlainText(content)
+    if (ok) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } else {
+      console.error('Failed to copy message')
+    }
+  }
+
+  const handleDelete = () => {
+    if (onDelete) {
+      onDelete(id)
+    }
+  }
+
+  const handleResend = () => {
+    if (onResend) {
+      onResend(id)
+    }
+  }
+
+  const handleDeleteArtifact = (index: number) => {
+    const numericId = Number(id)
+    if (Number.isNaN(numericId)) return
+    dispatch(chatSliceActions.messageArtifactDeleted({ messageId: numericId, index }))
+  }
+
   const copyPlainText = async (text: string) => {
     // Try async clipboard API first
     try {
@@ -284,31 +320,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     } catch (err) {
       console.error('Copy fallback failed:', err)
       return false
-    }
-  }
-
-  const handleCopy = async () => {
-    if (onCopy) {
-      onCopy(content)
-    }
-    const ok = await copyPlainText(content)
-    if (ok) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } else {
-      console.error('Failed to copy message')
-    }
-  }
-
-  const handleDelete = () => {
-    if (onDelete) {
-      onDelete(id)
-    }
-  }
-
-  const handleResend = () => {
-    if (onResend) {
-      onResend(id)
     }
   }
 
@@ -343,12 +354,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const styles = getRoleStyles()
 
-  const handleDeleteArtifact = (index: number) => {
-    const numericId = Number(id)
-    if (Number.isNaN(numericId)) return
-    dispatch(chatSliceActions.messageArtifactDeleted({ messageId: numericId, index }))
-  }
-
   const formatTimestamp = (dateInput: string | Date) => {
     const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
     if (isNaN(date.getTime())) {
@@ -357,23 +362,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
-  // Custom renderer for markdown code blocks to add a copy button
-  const CodeRenderer: React.FC<any> = ({ inline, className, children, ...props }) => {
+  // Custom renderer for block code (<pre>) to add a copy button while preserving valid HTML structure
+  const PreRenderer: React.FC<any> = ({ children, ...props }) => {
     const [copied, setCopied] = useState(false)
-    const codeRef = useRef<HTMLElement | null>(null)
-
-    // Inline code: render as-is; rehype-highlight does not target inline code
-    if (inline) {
-      return (
-        <code className={className} {...props}>
-          {children}
-        </code>
-      )
-    }
+    const preRef = useRef<HTMLPreElement | null>(null)
 
     const handleCopyCode = async () => {
       try {
-        const plain = codeRef.current?.innerText ?? ''
+        const plain = preRef.current?.innerText ?? ''
         await navigator.clipboard.writeText(plain)
         setCopied(true)
         setTimeout(() => setCopied(false), 1500)
@@ -385,21 +381,22 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     return (
       <div className='relative group my-3 not-prose'>
         {role === 'assistant' && (
-          <button
+          <Button
             type='button'
             onClick={handleCopyCode}
-            title='Copy code'
-            className='absolute top-2 right-2 z-10 text-xs px-2 py-1 rounded bg-neutral-700 text-white hover:bg-neutral-600 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity duration-150'
+            className='absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-150 border-1 text-slate-900 dark:text-white border-neutral-600 dark:border-neutral-600 dark:hover:bg-neutral-700'
+            size='smaller'
+            variant='outline'
           >
             {copied ? 'Copied' : 'Copy'}
-          </button>
+          </Button>
         )}
-        {/* code block container */}
-        <pre className={`not-prose overflow-auto rounded-lg border-0 ring-0 outline-none shadow-none bg-gray-100 text-gray-800 dark:bg-neutral-900 dark:text-neutral-100 p-3`}>
-          {/* Preserve highlighted markup produced by rehype-highlight */}
-          <code ref={codeRef} className={`${className ?? ''} bg-transparent p-0 m-0 border-0 shadow-none outline-none ring-0`} {...props}>
-            {children}
-          </code>
+        <pre
+          ref={preRef}
+          className={`not-prose overflow-auto rounded-lg border-0 ring-0 outline-none shadow-none bg-gray-100 text-gray-900 dark:bg-neutral-900 dark:text-neutral-100 p-3`}
+          {...props}
+        >
+          {children}
         </pre>
       </div>
     )
@@ -434,6 +431,35 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         />
       </div>
 
+      {/* Reasoning / thinking block */}
+      {typeof thinking === 'string' && thinking.trim().length > 0 && (
+        <div className='mb-3 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/40 dark:bg-neutral-900'>
+          <div className='mb-2 flex items-center justify-between'>
+            <div className='text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300'>
+              Reasoning
+            </div>
+            <Button
+              type='button'
+              onClick={() => setShowThinking(s => !s)}
+              className='ml-2 text-xs px-2 py-1 border-1 border-amber-300 text-amber-800 dark:text-amber-300 dark:border-amber-900/60 hover:bg-amber-100 dark:hover:bg-neutral-800'
+              size='smaller'
+              variant='outline'
+              aria-expanded={showThinking}
+              aria-controls={`reasoning-content-${id}`}
+            >
+              {showThinking ? 'Hide' : 'Show'}
+            </Button>
+          </div>
+          {showThinking && (
+            <div id={`reasoning-content-${id}`} className='prose max-w-none dark:prose-invert w-full text-sm'>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ pre: PreRenderer }}>
+                {thinking}
+              </ReactMarkdown>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Message content */}
       <div className='prose max-w-none dark:prose-invert w-full text-base'>
         {editingState ? (
@@ -460,7 +486,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             }}
           />
         ) : (
-          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ code: CodeRenderer }}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeHighlight]}
+            components={{ pre: PreRenderer }}
+          >
             {content}
           </ReactMarkdown>
         )}

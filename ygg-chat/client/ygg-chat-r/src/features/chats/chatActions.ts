@@ -241,7 +241,7 @@ export const sendMessage = createAsyncThunk(
       const { messages: currentMessages } = state.chat.conversation
       const currentPathIds = state.chat.conversation.currentPath
       const currentPathMessages = currentPathIds.map(id => currentMessages.find(m => m.id === id))
-      console.log('currentPathMessages', currentPathMessages)
+      // console.log('currentPathMessages', currentPathMessages)
       const modelName = input.modelOverride || state.chat.models.selected || state.chat.models.default
       // Map UI provider to server provider id
       const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
@@ -256,7 +256,7 @@ export const sendMessage = createAsyncThunk(
       if (!modelName) {
         throw new Error('No model selected')
       }
-      console.log('last currentMessage - ', currentMessages?.at(-1)?.id)
+      // console.log('last currentMessage - ', currentMessages?.at(-1)?.id)
 
       console.log(
         'finalMessage sent to the server ---------------------- ',
@@ -301,6 +301,7 @@ export const sendMessage = createAsyncThunk(
               parent_id: m.parent_id,
               children_ids: m.children_ids,
               role: m.role,
+              thinking_block: m.thinking_block,
               content: m.content,
               created_at: m.created_at,
             })),
@@ -364,7 +365,9 @@ export const sendMessage = createAsyncThunk(
               }
 
               // For streaming, accumulate or finalize per event
-              if (chunk.type === 'chunk') {
+              if (chunk.type === 'generation_started') {
+                dispatch(chatSliceActions.streamChunkReceived(chunk))
+              } else if (chunk.type === 'chunk') {
                 dispatch(chatSliceActions.streamChunkReceived(chunk))
               } else if (chunk.type === 'complete' && chunk.message) {
                 // Push each assistant reply as its own message
@@ -483,7 +486,7 @@ export const deleteMessage = createAsyncThunk(
 export const editMessageWithBranching = createAsyncThunk(
   'chat/editMessageWithBranching',
   async (
-    { conversationId, originalMessageId, newContent, modelOverride, systemPrompt }: EditMessagePayload,
+    { conversationId, originalMessageId, newContent, modelOverride }: EditMessagePayload,
     { dispatch, getState, rejectWithValue, signal }
   ) => {
     dispatch(chatSliceActions.sendingStarted())
@@ -496,7 +499,10 @@ export const editMessageWithBranching = createAsyncThunk(
 
       const state = getState() as RootState
       const originalMessage = state.chat.conversation.messages.find(m => m.id === originalMessageId)
-
+      const { messages: currentMessages } = state.chat.conversation
+      const currentPathIds = state.chat.conversation.currentPath
+      const currentPathMessages = currentPathIds.map(id => currentMessages.find(m => m.id === id))
+      console.log('currentPathMessages branch ---', currentPathMessages)
       if (!originalMessage) {
         throw new Error('Original message not found')
       }
@@ -538,10 +544,20 @@ export const editMessageWithBranching = createAsyncThunk(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          messages: currentPathMessages.map(m => ({
+            id: m.id,
+            conversation_id: m.conversation_id,
+            parent_id: m.parent_id,
+            children_ids: m.children_ids,
+            role: m.role,
+            thinking_block: m.thinking_block,
+            content: m.content,
+            created_at: m.created_at,
+          })),
           content: newContent,
           modelName,
           parentId: parentId, // Branch from the same parent as original
-          systemPrompt,
+          systemPrompt: state.chat.systemPrompt,
           provider: serverProvider,
           attachmentsBase64,
         }),
@@ -593,7 +609,11 @@ export const editMessageWithBranching = createAsyncThunk(
                 }
               }
 
-              dispatch(chatSliceActions.streamChunkReceived(chunk))
+              if (chunk.type === 'generation_started') {
+                dispatch(chatSliceActions.streamChunkReceived(chunk))
+              } else {
+                dispatch(chatSliceActions.streamChunkReceived(chunk))
+              }
 
               if (chunk.type === 'complete' && chunk.message) {
                 messageId = chunk.message.id
@@ -708,7 +728,11 @@ export const sendMessageToBranch = createAsyncThunk(
                 dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
               }
 
-              dispatch(chatSliceActions.streamChunkReceived(chunk))
+              if (chunk.type === 'generation_started') {
+                dispatch(chatSliceActions.streamChunkReceived(chunk))
+              } else {
+                dispatch(chatSliceActions.streamChunkReceived(chunk))
+              }
 
               if (chunk.type === 'complete' && chunk.message) {
                 messageId = chunk.message.id
@@ -866,21 +890,21 @@ export const fetchSystemPrompt = createAsyncThunk<string | null, number>(
 )
 
 // Update the conversation system prompt on the server and reflect in state
-export const updateSystemPrompt = createAsyncThunk<SystemPromptPatchResponse, { id: number; systemPrompt: string | null }>(
-  'chat/updateSystemPrompt',
-  async ({ id, systemPrompt }, { dispatch, rejectWithValue }) => {
-    try {
-      const updated = await patchConversationSystemPrompt(id, systemPrompt)
-      // Server returns updated Conversation with snake_case system_prompt
-      // Mirror to client state
-      dispatch(chatSliceActions.systemPromptSet((updated as any).system_prompt ?? null))
-      return updated
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update system prompt'
-      return rejectWithValue(message) as any
-    }
+export const updateSystemPrompt = createAsyncThunk<
+  SystemPromptPatchResponse,
+  { id: number; systemPrompt: string | null }
+>('chat/updateSystemPrompt', async ({ id, systemPrompt }, { dispatch, rejectWithValue }) => {
+  try {
+    const updated = await patchConversationSystemPrompt(id, systemPrompt)
+    // Server returns updated Conversation with snake_case system_prompt
+    // Mirror to client state
+    dispatch(chatSliceActions.systemPromptSet((updated as any).system_prompt ?? null))
+    return updated
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update system prompt'
+    return rejectWithValue(message) as any
   }
-)
+})
 
 /* Attachments: upload, link, fetch, delete */
 
@@ -1003,6 +1027,31 @@ export const fetchAttachmentById = createAsyncThunk<Attachment, { id: number }>(
       return attachment
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch attachment'
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Abort a running generation
+export const abortStreaming = createAsyncThunk<
+  { success: boolean },
+  { messageId: number },
+  { state: RootState }
+>(
+  'chat/abortStreaming',
+  async ({ messageId }, { dispatch, rejectWithValue }) => {
+    try {
+      const response = await apiCall<{ success: boolean }>(`/messages/${messageId}/abort`, {
+        method: 'POST',
+      })
+      
+      if (response.success) {
+        dispatch(chatSliceActions.streamingAborted())
+      }
+      
+      return response
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to abort generation'
       return rejectWithValue(message)
     }
   }

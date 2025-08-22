@@ -216,13 +216,22 @@ export class ConversationService {
 export class MessageService {
   static create(
     conversationId: number,
+    parentId: number | null = null,
     role: Message['role'],
     content: string,
-    parentId: number | null = null,
+    thinking_block: string,
     modelName?: string
     // children: []
   ): Message {
-    const result = statements.createMessage.run(conversationId, parentId, role, content, '[]', modelName)
+    const result = statements.createMessage.run(
+      conversationId,
+      parentId,
+      role,
+      content,
+      thinking_block,
+      '[]',
+      modelName
+    )
     statements.updateConversationTimestamp.run(conversationId)
     return statements.getMessageById.get(result.lastInsertRowid) as Message
   }

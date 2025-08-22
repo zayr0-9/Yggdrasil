@@ -7,10 +7,14 @@ export async function generateResponse(
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
   onChunk: (chunk: string) => void,
   model: string = 'gemini-2.5-flash',
-  attachments?: Array<{ mimeType?: string; filePath?: string }>
+  attachments?: Array<{ mimeType?: string; filePath?: string }>,
+  abortSignal?: AbortSignal
 ): Promise<void> {
   // Start with simple role/content messages
-  let formattedMessages: any[] = messages.map(msg => ({ role: msg.role as 'user' | 'assistant' | 'system', content: msg.content }))
+  let formattedMessages: any[] = messages.map(msg => ({
+    role: msg.role as 'user' | 'assistant' | 'system',
+    content: msg.content,
+  }))
 
   const imageAtts = (attachments || []).filter(a => a.filePath)
   if (imageAtts.length > 0) {
@@ -61,15 +65,70 @@ export async function generateResponse(
       : [{ type: 'text', text: String(formattedMessages[lastUserIdx].content || '') }]
     formattedMessages[lastUserIdx] = { role: 'user', content: [...parts, ...existing] }
   }
-  console.log(formattedMessages.find(m => m.role === 'user'))
-  const { textStream } = await streamText({ model: google(model), messages: formattedMessages as any })
-  /*max_tokens, 
-  "thinking": {
-        "type": "enabled",
-        "budget_tokens": 10000
-    },
-  */
-  for await (const chunk of textStream) {
-    onChunk(chunk)
+  let aborted = false
+  let result: any
+  try {
+    result = await streamText({
+      model: google(model),
+      messages: formattedMessages as any,
+      // Enable Gemini "thinking" support per provider guide
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 8192,
+            includeThoughts: true,
+          },
+        },
+      },
+      // forward aborts from the request or caller
+      abortSignal,
+      onAbort: () => {
+        aborted = true
+        console.log('Gemini stream aborted')
+      },
+    })
+  } catch (err: any) {
+    if (aborted || err?.name === 'AbortError') {
+      return
+    }
+    throw err
+  }
+  
+  // Prefer full stream (includes reasoning/text parts) when available
+  const fullStream: AsyncIterable<any> | undefined =
+    (result && (result.fullStream as AsyncIterable<any>)) || (result && (result.dataStream as AsyncIterable<any>))
+
+  try {
+    if (fullStream && typeof (fullStream as any)[Symbol.asyncIterator] === 'function') {
+      for await (const part of fullStream) {
+        try {
+          const t = String((part as any)?.type || '')
+          // Extract delta from common fields across providers/versions
+          const delta: string =
+            (part as any)?.delta ?? (part as any)?.textDelta ?? (part as any)?.text ?? (typeof part === 'string' ? part : '')
+
+          if (!delta) continue
+
+          if (t.includes('reasoning')) {
+            onChunk(JSON.stringify({ part: 'reasoning', delta }))
+          } else if (t.includes('text') || typeof part === 'string') {
+            onChunk(JSON.stringify({ part: 'text', delta }))
+          }
+        } catch {
+          // Ignore malformed parts
+        }
+      }
+    } else {
+      // Fallback: stream plain text deltas
+      const { textStream } = result
+      for await (const chunk of textStream as AsyncIterable<string>) {
+        onChunk(JSON.stringify({ part: 'text', delta: chunk }))
+      }
+    }
+  } catch (err: any) {
+    if (aborted || err?.name === 'AbortError') {
+      return
+    }
+    throw err
   }
 }
