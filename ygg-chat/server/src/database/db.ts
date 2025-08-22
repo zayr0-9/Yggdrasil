@@ -195,6 +195,7 @@ export function initializeStatements() {
     updateConversationContext: db.prepare(
       'UPDATE conversations SET conversation_context = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
     ),
+    getConversationContext: db.prepare('SELECT conversation_context FROM conversations WHERE id = ?'),
     updateConversationTimestamp: db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?'),
     deleteConversation: db.prepare('DELETE FROM conversations WHERE id = ?'),
     deleteConversationsByUser: db.prepare('DELETE FROM conversations WHERE user_id = ?'),

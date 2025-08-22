@@ -189,7 +189,10 @@ export class ConversationService {
     const row = statements.getConversationSystemPrompt.get(id) as { system_prompt: string | null } | undefined
     return row?.system_prompt ?? null
   }
-
+  static getConversationContext(id: number): string | null {
+    const row = statements.getConversationContext.get(id) as { conversation_context: string | null } | undefined
+    return row?.conversation_context ?? null
+  }
   static updateSystemPrompt(id: number, prompt: string | null): Conversation | undefined {
     statements.updateConversationSystemPrompt.run(prompt, id)
     return statements.getConversationById.get(id) as Conversation | undefined

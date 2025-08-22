@@ -1,13 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
 import type { RootState } from '../../store/store'
-import {
-  API_BASE,
-  apiCall,
-  createStreamingRequest,
-  getConversationSystemPrompt,
-  patchConversationSystemPrompt,
-  type SystemPromptPatchResponse,
-} from '../../utils/api'
+import { API_BASE, apiCall, createStreamingRequest } from '../../utils/api'
 import type { Conversation } from '../conversations/conversationTypes'
 import { chatSliceActions } from './chatSlice'
 import {
@@ -222,11 +215,24 @@ export const fetchModelsForCurrentProvider = createAsyncThunk(
   }
 )
 
+// Model selection with persistence
+export const selectModel = createAsyncThunk('chat/selectModel', async (modelName: string, { dispatch, getState }) => {
+  const state = getState() as RootState
+
+  // Verify model exists
+  if (!state.chat.models.available.includes(modelName)) {
+    throw new Error(`Model ${modelName} not available`)
+  }
+
+  dispatch(chatSliceActions.modelSelected({ modelName, persist: true }))
+  return modelName
+})
+
 // Streaming message sending with proper error handling
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
   async (
-    { conversationId, input, parent, repeatNum }: SendMessagePayload,
+    { conversationId, input, parent, repeatNum, think }: SendMessagePayload,
     { dispatch, getState, rejectWithValue, signal }
   ) => {
     dispatch(chatSliceActions.sendingStarted())
@@ -283,10 +289,11 @@ export const sendMessage = createAsyncThunk(
             modelName: modelName,
             // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
             parentId: parent,
-            systemPrompt: state.chat.systemPrompt,
+            systemPrompt: state.conversations.systemPrompt,
             provider: serverProvider,
             repeatNum: repeatNum,
             attachmentsBase64,
+            think,
           }),
           signal: controller.signal,
         })
@@ -309,9 +316,10 @@ export const sendMessage = createAsyncThunk(
             modelName: modelName,
             // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
             parentId: parent,
-            systemPrompt: state.chat.systemPrompt,
+            systemPrompt: state.conversations.systemPrompt,
             provider: serverProvider,
             attachmentsBase64,
+            think,
           }),
           signal: controller.signal,
         })
@@ -411,18 +419,6 @@ export const sendMessage = createAsyncThunk(
     }
   }
 )
-// Model selection with persistence
-export const selectModel = createAsyncThunk('chat/selectModel', async (modelName: string, { dispatch, getState }) => {
-  const state = getState() as RootState
-
-  // Verify model exists
-  if (!state.chat.models.available.includes(modelName)) {
-    throw new Error(`Model ${modelName} not available`)
-  }
-
-  dispatch(chatSliceActions.modelSelected({ modelName, persist: true }))
-  return modelName
-})
 
 export const updateMessage = createAsyncThunk(
   'chat/updateMessage',
@@ -486,7 +482,7 @@ export const deleteMessage = createAsyncThunk(
 export const editMessageWithBranching = createAsyncThunk(
   'chat/editMessageWithBranching',
   async (
-    { conversationId, originalMessageId, newContent, modelOverride }: EditMessagePayload,
+    { conversationId, originalMessageId, newContent, modelOverride, think }: EditMessagePayload,
     { dispatch, getState, rejectWithValue, signal }
   ) => {
     dispatch(chatSliceActions.sendingStarted())
@@ -557,9 +553,10 @@ export const editMessageWithBranching = createAsyncThunk(
           content: newContent,
           modelName,
           parentId: parentId, // Branch from the same parent as original
-          systemPrompt: state.chat.systemPrompt,
+          systemPrompt: state.conversations.systemPrompt,
           provider: serverProvider,
           attachmentsBase64,
+          think,
         }),
         signal: controller.signal,
       })
@@ -659,7 +656,7 @@ export const editMessageWithBranching = createAsyncThunk(
 export const sendMessageToBranch = createAsyncThunk(
   'chat/sendMessageToBranch',
   async (
-    { conversationId, parentId, content, modelOverride, systemPrompt }: BranchMessagePayload,
+    { conversationId, parentId, content, modelOverride, systemPrompt, think }: BranchMessagePayload,
     { dispatch, getState, rejectWithValue, signal }
   ) => {
     dispatch(chatSliceActions.sendingStarted())
@@ -694,6 +691,7 @@ export const sendMessageToBranch = createAsyncThunk(
           systemPrompt,
           provider: serverProvider,
           attachmentsBase64,
+          think,
         }),
         signal: controller.signal,
       })
@@ -872,39 +870,6 @@ export const updateConversationTitle = createAsyncThunk<Conversation, { id: numb
     }
   }
 )
-
-// Fetch the conversation system prompt and store in state.chat.systemPrompt
-export const fetchSystemPrompt = createAsyncThunk<string | null, number>(
-  'chat/fetchSystemPrompt',
-  async (conversationId, { dispatch, rejectWithValue }) => {
-    try {
-      const res = await getConversationSystemPrompt(conversationId)
-      const value = typeof res.systemPrompt === 'string' ? res.systemPrompt : null
-      dispatch(chatSliceActions.systemPromptSet(value))
-      return value
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch system prompt'
-      return rejectWithValue(message) as any
-    }
-  }
-)
-
-// Update the conversation system prompt on the server and reflect in state
-export const updateSystemPrompt = createAsyncThunk<
-  SystemPromptPatchResponse,
-  { id: number; systemPrompt: string | null }
->('chat/updateSystemPrompt', async ({ id, systemPrompt }, { dispatch, rejectWithValue }) => {
-  try {
-    const updated = await patchConversationSystemPrompt(id, systemPrompt)
-    // Server returns updated Conversation with snake_case system_prompt
-    // Mirror to client state
-    dispatch(chatSliceActions.systemPromptSet((updated as any).system_prompt ?? null))
-    return updated
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to update system prompt'
-    return rejectWithValue(message) as any
-  }
-})
 
 /* Attachments: upload, link, fetch, delete */
 

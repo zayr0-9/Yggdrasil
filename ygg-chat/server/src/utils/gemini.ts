@@ -8,7 +8,8 @@ export async function generateResponse(
   onChunk: (chunk: string) => void,
   model: string = 'gemini-2.5-flash',
   attachments?: Array<{ mimeType?: string; filePath?: string }>,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  think: boolean = false
 ): Promise<void> {
   // Start with simple role/content messages
   let formattedMessages: any[] = messages.map(msg => ({
@@ -72,14 +73,16 @@ export async function generateResponse(
       model: google(model),
       messages: formattedMessages as any,
       // Enable Gemini "thinking" support per provider guide
-      providerOptions: {
-        google: {
-          thinkingConfig: {
-            thinkingBudget: 8192,
-            includeThoughts: true,
-          },
-        },
-      },
+      providerOptions: think
+        ? {
+            google: {
+              thinkingConfig: {
+                thinkingBudget: 8192,
+                includeThoughts: true,
+              },
+            },
+          }
+        : undefined,
       // forward aborts from the request or caller
       abortSignal,
       onAbort: () => {
@@ -93,7 +96,7 @@ export async function generateResponse(
     }
     throw err
   }
-  
+
   // Prefer full stream (includes reasoning/text parts) when available
   const fullStream: AsyncIterable<any> | undefined =
     (result && (result.fullStream as AsyncIterable<any>)) || (result && (result.dataStream as AsyncIterable<any>))
@@ -105,11 +108,14 @@ export async function generateResponse(
           const t = String((part as any)?.type || '')
           // Extract delta from common fields across providers/versions
           const delta: string =
-            (part as any)?.delta ?? (part as any)?.textDelta ?? (part as any)?.text ?? (typeof part === 'string' ? part : '')
+            (part as any)?.delta ??
+            (part as any)?.textDelta ??
+            (part as any)?.text ??
+            (typeof part === 'string' ? part : '')
 
           if (!delta) continue
 
-          if (t.includes('reasoning')) {
+          if (think && t.includes('reasoning')) {
             onChunk(JSON.stringify({ part: 'reasoning', delta }))
           } else if (t.includes('text') || typeof part === 'string') {
             onChunk(JSON.stringify({ part: 'text', delta }))

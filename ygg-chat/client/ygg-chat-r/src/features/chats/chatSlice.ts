@@ -76,7 +76,6 @@ const makeInitialState = (): ChatState => ({
     byMessage: {},
     backup: {},
   },
-  systemPrompt: null,
 })
 
 const initialState: ChatState = makeInitialState()
@@ -444,9 +443,7 @@ export const chatSlice = createSlice({
         msg.artifacts = [...existing, ...artifacts]
       }
     },
-    systemPromptSet: (state, action: PayloadAction<string | null>) => {
-      state.systemPrompt = action.payload
-    },
+
     stateReset: () => makeInitialState(),
   },
 })

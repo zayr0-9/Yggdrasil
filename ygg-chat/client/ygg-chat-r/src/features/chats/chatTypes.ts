@@ -130,7 +130,6 @@ export interface ChatState {
   initialization: InitializationState
   selectedNodes: number[]
   attachments: AttachmentsState
-  systemPrompt: string | null
 }
 
 // Action payloads
@@ -139,6 +138,7 @@ export interface SendMessagePayload {
   input: MessageInput
   parent: number
   repeatNum: number
+  think: boolean
 }
 
 export interface EditMessagePayload {
@@ -147,6 +147,7 @@ export interface EditMessagePayload {
   newContent: string
   modelOverride?: string
   systemPrompt?: string
+  think: boolean
 }
 
 export interface BranchMessagePayload {
@@ -155,6 +156,7 @@ export interface BranchMessagePayload {
   content: string
   modelOverride?: string
   systemPrompt?: string
+  think: boolean
 }
 
 export interface ModelSelectionPayload {

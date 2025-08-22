@@ -9,7 +9,6 @@ import {
   fetchConversationMessages,
   fetchMessageTree,
   fetchModelsForCurrentProvider,
-  fetchSystemPrompt,
   initializeUserAndConversation,
   refreshCurrentPathAfterDelete,
   selectCanSend,
@@ -34,7 +33,13 @@ import {
   updateConversationTitle,
   updateMessage,
 } from '../features/chats'
-import { fetchConversations, makeSelectConversationById } from '../features/conversations'
+import {
+  fetchContext,
+  fetchConversations,
+  fetchSystemPrompt,
+  makeSelectConversationById,
+  systemPromptSet,
+} from '../features/conversations'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
 import { getParentPath } from '../utils/path'
 
@@ -110,6 +115,7 @@ function Chat() {
   })
   const [isResizing, setIsResizing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [think, setThink] = useState<boolean>(false)
 
   useEffect(() => {
     if (!isResizing) return
@@ -151,6 +157,12 @@ function Chat() {
     }
   }, [isResizing])
 
+  // Simple effect reacting to think changes
+  useEffect(() => {
+    // Minimal side-effect: log the current think mode
+    console.log('Think mode:', think)
+  }, [think])
+
   const handleTitleSave = () => {
     if (currentConversationId && titleChanged) {
       dispatch(updateConversationTitle({ id: currentConversationId, title: titleInput.trim() }))
@@ -180,8 +192,9 @@ function Chat() {
   useEffect(() => {
     if (currentConversationId) {
       dispatch(fetchSystemPrompt(currentConversationId))
+      dispatch(fetchContext(currentConversationId))
     } else {
-      dispatch(chatSliceActions.systemPromptSet(null))
+      dispatch(systemPromptSet(null))
     }
   }, [currentConversationId, dispatch])
 
@@ -421,6 +434,7 @@ function Chat() {
           input: messageInput,
           parent,
           repeatNum: value,
+          think: think,
         })
       )
     } else if (!currentConversationId) {
@@ -448,6 +462,7 @@ function Chat() {
           originalMessageId: parseInt(id),
           newContent: newContent,
           modelOverride: selectedModel || undefined,
+          think: think,
         })
       )
     }
@@ -654,6 +669,13 @@ function Chat() {
             </Button>
             <Button variant='secondary' size='small' onClick={() => setSettingsOpen(true)}>
               Settings
+            </Button>
+            <Button
+              variant={think ? 'primary' : 'secondary'}
+              size='small'
+              onClick={() => setThink(t => !t)}
+            >
+              Think {think ? 'On' : 'Off'}
             </Button>
             <Button onClick={() => dispatch(chatSliceActions.heimdallCompactModeToggled())}> compact </Button>
             <span className='text-stone-800 dark:text-stone-200 text-sm'>

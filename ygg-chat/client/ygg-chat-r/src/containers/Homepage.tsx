@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button, TextField } from '../components'
 import { chatSliceActions } from '../features/chats'
 import {
+  activeConversationIdSet,
   Conversation,
   createConversation,
   deleteConversation,
@@ -53,6 +54,7 @@ const Homepage: React.FC = () => {
   const handleSelect = (conv: Conversation) => {
     dispatch(chatSliceActions.conversationSet(conv.id))
     navigate(`/chat/${conv.id}`)
+    dispatch(activeConversationIdSet(conv.id))
   }
 
   const handleDelete = (id: number) => {

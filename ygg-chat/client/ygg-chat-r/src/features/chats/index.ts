@@ -22,13 +22,11 @@ export {
   editMessageWithBranching,
   fetchModels,
   fetchModelsForCurrentProvider,
-  fetchSystemPrompt,
   refreshCurrentPathAfterDelete,
   selectModel,
   sendMessage,
   sendMessageToBranch,
   updateMessage,
-  updateSystemPrompt,
 } from './chatActions'
 
 // Selectors - grouped by feature

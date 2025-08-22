@@ -1,10 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react'
-import {
-  chatSliceActions,
-  conversationContext,
-  selectCurrentConversationId,
-  updateSystemPrompt,
-} from '../../features/chats'
+import { selectCurrentConversationId } from '../../features/chats'
+import { convContextSet, systemPromptSet, updateContext, updateSystemPrompt } from '../../features/conversations'
 import { useAppDispatch, useAppSelector } from '../../hooks/redux'
 import { Button } from '../Button/button'
 import { InputTextArea } from '../InputTextArea/InputTextArea'
@@ -16,19 +12,32 @@ type SettingsPaneProps = {
 
 export const SettingsPane: React.FC<SettingsPaneProps> = ({ open, onClose }) => {
   const dispatch = useAppDispatch()
-  const systemPrompt = useAppSelector(state => state.chat.systemPrompt ?? '')
-  const context = useAppSelector(conversationContext)
+  const systemPrompt = useAppSelector(state => state.conversations.systemPrompt ?? '')
+  const context = useAppSelector(state => state.conversations.convContext ?? '')
   const conversationId = useAppSelector(selectCurrentConversationId)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleChange = useCallback(
     (value: string) => {
-      dispatch(chatSliceActions.systemPromptSet(value))
+      dispatch(systemPromptSet(value))
       if (!conversationId) return
       if (debounceRef.current) clearTimeout(debounceRef.current)
       const persisted = value.trim() === '' ? null : value
       debounceRef.current = setTimeout(() => {
         dispatch(updateSystemPrompt({ id: conversationId, systemPrompt: persisted }))
+      }, 500)
+    },
+    [dispatch, conversationId]
+  )
+
+  const handleContextChange = useCallback(
+    (value: string) => {
+      dispatch(convContextSet(value))
+      if (!conversationId) return
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      const persisted = value.trim() === '' ? null : value
+      debounceRef.current = setTimeout(() => {
+        dispatch(updateContext({ id: conversationId, context: persisted }))
       }, 500)
     },
     [dispatch, conversationId]
@@ -87,7 +96,7 @@ export const SettingsPane: React.FC<SettingsPaneProps> = ({ open, onClose }) => 
           label='Context'
           placeholder='Enter a context to augment your chat...'
           value={context}
-          onChange={handleChange}
+          onChange={handleContextChange}
           minRows={6}
           maxRows={16}
           width='w-full'
