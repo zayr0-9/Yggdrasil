@@ -14,6 +14,7 @@ export const selectSelectedModel = createSelector([selectChatState], chat => cha
 export const selectDefaultModel = createSelector([selectChatState], chat => chat.models.default)
 
 export const selectModelsLoading = createSelector([selectChatState], chat => chat.models.loading)
+export const conversationContext = createSelector([selectChatState], chat => chat.conversation.context)
 
 export const selectModelsError = createSelector([selectChatState], chat => chat.models.error)
 export const selectMultiReplyCount = createSelector([selectChatState], chat => chat.composition.multiReplyCount)

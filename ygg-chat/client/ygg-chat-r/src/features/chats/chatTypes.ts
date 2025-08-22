@@ -93,6 +93,7 @@ export interface ConversationState {
   messages: Message[] // Linear messages in current path order
   bookmarked: number[] //each index contains id of a message selected
   excludedMessages: number[] //id of each message which are NOT to be sent for chat,
+  context: string
 }
 
 // Core chat state - ONLY chat concerns

@@ -58,6 +58,7 @@ const makeInitialState = (): ChatState => ({
     messages: [],
     bookmarked: [],
     excludedMessages: [],
+    context: '',
   },
   heimdall: {
     treeData: null,

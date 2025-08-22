@@ -22,17 +22,18 @@ export {
   editMessageWithBranching,
   fetchModels,
   fetchModelsForCurrentProvider,
+  fetchSystemPrompt,
   refreshCurrentPathAfterDelete,
   selectModel,
   sendMessage,
   sendMessageToBranch,
   updateMessage,
-  fetchSystemPrompt,
   updateSystemPrompt,
 } from './chatActions'
 
 // Selectors - grouped by feature
 export {
+  conversationContext,
   HeimdallDataReset,
   selectBookmarkedMessages,
   // Combined selectors
@@ -72,7 +73,12 @@ export {
 
 // Convenience re-exports
 // New async thunks
-export { fetchConversationMessages, fetchMessageTree, initializeUserAndConversation, updateConversationTitle } from './chatActions'
+export {
+  fetchConversationMessages,
+  fetchMessageTree,
+  initializeUserAndConversation,
+  updateConversationTitle,
+} from './chatActions'
 
 // New selectors for Heimdall and initialization
 export {
@@ -88,4 +94,3 @@ export {
 } from './chatSelectors'
 
 export { chatSliceActions as actions } from './chatSlice'
-

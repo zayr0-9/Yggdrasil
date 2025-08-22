@@ -195,6 +195,11 @@ export class ConversationService {
     return statements.getConversationById.get(id) as Conversation | undefined
   }
 
+  static updateContext(id: number, context: string): Conversation | undefined {
+    statements.updateConversationContext.run(context, id)
+    return statements.getConversationById.get(id) as Conversation | undefined
+  }
+
   static updateTitle(id: number, title: string): Conversation | undefined {
     statements.updateConversationTitle.run(title, id)
     return statements.getConversationById.get(id) as Conversation | undefined

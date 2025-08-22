@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useRef } from 'react'
-import { chatSliceActions, selectCurrentConversationId, updateSystemPrompt } from '../../features/chats'
+import {
+  chatSliceActions,
+  conversationContext,
+  selectCurrentConversationId,
+  updateSystemPrompt,
+} from '../../features/chats'
 import { useAppDispatch, useAppSelector } from '../../hooks/redux'
 import { Button } from '../Button/button'
 import { InputTextArea } from '../InputTextArea/InputTextArea'
@@ -12,6 +17,7 @@ type SettingsPaneProps = {
 export const SettingsPane: React.FC<SettingsPaneProps> = ({ open, onClose }) => {
   const dispatch = useAppDispatch()
   const systemPrompt = useAppSelector(state => state.chat.systemPrompt ?? '')
+  const context = useAppSelector(conversationContext)
   const conversationId = useAppSelector(selectCurrentConversationId)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -70,6 +76,17 @@ export const SettingsPane: React.FC<SettingsPaneProps> = ({ open, onClose }) => 
           label='System prompt'
           placeholder='Enter a system prompt to guide the assistant...'
           value={systemPrompt}
+          onChange={handleChange}
+          minRows={6}
+          maxRows={16}
+          width='w-full'
+          showCharCount
+        />
+        <div className='py-2'></div>
+        <InputTextArea
+          label='Context'
+          placeholder='Enter a context to augment your chat...'
+          value={context}
           onChange={handleChange}
           minRows={6}
           maxRows={16}

@@ -32,7 +32,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
   onKeyDown,
   state = 'default',
   errorMessage,
-  maxLength = 20000,
+  maxLength = 1000000,
   width = 'max-w-3xl',
   className = '',
   minRows = 1,
@@ -165,15 +165,15 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
   const labelClasses = state === 'disabled' ? 'opacity-40' : ''
 
   const stateStyles = {
-    default: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-gray-400 border-gray-600 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50`,
-    error: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-gray-400 border-red-500 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500 focus:ring-opacity-50`,
-    disabled: `${baseStyles} bg-gray-900 text-stone-800 dark:text-stone-200 border-gray-700 placeholder-gray-600 cursor-not-allowed`,
+    default: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-gray-600 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50`,
+    error: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-red-500 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500 focus:ring-opacity-50`,
+    disabled: `${baseStyles} bg-gray-900 text-stone-800 dark:text-stone-200 border-gray-700 placeholder-neutral-700 dark:placeholder-neutral-200 cursor-not-allowed`,
   }
 
   return (
     <div className='flex flex-col gap-1'>
       {label && (
-        <label htmlFor={id} className={`text-sm font-medium text-gray-200 ${labelClasses}`}>
+        <label htmlFor={id} className={`text-sm font-medium text-neutral-800 dark:text-neutral-200 ${labelClasses}`}>
           {label}
         </label>
       )}
@@ -191,7 +191,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           disabled={state === 'disabled'}
-          maxLength={maxLength}
+          // maxLength={maxLength}
           className={`${stateStyles[state]} ${dragOver ? 'border-blue-500 ring-2 ring-blue-500' : ''} ${className}`}
           aria-invalid={state === 'error'}
           aria-describedby={state === 'error' && errorMessage ? errorId : undefined}
@@ -203,9 +203,10 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
         />
 
         {/* Character count indicator */}
-        {showCharCount && maxLength && (
+        {showCharCount && (
           <div className='absolute bottom-2 right-3 text-xs text-stone-800 dark:text-stone-200'>
-            {value.length}/{maxLength}
+            {/* {value.length}/{maxLength} */}
+            {value.length}
           </div>
         )}
       </div>

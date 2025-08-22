@@ -389,6 +389,30 @@ router.patch(
   })
 )
 
+//update conversation context
+router.patch(
+  '/conversations/:id/context',
+  asyncHandler(async (req, res) => {
+    const conversationId = parseInt(req.params.id)
+    const { context } = req.body as { context?: string | null }
+
+    const existing = ConversationService.getById(conversationId)
+    if (!existing) {
+      return res.status(404).json({ error: 'Conversation not found' })
+    }
+
+    if (typeof context === 'undefined') {
+      return res.status(400).json({ error: 'context is required (string or null)' })
+    }
+    if (context) {
+      const updated = ConversationService.updateContext(conversationId, context)
+      res.json(updated)
+    } else {
+      // return error if no context sent
+      return res.status(400).json({ error: 'context is required (string or null)' })
+    }
+  })
+)
 //delete conversation
 router.delete(
   '/conversations/:id/',

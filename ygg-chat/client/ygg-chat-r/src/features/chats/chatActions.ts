@@ -1033,22 +1033,18 @@ export const fetchAttachmentById = createAsyncThunk<Attachment, { id: number }>(
 )
 
 // Abort a running generation
-export const abortStreaming = createAsyncThunk<
-  { success: boolean },
-  { messageId: number },
-  { state: RootState }
->(
+export const abortStreaming = createAsyncThunk<{ success: boolean }, { messageId: number }, { state: RootState }>(
   'chat/abortStreaming',
   async ({ messageId }, { dispatch, rejectWithValue }) => {
     try {
       const response = await apiCall<{ success: boolean }>(`/messages/${messageId}/abort`, {
         method: 'POST',
       })
-      
+
       if (response.success) {
         dispatch(chatSliceActions.streamingAborted())
       }
-      
+
       return response
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to abort generation'
