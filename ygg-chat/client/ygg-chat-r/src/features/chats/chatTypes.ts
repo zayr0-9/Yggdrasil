@@ -16,18 +16,28 @@ export interface miniMessage {
 
 // Stream-specific types
 export interface StreamChunk {
-  type: 'chunk' | 'complete' | 'error' | 'user_message' | 'reset'
+  type: 'chunk' | 'complete' | 'error' | 'user_message' | 'reset' | 'generation_started'
   content?: string
+  // delta is used for token-level updates from the server
+  delta?: string
+  // part distinguishes normal text from reasoning tokens
+  part?: 'text' | 'reasoning'
   message?: Message
   error?: string
+  // optional iteration index for multi-reply endpoints
+  iteration?: number
+  messageId?: number
 }
 
 export interface StreamState {
   active: boolean
   buffer: string
+  // separate buffer for reasoning/thinking tokens while streaming
+  thinkingBuffer: string
   messageId: number | null
   error: string | null
   finished: boolean
+  streamingMessageId: number | null
 }
 
 // Model types - simplified to match server
@@ -64,7 +74,6 @@ export interface ImageDraft {
 export interface MessageInput {
   content: string
   modelOverride?: string
-  systemPrompt?: string
 }
 
 export interface CompositionState {
@@ -84,6 +93,7 @@ export interface ConversationState {
   messages: Message[] // Linear messages in current path order
   bookmarked: number[] //each index contains id of a message selected
   excludedMessages: number[] //id of each message which are NOT to be sent for chat,
+  context: string
 }
 
 // Core chat state - ONLY chat concerns
@@ -128,6 +138,7 @@ export interface SendMessagePayload {
   input: MessageInput
   parent: number
   repeatNum: number
+  think: boolean
 }
 
 export interface EditMessagePayload {
@@ -136,6 +147,7 @@ export interface EditMessagePayload {
   newContent: string
   modelOverride?: string
   systemPrompt?: string
+  think: boolean
 }
 
 export interface BranchMessagePayload {
@@ -144,6 +156,7 @@ export interface BranchMessagePayload {
   content: string
   modelOverride?: string
   systemPrompt?: string
+  think: boolean
 }
 
 export interface ModelSelectionPayload {

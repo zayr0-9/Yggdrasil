@@ -27,7 +27,11 @@ export async function generateResponse(
   onChunk: (chunk: string) => void,
   provider: ProviderType,
   model?: string,
-  attachments?: Array<{ url?: string; mimeType?: string; filePath?: string }>
+  attachments?: Array<{ url?: string; mimeType?: string; filePath?: string }>,
+  systemPrompt?: string,
+  abortSignal?: AbortSignal,
+  conversationContext?: string | null,
+  think?: boolean
 ): Promise<void> {
   const providerModel = getProviderModel(provider, model)
 
@@ -40,19 +44,54 @@ export async function generateResponse(
       : ''
 
   // Prepare messages for AI SDK providers (text-only content objects)
-  const aiSdkMessages = messages
+  const aiSdkBase = messages
     .filter(msg => msg.content && msg.content.trim() !== '')
     .map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content }))
+
+  // Optionally prepend a dummy user context message
+  const aiSdkMessages = conversationContext && conversationContext.trim()
+    ? ([{ role: 'user' as const, content: conversationContext.trim() }, ...aiSdkBase] as Array<{
+        role: 'user' | 'assistant'
+        content: string
+      }>)
+    : aiSdkBase
 
   const aiSdkMessagesWithNote = attachmentNote
     ? [...aiSdkMessages, { role: 'user' as const, content: attachmentNote }]
     : aiSdkMessages
 
+  // Prepend system prompt (for AI SDK providers) if provided
+  const aiSdkForOpenAI = systemPrompt
+    ? ([{ role: 'system' as const, content: systemPrompt }, ...aiSdkMessagesWithNote] as Array<{
+        role: 'user' | 'assistant' | 'system'
+        content: string
+      }>)
+    : (aiSdkMessagesWithNote as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>)
+
+  const aiSdkForGemini = systemPrompt
+    ? ([{ role: 'system' as const, content: systemPrompt }, ...aiSdkMessages] as Array<{
+        role: 'user' | 'assistant' | 'system'
+        content: string
+      }>)
+    : (aiSdkMessages as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>)
+
+  const aiSdkForAnthropic = aiSdkForGemini
+
   // Prepare messages for Ollama (expects Message[], but we only use role/content fields)
+  const ollamaBase: any[] = (() => {
+    const cloned = messages.map(m => ({ ...m })) as any[]
+    if (conversationContext && conversationContext.trim()) {
+      const template = cloned[0] ?? {}
+      // Prepend synthetic user context message
+      return [{ ...template, role: 'user', content: conversationContext.trim() }, ...cloned]
+    }
+    return cloned
+  })()
+
   const ollamaMessagesWithNote: Message[] = (() => {
-    if (!attachmentNote) return messages
+    if (!attachmentNote) return ollamaBase as Message[]
     // Clone and append note to the last user message to preserve chronology
-    const cloned: any[] = messages.map(m => ({ ...m }))
+    const cloned: any[] = ollamaBase.map(m => ({ ...m }))
     for (let i = cloned.length - 1; i >= 0; i--) {
       if (cloned[i].role === 'user') {
         cloned[i].content = `${cloned[i].content}\n\n${attachmentNote}`
@@ -60,16 +99,16 @@ export async function generateResponse(
       }
     }
     // If no user message found, append a synthetic trailing user note
-    return [...cloned, { ...cloned[cloned.length - 1], role: 'user', content: attachmentNote }] as any as Message[]
+    return [...cloned, { ...(cloned[cloned.length - 1] || {}), role: 'user', content: attachmentNote }] as any as Message[]
   })()
 
   switch (provider) {
     case 'ollama':
-      return ollamaGenerate(ollamaMessagesWithNote, onChunk, providerModel)
+      return ollamaGenerate(ollamaMessagesWithNote, onChunk, providerModel, systemPrompt)
     case 'gemini': {
       // Forward attachments so Gemini can inline images
       const geminiAttachments = (attachments || []).map(a => ({ mimeType: a.mimeType, filePath: a.filePath }))
-      return geminiGenerate(aiSdkMessages, onChunk, providerModel, geminiAttachments)
+      return geminiGenerate(aiSdkForGemini, onChunk, providerModel, geminiAttachments, abortSignal, think)
     }
     case 'anthropic': {
       // For Anthropic, forward attachments so we can construct image+text content parts
@@ -78,10 +117,10 @@ export async function generateResponse(
         mimeType: a.mimeType,
         filePath: a.filePath,
       }))
-      return anthropicGenerate(aiSdkMessages, onChunk, providerModel, anthroAttachments)
+      return anthropicGenerate(aiSdkForAnthropic, onChunk, providerModel, anthroAttachments, abortSignal, think)
     }
     case 'openai':
-      return openaiGenerate(aiSdkMessagesWithNote, onChunk, providerModel)
+      return openaiGenerate(aiSdkForOpenAI, onChunk, providerModel)
     default:
       throw new Error(`Unknown provider: ${provider}`)
   }

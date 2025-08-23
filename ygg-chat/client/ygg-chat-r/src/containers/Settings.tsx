@@ -1,0 +1,208 @@
+import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Button, TextField } from '../components'
+
+interface EnvVariable {
+  key: string
+  value: string
+}
+
+const Settings: React.FC = () => {
+  const navigate = useNavigate()
+  const [envVars, setEnvVars] = useState<EnvVariable[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchEnvVars()
+  }, [])
+
+  const fetchEnvVars = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/settings/env')
+      if (!response.ok) {
+        throw new Error('Failed to fetch environment variables')
+      }
+      const data = await response.json()
+      
+      // Convert object to array of key-value pairs
+      const vars = Object.entries(data).map(([key, value]) => ({
+        key,
+        value: value as string,
+      }))
+      setEnvVars(vars)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load environment variables')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSave = async () => {
+    try {
+      setSaving(true)
+      setError(null)
+      setSuccess(null)
+
+      // Convert array back to object, filtering out empty keys
+      const envObject = envVars.reduce((acc, { key, value }) => {
+        if (key.trim()) {
+          acc[key.trim()] = value
+        }
+        return acc
+      }, {} as Record<string, string>)
+
+      const response = await fetch('/api/settings/env', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(envObject),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to save environment variables')
+      }
+
+      setSuccess('Environment variables saved successfully!')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save environment variables')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAddVariable = () => {
+    setEnvVars([...envVars, { key: '', value: '' }])
+  }
+
+  const handleRemoveVariable = (index: number) => {
+    setEnvVars(envVars.filter((_, i) => i !== index))
+  }
+
+  const handleKeyChange = (index: number, key: string) => {
+    const updated = [...envVars]
+    updated[index].key = key
+    setEnvVars(updated)
+  }
+
+  const handleValueChange = (index: number, value: string) => {
+    const updated = [...envVars]
+    updated[index].value = value
+    setEnvVars(updated)
+  }
+
+  if (loading) {
+    return (
+      <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900'>
+        <div className='p-6 max-w-4xl mx-auto'>
+          <div className='flex items-center justify-center min-h-[200px]'>
+            <p className='text-gray-600 dark:text-gray-400'>Loading environment variables...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900'>
+      <div className='p-6 max-w-4xl mx-auto'>
+        {/* Header */}
+        <div className='flex items-center justify-between mb-6'>
+          <h1 className='text-2xl font-bold dark:text-neutral-100'>Environment Variables</h1>
+          <Button variant='secondary' onClick={() => navigate('/')}>
+            Back to Home
+          </Button>
+        </div>
+
+        {/* Description */}
+        <div className='mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800'>
+          <p className='text-sm text-blue-800 dark:text-blue-200'>
+            Configure environment variables for your application. Changes require a server restart to take effect.
+          </p>
+        </div>
+
+        {/* Error/Success Messages */}
+        {error && (
+          <div className='mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg'>
+            <p className='text-sm text-red-800 dark:text-red-200'>{error}</p>
+          </div>
+        )}
+
+        {success && (
+          <div className='mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg'>
+            <p className='text-sm text-green-800 dark:text-green-200'>{success}</p>
+          </div>
+        )}
+
+        {/* Environment Variables List */}
+        <div className='space-y-4 mb-6'>
+          {envVars.map((envVar, index) => (
+            <div key={index} className='flex gap-4 items-start p-4 bg-white dark:bg-zinc-800 rounded-lg border border-gray-200 dark:border-zinc-700'>
+              <div className='flex-1'>
+                <TextField
+                  label='Variable Name'
+                  placeholder='VARIABLE_NAME'
+                  value={envVar.key}
+                  onChange={(value) => handleKeyChange(index, value)}
+                />
+              </div>
+              <div className='flex-1'>
+                <TextField
+                  label='Value'
+                  placeholder='variable_value'
+                  value={envVar.value}
+                  onChange={(value) => handleValueChange(index, value)}
+                />
+              </div>
+              <div className='pt-6'>
+                <Button
+                  variant='danger'
+                  size='small'
+                  onClick={() => handleRemoveVariable(index)}
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ))}
+
+          {envVars.length === 0 && (
+            <div className='text-center py-8 text-gray-500 dark:text-gray-400'>
+              No environment variables configured. Click "Add Variable" to get started.
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className='flex gap-4'>
+          <Button variant='outline' onClick={handleAddVariable}>
+            Add Variable
+          </Button>
+          <Button
+            variant='primary'
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </div>
+
+        {/* Warning */}
+        <div className='mt-8 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800'>
+          <p className='text-sm text-yellow-800 dark:text-yellow-200'>
+            <strong>Warning:</strong> Be careful when editing environment variables. Invalid values may cause the application to malfunction. 
+            Always backup your .env file before making changes.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default Settings

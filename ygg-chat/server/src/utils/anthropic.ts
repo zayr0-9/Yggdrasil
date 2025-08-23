@@ -4,13 +4,18 @@ import fs from 'fs'
 import path from 'path'
 
 export async function generateResponse(
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
   onChunk: (chunk: string) => void,
   model: string = 'claude-3-5-sonnet-latest',
-  attachments?: Array<{ mimeType?: string; filePath?: string }>
+  attachments?: Array<{ mimeType?: string; filePath?: string }>,
+  abortSignal?: AbortSignal,
+  think: boolean = false
 ): Promise<void> {
   // Build Anthropic-compatible messages. Start with simple messages
-  let formattedMessages: any[] = messages.map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content }))
+  let formattedMessages: any[] = messages.map(msg => ({
+    role: msg.role as 'user' | 'assistant' | 'system',
+    content: msg.content,
+  }))
 
   const imageAtts = (attachments || []).filter(a => a.filePath)
   if (imageAtts.length > 0) {
@@ -62,14 +67,96 @@ export async function generateResponse(
     formattedMessages[lastUserIdx] = { role: 'user', content: [...parts, ...existing] }
   }
 
-  const { textStream } = await streamText({ model: anthropic(model), messages: formattedMessages as any })
-  /*max_tokens, 
-  "thinking": {
-        "type": "enabled",
-        "budget_tokens": 10000
-    },
-  */
-  for await (const chunk of textStream) {
-    onChunk(chunk)
+  // Enable Anthropic "thinking" (reasoning) for supported models only if requested
+  const supportsThinking = /opus-4|sonnet-4|3-7-sonnet/.test(model)
+  const enableThinking = Boolean(think) && supportsThinking
+  let result: any
+  let aborted = false
+  try {
+    result = await streamText({
+      model: anthropic(model),
+      messages: formattedMessages as any,
+      abortSignal,
+      onAbort: () => {
+        aborted = true
+        console.log('Anthropic stream aborted')
+      },
+      ...(enableThinking
+        ? {
+            providerOptions: {
+              anthropic: {
+                thinking: {
+                  type: 'enabled',
+                  budgetTokens: 8192,
+                },
+              },
+            },
+          }
+        : {}),
+    })
+  } catch (err: any) {
+    // Fallback: retry without thinking if unsupported or budget-related error
+    const msg = String(err?.message || err || '')
+    const name = String((err && (err.name || '')) || '')
+    if (aborted || err?.name === 'AbortError') {
+      return
+    }
+    if (enableThinking && (msg.toLowerCase().includes('thinking') || name.toLowerCase().includes('unsupported'))) {
+      result = await streamText({ model: anthropic(model), messages: formattedMessages as any, abortSignal, onAbort: () => { aborted = true } })
+    } else {
+      throw err
+    }
+  }
+
+  // Prefer full/data stream (may include reasoning/text parts); fallback to text stream
+  const fullStream: AsyncIterable<any> | undefined =
+    (result && (result.fullStream as AsyncIterable<any>)) || (result && (result.dataStream as AsyncIterable<any>))
+
+  try {
+    if (fullStream && typeof (fullStream as any)[Symbol.asyncIterator] === 'function') {
+      for await (const part of fullStream) {
+        if (aborted || abortSignal?.aborted) {
+          return
+        }
+        try {
+          const t = String((part as any)?.type || '')
+          const delta: string =
+            (part as any)?.delta ??
+            (part as any)?.textDelta ??
+            (part as any)?.text ??
+            (typeof part === 'string' ? part : '')
+
+          if (!delta) continue
+
+          // Route reasoning vs text parts. Anthropic may label as 'thinking'/'reasoning'.
+          const isReason = t.includes('reason') || t.includes('thinking')
+          if (isReason) {
+            if (think) {
+              onChunk(JSON.stringify({ part: 'reasoning', delta }))
+            } else {
+              // Suppress reasoning output when thinking is disabled
+              continue
+            }
+          } else {
+            onChunk(JSON.stringify({ part: 'text', delta }))
+          }
+        } catch {
+          // Ignore malformed parts
+        }
+      }
+    } else {
+      const { textStream } = result
+      for await (const chunk of textStream as AsyncIterable<string>) {
+        if (aborted || abortSignal?.aborted) {
+          return
+        }
+        onChunk(JSON.stringify({ part: 'text', delta: chunk }))
+      }
+    }
+  } catch (err: any) {
+    if (aborted || err?.name === 'AbortError') {
+      return
+    }
+    throw err
   }
 }

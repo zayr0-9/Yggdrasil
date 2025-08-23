@@ -34,6 +34,8 @@ export function initializeDatabase() {
       user_id INTEGER NOT NULL,
       title TEXT,
       model_name TEXT DEFAULT 'gemma3:4b',
+      system_prompt TEXT,
+      conversation_context TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -49,6 +51,7 @@ export function initializeDatabase() {
       children_ids TEXT DEFAULT '[]',
       role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
       content TEXT NOT NULL,
+      thinking_block TEXT,
       model_name TEXT DEFAULT 'unknown',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
@@ -182,23 +185,31 @@ export function initializeStatements() {
     createConversation: db.prepare('INSERT INTO conversations (user_id, title, model_name) VALUES (?, ?, ?)'),
     getConversationsByUser: db.prepare('SELECT * FROM conversations WHERE user_id = ? ORDER BY updated_at DESC'),
     getConversationById: db.prepare('SELECT * FROM conversations WHERE id = ?'),
+    getConversationSystemPrompt: db.prepare('SELECT system_prompt FROM conversations WHERE id = ?'),
     updateConversationTitle: db.prepare(
       'UPDATE conversations SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
     ),
+    updateConversationSystemPrompt: db.prepare(
+      'UPDATE conversations SET system_prompt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ),
+    updateConversationContext: db.prepare(
+      'UPDATE conversations SET conversation_context = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ),
+    getConversationContext: db.prepare('SELECT conversation_context FROM conversations WHERE id = ?'),
     updateConversationTimestamp: db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?'),
     deleteConversation: db.prepare('DELETE FROM conversations WHERE id = ?'),
     deleteConversationsByUser: db.prepare('DELETE FROM conversations WHERE user_id = ?'),
 
     // Messages - Core operations
     createMessage: db.prepare(
-      'INSERT INTO messages (conversation_id, parent_id, role, content, children_ids, model_name) VALUES (?, ?, ?, ?, ?, ?)'
+      'INSERT INTO messages (conversation_id, parent_id, role, content, thinking_block, children_ids, model_name) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ),
     getMessageById: db.prepare('SELECT * FROM messages WHERE id = ?'),
     getChildrenIds: db.prepare('SELECT children_ids FROM messages WHERE id = ?'),
     getMessagesByConversation: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'),
     getLastMessage: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1'),
     deleteMessagesByConversation: db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
-    updateMessage: db.prepare('UPDATE messages SET content = ? WHERE id = ?'),
+    updateMessage: db.prepare('UPDATE messages SET content = ?, thinking_block = ? WHERE id = ?'),
     deleteMessage: db.prepare('DELETE FROM messages WHERE id = ?'),
 
     // Messages - Optimized branch operations using children_ids
@@ -255,16 +266,12 @@ export function initializeStatements() {
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ),
     // Legacy setter retained but no longer used in new code paths
-    updateAttachmentMessageId: db.prepare(
-      'UPDATE message_attachments SET message_id = ? WHERE id = ?'
-    ),
+    updateAttachmentMessageId: db.prepare('UPDATE message_attachments SET message_id = ? WHERE id = ?'),
     // Many-to-many operations via join table
     linkAttachmentToMessage: db.prepare(
       'INSERT OR IGNORE INTO message_attachment_links (message_id, attachment_id) VALUES (?, ?)'
     ),
-    deleteLinksByMessage: db.prepare(
-      'DELETE FROM message_attachment_links WHERE message_id = ?'
-    ),
+    deleteLinksByMessage: db.prepare('DELETE FROM message_attachment_links WHERE message_id = ?'),
     unlinkAttachmentFromMessage: db.prepare(
       'DELETE FROM message_attachment_links WHERE message_id = ? AND attachment_id = ?'
     ),

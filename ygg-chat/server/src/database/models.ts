@@ -109,6 +109,7 @@ export interface Conversation {
   user_id: number
   title: string | null
   model_name: string
+  system_prompt?: string | null
   created_at: string
   updated_at: string
 }
@@ -184,6 +185,24 @@ export class ConversationService {
     return statements.getConversationById.get(id) as Conversation | undefined
   }
 
+  static getSystemPrompt(id: number): string | null {
+    const row = statements.getConversationSystemPrompt.get(id) as { system_prompt: string | null } | undefined
+    return row?.system_prompt ?? null
+  }
+  static getConversationContext(id: number): string | null {
+    const row = statements.getConversationContext.get(id) as { conversation_context: string | null } | undefined
+    return row?.conversation_context ?? null
+  }
+  static updateSystemPrompt(id: number, prompt: string | null): Conversation | undefined {
+    statements.updateConversationSystemPrompt.run(prompt, id)
+    return statements.getConversationById.get(id) as Conversation | undefined
+  }
+
+  static updateContext(id: number, context: string): Conversation | undefined {
+    statements.updateConversationContext.run(context, id)
+    return statements.getConversationById.get(id) as Conversation | undefined
+  }
+
   static updateTitle(id: number, title: string): Conversation | undefined {
     statements.updateConversationTitle.run(title, id)
     return statements.getConversationById.get(id) as Conversation | undefined
@@ -205,13 +224,22 @@ export class ConversationService {
 export class MessageService {
   static create(
     conversationId: number,
+    parentId: number | null = null,
     role: Message['role'],
     content: string,
-    parentId: number | null = null,
+    thinking_block: string,
     modelName?: string
     // children: []
   ): Message {
-    const result = statements.createMessage.run(conversationId, parentId, role, content, '[]', modelName)
+    const result = statements.createMessage.run(
+      conversationId,
+      parentId,
+      role,
+      content,
+      thinking_block,
+      '[]',
+      modelName
+    )
     statements.updateConversationTimestamp.run(conversationId)
     return statements.getMessageById.get(result.lastInsertRowid) as Message
   }

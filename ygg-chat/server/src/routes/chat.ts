@@ -10,6 +10,7 @@ import { convertMessagesToHeimdall } from '../utils/heimdallConverter'
 import { modelService } from '../utils/modelService'
 // import { generateResponse } from '../utils/ollama'
 import { saveBase64ImageAttachmentsForMessage } from '../utils/attachments'
+import { abortGeneration, clearGeneration, createGeneration } from '../utils/generationManager'
 import { generateResponse } from '../utils/provider'
 
 const router = express.Router()
@@ -33,6 +34,8 @@ router.get(
   '/models/openai',
   asyncHandler(async (req, res) => {
     try {
+      const abortController = new AbortController()
+      req.on('close', () => abortController.abort())
       const apiKey = process.env.OPENAI_API_KEY
       if (!apiKey) {
         return res.status(400).json({ error: 'Missing OPENAI_API_KEY' })
@@ -349,6 +352,84 @@ router.patch(
   })
 )
 
+// Get conversation system prompt
+router.get(
+  '/conversations/:id/system-prompt',
+  asyncHandler(async (req, res) => {
+    const conversationId = parseInt(req.params.id)
+    const conversation = ConversationService.getById(conversationId)
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' })
+    }
+    const systemPrompt = ConversationService.getSystemPrompt(conversationId)
+    res.json({ systemPrompt })
+  })
+)
+
+//Get conversation context
+router.get(
+  '/conversations/:id/context',
+  asyncHandler(async (req, res) => {
+    const conversationId = parseInt(req.params.id)
+    const conversation = ConversationService.getById(conversationId)
+    console.log('conversation', conversation)
+    if (!conversation) {
+      console.log('Conversation not found')
+      return res.status(404).json({ error: 'Conversation not found' })
+    }
+    const context = ConversationService.getConversationContext(conversationId)
+    console.log('context', context)
+    res.json({ context })
+  })
+)
+
+// Update conversation system prompt
+router.patch(
+  '/conversations/:id/system-prompt',
+  asyncHandler(async (req, res) => {
+    const conversationId = parseInt(req.params.id)
+    const { systemPrompt } = req.body as { systemPrompt?: string | null }
+
+    // Validate existence
+    const existing = ConversationService.getById(conversationId)
+    if (!existing) {
+      return res.status(404).json({ error: 'Conversation not found' })
+    }
+
+    // Validate payload: allow string or null to clear; undefined is invalid
+    if (typeof systemPrompt === 'undefined') {
+      return res.status(400).json({ error: 'systemPrompt is required (string or null)' })
+    }
+
+    const updated = ConversationService.updateSystemPrompt(conversationId, systemPrompt ?? null)
+    res.json(updated)
+  })
+)
+
+//update conversation context
+router.patch(
+  '/conversations/:id/context',
+  asyncHandler(async (req, res) => {
+    const conversationId = parseInt(req.params.id)
+    const { context } = req.body as { context?: string | null }
+
+    const existing = ConversationService.getById(conversationId)
+    if (!existing) {
+      return res.status(404).json({ error: 'Conversation not found' })
+    }
+
+    if (typeof context === 'undefined') {
+      return res.status(400).json({ error: 'context is required (string or null)' })
+    }
+    if (context) {
+      const updated = ConversationService.updateContext(conversationId, context)
+      res.json(updated)
+    } else {
+      // return error if no context sent
+      return res.status(400).json({ error: 'context is required (string or null)' })
+    }
+  })
+)
 //delete conversation
 router.delete(
   '/conversations/:id/',
@@ -374,6 +455,7 @@ router.get(
   })
 )
 
+// get conversation children
 router.get(
   '/conversations/:conversationId/messages/:messageId/children',
   asyncHandler(async (req, res) => {
@@ -405,7 +487,15 @@ router.post(
   '/conversations/:id/messages/repeat',
   asyncHandler(async (req, res) => {
     const conversationId = parseInt(req.params.id)
-    const { content, modelName, parentId: requestedParentId, repeatNum = 1, provider = 'ollama' } = req.body
+    const {
+      content,
+      modelName,
+      parentId: requestedParentId,
+      repeatNum = 1,
+      provider = 'ollama',
+      systemPrompt,
+      think,
+    } = req.body
 
     if (!content) {
       return res.status(400).json({ error: 'Message content required' })
@@ -416,6 +506,9 @@ router.post(
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' })
     }
+    const conversationContext = ConversationService.getConversationContext(conversationId)
+    // const conversationSystemPrompt = ConversationService.getSystemPrompt(conversationId)
+    //we should ideally call this but rn we are just passing from front end, cleanup later
 
     // Use conversation's model or provided model or default
     const selectedModel = modelName || conversation.model_name || (await modelService.getDefaultModel())
@@ -434,7 +527,7 @@ router.post(
     }
 
     // Save user message with proper parent ID
-    const userMessage = MessageService.create(conversationId, 'user', content, parentId)
+    const userMessage = MessageService.create(conversationId, parentId, 'user', content, '', selectedModel)
 
     // Setup SSE headers
     res.writeHead(200, {
@@ -457,15 +550,42 @@ router.post(
 
     try {
       const repeats = Math.max(1, parseInt(repeatNum as string, 10) || 1)
+      const { id: messageId, controller } = createGeneration(userMessage.id)
+      // Inform client of message id so it can cancel later
+      res.write(`data: ${JSON.stringify({ type: 'generation_started', messageId: userMessage.id })}\n\n`)
+      // Only clear on close; do NOT abort automatically
+      // Don't clear on close - let it complete naturally or be aborted manually
+      // req.on('close', () => clearGeneration(messageId))
 
       for (let i = 0; i < repeats; i++) {
         let assistantContent = ''
+        let assistantThinking = ''
 
         await generateResponse(
           baseHistory,
           chunk => {
-            assistantContent += chunk
-            res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk, iteration: i })}\n\n`)
+            try {
+              const obj = JSON.parse(chunk)
+              const part = obj?.part as 'text' | 'reasoning' | undefined
+              const delta = String(obj?.delta ?? '')
+              if (part === 'reasoning') {
+                assistantThinking += delta
+                res.write(
+                  `data: ${JSON.stringify({ type: 'chunk', part: 'reasoning', delta, content: '', iteration: i })}\n\n`
+                )
+              } else {
+                assistantContent += delta
+                res.write(
+                  `data: ${JSON.stringify({ type: 'chunk', part: 'text', delta, content: delta, iteration: i })}\n\n`
+                )
+              }
+            } catch {
+              // Fallback: treat as plain text
+              assistantContent += chunk
+              res.write(
+                `data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: chunk, content: chunk, iteration: i })}\n\n`
+              )
+            }
           },
           provider,
           selectedModel,
@@ -473,17 +593,31 @@ router.post(
             url: a?.url || undefined,
             mimeType: (a as any)?.mime_type,
             filePath: (a as any)?.file_path,
-          }))
+          })),
+          systemPrompt,
+          controller.signal,
+          conversationContext ? conversationContext : null,
+          think
         )
 
-        if (assistantContent.trim()) {
-          const assistantMessage = MessageService.create(conversationId, 'assistant', assistantContent, userMessage.id)
+        if (assistantContent.trim() || assistantThinking.trim()) {
+          const assistantMessage = MessageService.create(
+            conversationId,
+            userMessage.id,
+            'assistant',
+            assistantContent,
+            assistantThinking,
+            selectedModel
+          )
 
           res.write(`data: ${JSON.stringify({ type: 'complete', message: assistantMessage, iteration: i })}\n\n`)
         } else {
           res.write(`data: ${JSON.stringify({ type: 'no_output', iteration: i })}\n\n`)
         }
       }
+
+      // Clear generation on successful completion
+      clearGeneration(messageId)
 
       const messages = MessageService.getByConversation(conversationId)
       if (!conversation.title && messages.length === 1) {
@@ -497,6 +631,11 @@ router.post(
           error: error instanceof Error ? error.message : 'Unknown error',
         })}\n\n`
       )
+    } finally {
+      // Best-effort cleanup
+      try {
+        const { id: _ } = { id: '' }
+      } catch {}
     }
 
     res.end()
@@ -509,7 +648,15 @@ router.post(
   asyncHandler(async (req, res) => {
     console.log('received message from client, starting generation')
     const conversationId = parseInt(req.params.id)
-    const { content, messages, modelName, parentId: requestedParentId, provider = 'ollama' } = req.body
+    const {
+      content,
+      messages,
+      modelName,
+      parentId: requestedParentId,
+      provider = 'ollama',
+      systemPrompt,
+      think,
+    } = req.body
 
     if (!content) {
       return res.status(400).json({ error: 'Message content required' })
@@ -520,10 +667,12 @@ router.post(
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' })
     }
+    const conversationContext = ConversationService.getConversationContext(conversationId)
+    // const conversationSystemPrompt = ConversationService.getSystemPrompt(conversationId)
 
     // Use conversation's model or provided model or default
     const selectedModel = modelName || conversation.model_name || (await modelService.getDefaultModel())
-
+    console.log('messages server received -------', messages)
     // Determine parent ID: use requested parentId if provided, otherwise get last message
     let parentId: number | null = null
     if (requestedParentId !== undefined) {
@@ -539,7 +688,7 @@ router.post(
     }
 
     // Save user message with proper parent ID
-    const userMessage = MessageService.create(conversationId, 'user', content, parentId)
+    const userMessage = MessageService.create(conversationId, parentId, 'user', content, '', selectedModel)
     // console.log('server | user message', userMessage)
 
     // Setup SSE headers
@@ -568,140 +717,109 @@ router.post(
 
       // Ensure latest prompt is included with prior context before generating
       const combinedMessages = Array.isArray(messages) ? [...messages, userMessage] : [userMessage]
-      // console.log('server | combined messages', combinedMessages)
+      console.log('server | combined messages', combinedMessages)
 
       let assistantContent = ''
+      let assistantThinking = ''
 
-      // Stream AI response
-      await generateResponse(
-        combinedMessages,
-        chunk => {
-          assistantContent += chunk
-          res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`)
-        },
-        provider,
-        selectedModel,
-        createdAttachments.map(a => ({
-          url: a?.url || undefined,
-          mimeType: (a as any)?.mime_type,
-          filePath: (a as any)?.file_path,
-        }))
-      )
-      // console.log('selectedModel', selectedModel)
-      // Save complete assistant message with user message as parent
-      const assistantMessage = MessageService.create(
-        conversationId,
-        'assistant',
-        assistantContent,
-        userMessage.id,
-        selectedModel
-      )
-
-      // Send completion event
-      res.write(
-        `data: ${JSON.stringify({
-          type: 'complete',
-          message: assistantMessage,
-        })}\n\n`
-      )
-
-      // Auto-generate title for new conversations
-      if (!conversation.title && messages.length === 1) {
-        const title = content.slice(0, 50) + (content.length > 50 ? '...' : '')
-        ConversationService.updateTitle(conversationId, title)
-      }
-    } catch (error) {
-      res.write(
-        `data: ${JSON.stringify({
-          type: 'error',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        })}\n\n`
-      )
-    }
-
-    res.end()
-  })
-)
-
-// Send message with streaming response (with repeat capability)
-router.post(
-  '/conversations/:id/messages/repeat',
-  asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
-    const { content, modelName, parentId: requestedParentId, repeatNum = 1, provider = 'ollama' } = req.body
-
-    if (!content) {
-      return res.status(400).json({ error: 'Message content required' })
-    }
-
-    // Verify conversation exists
-    const conversation = ConversationService.getById(conversationId)
-    if (!conversation) {
-      return res.status(404).json({ error: 'Conversation not found' })
-    }
-
-    // Use conversation's model or provided model or default
-    const selectedModel = modelName || conversation.model_name || (await modelService.getDefaultModel())
-
-    // Determine parent ID: use requested parentId if provided, otherwise get last message
-    let parentId: number | null = null
-    if (requestedParentId !== undefined) {
-      const parentMessage = MessageService.getById(requestedParentId)
-      parentId = parentMessage ? requestedParentId : null
-    } else {
-      const lastMessage = MessageService.getLastMessage(conversationId)
-      if (lastMessage) {
-        const validParent = MessageService.getById(lastMessage.id)
-        parentId = validParent ? lastMessage.id : null
-      }
-    }
-
-    // Save user message with proper parent ID
-    const userMessage = MessageService.create(conversationId, 'user', content, parentId)
-
-    // Setup SSE headers
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Cache-Control',
-    })
-
-    // Send user message immediately
-    res.write(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`)
-    const baseHistory = MessageService.getByConversation(conversationId)
-
-    try {
-      const repeats = Math.max(1, parseInt(repeatNum as string, 10) || 1)
-
-      for (let i = 0; i < repeats; i++) {
-        let assistantContent = ''
-
+      // Stream AI response with manual abort control
+      console.log('calling create generation')
+      const { id: messageId, controller } = createGeneration(userMessage.id)
+      console.log('created generation', messageId)
+      res.write(`data: ${JSON.stringify({ type: 'generation_started', messageId: userMessage.id })}\n\n`)
+      // Don't clear on close - let it complete naturally or be aborted manually
+      // req.on('close', () => clearGeneration(messageId))
+      try {
         await generateResponse(
-          baseHistory,
+          combinedMessages,
           chunk => {
-            assistantContent += chunk
-            res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk, iteration: i })}\n\n`)
+            try {
+              const obj = JSON.parse(chunk)
+              const part = obj?.part as 'text' | 'reasoning' | undefined
+              const delta = String(obj?.delta ?? '')
+              if (part === 'reasoning') {
+                assistantThinking += delta
+                res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'reasoning', delta, content: '' })}\n\n`)
+              } else {
+                assistantContent += delta
+                res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'text', delta, content: delta })}\n\n`)
+              }
+            } catch {
+              // Fallback: treat as plain text
+              assistantContent += chunk
+              res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: chunk, content: chunk })}\n\n`)
+            }
           },
           provider,
+          selectedModel,
+          createdAttachments.map(a => ({
+            url: a?.url || undefined,
+            mimeType: (a as any)?.mime_type,
+            filePath: (a as any)?.file_path,
+          })),
+          systemPrompt,
+          controller.signal,
+          conversationContext ? conversationContext : null,
+          think
+        )
+
+        // Normal completion -> persist assistant message
+        const assistantMessage = MessageService.create(
+          conversationId,
+          userMessage.id,
+          'assistant',
+          assistantContent,
+          assistantThinking,
           selectedModel
         )
 
-        if (assistantContent.trim()) {
-          const assistantMessage = MessageService.create(conversationId, 'assistant', assistantContent, userMessage.id)
+        res.write(
+          `data: ${JSON.stringify({
+            type: 'complete',
+            message: assistantMessage,
+          })}\n\n`
+        )
 
-          res.write(`data: ${JSON.stringify({ type: 'complete', message: assistantMessage, iteration: i })}\n\n`)
-        } else {
-          res.write(`data: ${JSON.stringify({ type: 'no_output', iteration: i })}\n\n`)
+        // Auto-generate title for new conversations
+        if (!conversation.title && messages.length === 1) {
+          const title = content.slice(0, 50) + (content.length > 50 ? '...' : '')
+          ConversationService.updateTitle(conversationId, title)
         }
+      } catch (error: any) {
+        const isAbort =
+          error?.name === 'AbortError' ||
+          String(error || '')
+            .toLowerCase()
+            .includes('abort')
+        if (isAbort) {
+          // Persist whatever we have as a partial message
+          if (assistantContent.trim() || assistantThinking.trim()) {
+            const assistantMessage = MessageService.create(
+              conversationId,
+              userMessage.id,
+              'assistant',
+              assistantContent,
+              assistantThinking,
+              selectedModel
+            )
+            res.write(`data: ${JSON.stringify({ type: 'complete', message: assistantMessage, aborted: true })}\n\n`)
+          } else {
+            res.write(`data: ${JSON.stringify({ type: 'aborted' })}\n\n`)
+          }
+        } else {
+          res.write(
+            `data: ${JSON.stringify({
+              type: 'error',
+              error: error instanceof Error ? error.message : 'Unknown error',
+            })}\n\n`
+          )
+        }
+      } finally {
+        // Ensure cleanup
+        clearGeneration(messageId)
       }
 
-      const messages = MessageService.getByConversation(conversationId)
-      if (!conversation.title && messages.length === 1) {
-        const title = content.slice(0, 50) + (content.length > 50 ? '...' : '')
-        ConversationService.updateTitle(conversationId, title)
-      }
+      res.end()
     } catch (error) {
       res.write(
         `data: ${JSON.stringify({
@@ -709,116 +827,11 @@ router.post(
           error: error instanceof Error ? error.message : 'Unknown error',
         })}\n\n`
       )
+      res.end()
     }
-
-    res.end()
   })
 )
-
-router.post(
-  '/conversations/:id/messages',
-  asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
-    const { content, modelName, parentId: requestedParentId, provider = 'ollama' } = req.body
-
-    if (!content) {
-      return res.status(400).json({ error: 'Message content required' })
-    }
-
-    // Verify conversation exists
-    const conversation = ConversationService.getById(conversationId)
-    if (!conversation) {
-      return res.status(404).json({ error: 'Conversation not found' })
-    }
-
-    // Use conversation's model or provided model or default
-    const selectedModel = modelName || conversation.model_name || (await modelService.getDefaultModel())
-
-    // Determine parent ID: use requested parentId if provided, otherwise get last message
-    let parentId: number | null = null
-    if (requestedParentId !== undefined) {
-      const parentMessage = MessageService.getById(requestedParentId)
-      parentId = parentMessage ? requestedParentId : null
-      console.log(`server | parent id - ${parentId}`)
-    } else {
-      const lastMessage = MessageService.getLastMessage(conversationId)
-      if (lastMessage) {
-        const validParent = MessageService.getById(lastMessage.id)
-        parentId = validParent ? lastMessage.id : null
-      }
-    }
-
-    // Save user message with proper parent ID
-    const userMessage = MessageService.create(conversationId, 'user', content, parentId)
-
-    // Setup SSE headers
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Cache-Control',
-    })
-
-    // Send user message immediately
-    res.write(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`)
-
-    try {
-      // Decode and persist any base64 attachments (images)
-      const attachmentsBase64 = Array.isArray(req.body?.attachmentsBase64) ? req.body.attachmentsBase64 : null
-      const createdAttachments: ReturnType<typeof AttachmentService.getById>[] = attachmentsBase64
-        ? saveBase64ImageAttachmentsForMessage(userMessage.id, attachmentsBase64)
-        : []
-      // Get conversation history for context
-      const messages = MessageService.getByConversation(conversationId)
-
-      let assistantContent = ''
-
-      // Stream AI response
-      await generateResponse(
-        messages,
-        chunk => {
-          assistantContent += chunk
-          res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`)
-        },
-        provider,
-        selectedModel,
-        createdAttachments.map(a => ({
-          url: a?.url || undefined,
-          mimeType: (a as any)?.mime_type,
-          filePath: (a as any)?.file_path,
-        }))
-      )
-
-      // Save complete assistant message with user message as parent
-      const assistantMessage = MessageService.create(conversationId, 'assistant', assistantContent, userMessage.id)
-
-      // Send completion event
-      res.write(
-        `data: ${JSON.stringify({
-          type: 'complete',
-          message: assistantMessage,
-        })}\n\n`
-      )
-
-      // Auto-generate title for new conversations
-      if (!conversation.title && messages.length === 1) {
-        const title = content.slice(0, 50) + (content.length > 50 ? '...' : '')
-        ConversationService.updateTitle(conversationId, title)
-      }
-    } catch (error) {
-      res.write(
-        `data: ${JSON.stringify({
-          type: 'error',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        })}\n\n`
-      )
-    }
-
-    res.end()
-  })
-)
-
+//update message
 router.put(
   '/messages/:id',
   asyncHandler(async (req, res) => {
@@ -1019,6 +1032,18 @@ router.delete(
     }
     const updated = MessageService.unlinkAttachment(messageId, attachmentId)
     res.json(updated)
+  })
+)
+
+// Abort an in-flight generation by message id
+router.post(
+  '/messages/:id/abort',
+  asyncHandler(async (req, res) => {
+    const messageId = parseInt(req.params.id)
+    console.log('Abort request received for message', messageId)
+    const success = abortGeneration(messageId)
+    console.log('Abort result:', success)
+    res.json({ success })
   })
 )
 

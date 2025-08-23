@@ -1,6 +1,14 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
 import { RootState } from '../../store/store'
-import { api } from '../../utils/api'
+import {
+  api,
+  getConversationContext,
+  getConversationSystemPrompt,
+  patchConversationContext,
+  patchConversationSystemPrompt,
+  type SystemPromptPatchResponse,
+} from '../../utils/api'
+import { convContextSet, systemPromptSet } from './conversationSlice'
 import { Conversation } from './conversationTypes'
 
 // Fetch conversations for current user (creates demo user if none)
@@ -70,4 +78,66 @@ export const deleteConversation = createAsyncThunk<number, { id: number }, { sta
   }
 )
 
-// delete conversation
+// Fetch the conversation system prompt and store in state.chat.systemPrompt
+export const fetchSystemPrompt = createAsyncThunk<string | null, number>(
+  'chat/fetchSystemPrompt',
+  async (conversationId, { dispatch, rejectWithValue }) => {
+    try {
+      const res = await getConversationSystemPrompt(conversationId)
+      const value = typeof res.systemPrompt === 'string' ? res.systemPrompt : null
+      dispatch(systemPromptSet(value))
+      return value
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch system prompt'
+      return rejectWithValue(message) as any
+    }
+  }
+)
+
+// Fetch conversation context
+export const fetchContext = createAsyncThunk<string | null, number>(
+  'chat/fetchContext',
+  async (conversationId, { dispatch, rejectWithValue }) => {
+    try {
+      const res = await getConversationContext(conversationId)
+      const value = res.context
+      console.log('dispatching convContext ', res)
+      dispatch(convContextSet(value))
+      return value
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch context'
+      return rejectWithValue(message) as any
+    }
+  }
+)
+// Update the conversation system prompt on the server and reflect in state
+export const updateSystemPrompt = createAsyncThunk<
+  SystemPromptPatchResponse,
+  { id: number; systemPrompt: string | null }
+>('chat/updateSystemPrompt', async ({ id, systemPrompt }, { dispatch, rejectWithValue }) => {
+  try {
+    const updated = await patchConversationSystemPrompt(id, systemPrompt)
+    // Server returns updated Conversation with snake_case system_prompt
+    // Mirror to client state
+    dispatch(systemPromptSet((updated as any).system_prompt ?? null))
+    return updated
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update system prompt'
+    return rejectWithValue(message) as any
+  }
+})
+
+export const updateContext = createAsyncThunk<
+  { id: number; context: string | null }, // return type
+  { id: number; context: string | null } // argument type
+>('chat/updateContext', async ({ id, context }, { dispatch, rejectWithValue }) => {
+  try {
+    const updated = await patchConversationContext(id, context) // ConversationPatchResponse
+    const next = { id: updated.id, context: updated.conversation_context ?? null }
+    dispatch(convContextSet(next.context))
+    return next
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update context'
+    return rejectWithValue(message) as any
+  }
+})

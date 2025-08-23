@@ -17,6 +17,7 @@ export { default as chatReducer, chatSliceActions } from './chatSlice'
 
 // Async actions
 export {
+  abortStreaming,
   deleteMessage,
   editMessageWithBranching,
   fetchModels,
@@ -30,6 +31,7 @@ export {
 
 // Selectors - grouped by feature
 export {
+  conversationContext,
   HeimdallDataReset,
   selectBookmarkedMessages,
   // Combined selectors
@@ -69,7 +71,12 @@ export {
 
 // Convenience re-exports
 // New async thunks
-export { fetchConversationMessages, fetchMessageTree, initializeUserAndConversation, updateConversationTitle } from './chatActions'
+export {
+  fetchConversationMessages,
+  fetchMessageTree,
+  initializeUserAndConversation,
+  updateConversationTitle,
+} from './chatActions'
 
 // New selectors for Heimdall and initialization
 export {

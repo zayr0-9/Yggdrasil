@@ -1,7 +1,10 @@
+import 'boxicons' // Types
+import 'boxicons/css/boxicons.min.css'
 import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
-import { Button, ChatMessage, Heimdall, InputTextArea, TextField } from '../components'
+import { Button, ChatMessage, Heimdall, InputTextArea, Select, SettingsPane, TextField } from '../components'
 import {
+  abortStreaming,
   chatSliceActions,
   deleteMessage,
   editMessageWithBranching,
@@ -32,11 +35,15 @@ import {
   updateConversationTitle,
   updateMessage,
 } from '../features/chats'
-import { fetchConversations, makeSelectConversationById } from '../features/conversations'
+import {
+  fetchContext,
+  fetchConversations,
+  fetchSystemPrompt,
+  makeSelectConversationById,
+  systemPromptSet,
+} from '../features/conversations'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
 import { getParentPath } from '../utils/path'
-
-// Types
 
 function Chat() {
   const dispatch = useAppDispatch()
@@ -66,6 +73,38 @@ function Chat() {
   // rAF id to coalesce frequent scroll requests during streaming
   const scrollRafRef = useRef<number | null>(null)
 
+  // Measure input area (controls + textarea) height so messages list can avoid being overlapped
+  const inputAreaRef = useRef<HTMLDivElement>(null)
+  const [inputAreaHeight, setInputAreaHeight] = useState<number>(0)
+  // Track if we already applied the URL hash-based path to avoid overriding user branch switches
+  const hashAppliedRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const el = inputAreaRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setInputAreaHeight(entry.contentRect.height)
+      }
+    })
+    observer.observe(el)
+    // Initialize immediately
+    setInputAreaHeight(el.getBoundingClientRect().height)
+    return () => observer.disconnect()
+  }, [])
+
+  // Lock page scroll while chat is mounted
+  useEffect(() => {
+    const prevDocOverflow = document.documentElement.style.overflow
+    const prevBodyOverflow = document.body.style.overflow
+    document.documentElement.style.overflow = 'hidden'
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.documentElement.style.overflow = prevDocOverflow
+      document.body.style.overflow = prevBodyOverflow
+    }
+  }, [])
+
   // Consider the user to be "at the bottom" if within this many pixels
   const NEAR_BOTTOM_PX = 48
   const isNearBottom = (el: HTMLElement, threshold = NEAR_BOTTOM_PX) =>
@@ -86,7 +125,18 @@ function Chat() {
     setTitleInput(currentConversation?.title ?? '')
   }, [currentConversation?.title])
 
-  const titleChanged = titleInput !== (currentConversation?.title ?? '')
+  // Debounce title updates to avoid dispatching on every keystroke
+  useEffect(() => {
+    if (!currentConversationId) return
+    const trimmed = titleInput.trim()
+    const currentTrimmed = (currentConversation?.title ?? '').trim()
+    // No-op if unchanged
+    if (trimmed === currentTrimmed) return
+    const handle = setTimeout(() => {
+      dispatch(updateConversationTitle({ id: currentConversationId, title: trimmed }))
+    }, 1000)
+    return () => clearTimeout(handle)
+  }, [titleInput, currentConversationId, currentConversation?.title, dispatch])
 
   // Ensure we have the latest conversation titles on reload/switch
   useEffect(() => {
@@ -107,6 +157,8 @@ function Chat() {
     }
   })
   const [isResizing, setIsResizing] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [think, setThink] = useState<boolean>(false)
 
   useEffect(() => {
     if (!isResizing) return
@@ -148,11 +200,11 @@ function Chat() {
     }
   }, [isResizing])
 
-  const handleTitleSave = () => {
-    if (currentConversationId && titleChanged) {
-      dispatch(updateConversationTitle({ id: currentConversationId, title: titleInput.trim() }))
-    }
-  }
+  // Simple effect reacting to think changes
+  useEffect(() => {
+    // Minimal side-effect: log the current think mode
+    console.log('Think mode:', think)
+  }, [think])
 
   // Fetch tree when conversation changes
   useEffect(() => {
@@ -170,6 +222,16 @@ function Chat() {
   useEffect(() => {
     if (currentConversationId) {
       dispatch(fetchConversationMessages(currentConversationId))
+    }
+  }, [currentConversationId, dispatch])
+
+  // Fetch system prompt when conversation changes; clear when none selected
+  useEffect(() => {
+    if (currentConversationId) {
+      dispatch(fetchSystemPrompt(currentConversationId))
+      dispatch(fetchContext(currentConversationId))
+    } else {
+      dispatch(systemPromptSet(null))
     }
   }, [currentConversationId, dispatch])
 
@@ -234,7 +296,14 @@ function Chat() {
       // Smooth scroll when not streaming
       scrollToBottom('smooth')
     }
-  }, [displayMessages, streamState.buffer, streamState.active, streamState.finished, selectedPath])
+  }, [
+    displayMessages,
+    streamState.buffer,
+    streamState.thinkingBuffer,
+    streamState.active,
+    streamState.finished,
+    selectedPath,
+  ])
 
   // Cleanup any pending rAF on unmount
   useEffect(() => {
@@ -306,19 +375,25 @@ function Chat() {
     return null
   }, [location.hash])
 
-  // When we have messages loaded and a hashMessageId, build path to that message and set it
-  // Do NOT truncate an existing deeper path if it already includes the hash target.
+  // When we have messages loaded and a hashMessageId, build path to that message and set it ONCE per hash.
+  // This avoids resetting currentPath when the user switches branches after landing from a search result.
   useEffect(() => {
-    if (hashMessageId && conversationMessages.length > 0) {
+    // If hash cleared, allow future re-application when a new hash appears
+    if (!hashMessageId) {
+      hashAppliedRef.current = null
+      return
+    }
+    // Skip if we've already applied this hash
+    if (hashAppliedRef.current === hashMessageId) return
+
+    if (conversationMessages.length > 0) {
       const path = getParentPath(conversationMessages, hashMessageId)
-      const alreadyIncludesTarget = Array.isArray(selectedPath) && selectedPath.includes(hashMessageId)
-      if (!alreadyIncludesTarget) {
-        dispatch(chatSliceActions.conversationPathSet(path))
-      }
+      dispatch(chatSliceActions.conversationPathSet(path))
       // Ensure the focused message id is set so scrolling targets the correct element
       dispatch(chatSliceActions.focusedChatMessageSet(hashMessageId))
+      hashAppliedRef.current = hashMessageId
     }
-  }, [hashMessageId, conversationMessages, selectedPath, dispatch])
+  }, [hashMessageId, conversationMessages, dispatch])
 
   // useEffect(() => {
   //   if (focusedChatMessageId && conversationMessages.length > 0) {
@@ -393,15 +468,16 @@ function Chat() {
     userScrolledDuringStreamRef.current = false
     if (canSend && currentConversationId) {
       // Compute parent message index (last selected path item, if any)
-      const parent: number | null = selectedPath.length > 0 ? selectedPath[selectedPath.length - 1] : null
+      const parent: number = selectedPath.length > 0 ? selectedPath[selectedPath.length - 1] : 0
 
       // Dispatch a single sendMessage with repeatNum set to value.
       dispatch(
         sendMessage({
           conversationId: currentConversationId,
           input: messageInput,
+          parent,
           repeatNum: value,
-          parent: parent ?? undefined,
+          think: think,
         })
       )
     } else if (!currentConversationId) {
@@ -409,20 +485,11 @@ function Chat() {
     }
   }
 
-  // Handle sending message
-  // const handleSend = () => {
-  //   if (canSend && currentConversationId) {
-  //     // Send message
-  //     dispatch(
-  //       sendMessage({
-  //         conversationId: currentConversationId,
-  //         input: messageInput,
-  //       })
-  //     )
-  //   } else if (!currentConversationId) {
-  //     console.error('📤 No conversation ID available')
-  //   }
-  // }
+  const handleStopGeneration = () => {
+    if (streamState.streamingMessageId) {
+      dispatch(abortStreaming({ messageId: streamState.streamingMessageId }))
+    }
+  }
 
   const handleMessageEdit = (id: string, newContent: string) => {
     dispatch(chatSliceActions.messageUpdated({ id: parseInt(id), content: newContent }))
@@ -438,6 +505,7 @@ function Chat() {
           originalMessageId: parseInt(id),
           newContent: newContent,
           modelOverride: selectedModel || undefined,
+          think: think,
         })
       )
     }
@@ -535,18 +603,36 @@ function Chat() {
   // incorrect parent linking that could break currentPath after branching.
 
   return (
-    <div ref={containerRef} className='flex min-h-screen bg-gray-900 bg-neutral-50 dark:bg-neutral-900'>
-      <div className='p-5 flex-none min-w-[280px]' style={{ width: `${leftWidthPct}%` }}>
+    <div ref={containerRef} className='flex h-screen overflow-hidden bg-gray-900 bg-neutral-50 dark:bg-neutral-900'>
+      <div
+        className='relative flex flex-col flex-none min-w-[280px] h-screen overflow-hidden'
+        style={{ width: `${leftWidthPct}%` }}
+      >
         {/* <h1 className='text-3xl font-bold text-stone-800 dark:text-stone-200 mb-6'>
           {titleInput} {currentConversationId}
         </h1> */}
         {/* <h1 className='text-lg font-bold text-stone-800 dark:text-stone-200'>Title</h1> */}
 
+        {/* Conversation Title Editor */}
+        {currentConversationId && (
+          <div className='flex items-center gap-2 mb-2 mt-2 px-2'>
+            <TextField
+              value={titleInput}
+              onChange={val => {
+                setTitleInput(val)
+              }}
+              placeholder='Conversation title'
+              size='large'
+            />
+          </div>
+        )}
+
         {/* Messages Display */}
-        <div className='mb-6 bg-gray-800 py-4 rounded-lg bg-neutral-50 dark:bg-neutral-900'>
+        <div className='relative ml-2 flex flex-col thin-scrollbar bg-gray-800 rounded-lg bg-neutral-50 dark:bg-neutral-900 flex-1 min-h-0'>
           <div
             ref={messagesContainerRef}
-            className='px-2 dark:border-neutral-700 border-b border-stone-200 rounded-lg py-4 h-[78vh] overflow-y-auto p-3 bg-neutral-50 bg-slate-50 dark:bg-neutral-900'
+            className='px-2 dark:border-neutral-700 border-b border-stone-200 rounded-lg py-4 overflow-y-auto overscroll-y-contain touch-pan-y p-3 bg-neutral-50 dark:bg-neutral-900 flex-1 min-h-0'
+            style={{ paddingBottom: `${inputAreaHeight}px` }}
           >
             {displayMessages.length === 0 ? (
               <p className='text-stone-800 dark:text-stone-200'>No messages yet...</p>
@@ -557,6 +643,7 @@ function Chat() {
                   id={msg.id.toString()}
                   role={msg.role}
                   content={msg.content}
+                  thinking={msg.thinking_block}
                   timestamp={msg.created_at}
                   width='w-full'
                   modelName={msg.model_name}
@@ -570,11 +657,12 @@ function Chat() {
             )}
 
             {/* Show streaming content */}
-            {streamState.active && streamState.buffer && (
+            {streamState.active && (Boolean(streamState.buffer) || Boolean(streamState.thinkingBuffer)) && (
               <ChatMessage
                 id='streaming'
                 role='assistant'
                 content={streamState.buffer}
+                thinking={streamState.thinkingBuffer}
                 width='w-full'
                 modelName={selectedModel || undefined}
                 className=''
@@ -584,11 +672,12 @@ function Chat() {
             <div ref={bottomRef} data-bottom-sentinel='true' />
           </div>
         </div>
+        {/* Absolute input area: controls row + textarea, measured as one block */}
+        <div ref={inputAreaRef} className='absolute left-0 right-0 bottom-0 z-10'>
+          {/* Controls row (above) */}
 
-        {/* Message Input */}
-        <div className='bg-neutral-100 px-4 py-2 rounded-lg dark:bg-neutral-800'>
-          {/* <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>Send Message:</h3> */}
-          <div>
+          {/* Textarea (bottom, grows upward because wrapper is bottom-pinned) */}
+          <div className='bg-neutral-100 px-4 pb-2 pt-4 rounded-t-lg dark:bg-neutral-800'>
             <InputTextArea
               value={messageInput.content}
               onChange={handleInputChange}
@@ -600,156 +689,81 @@ function Chat() {
               autoFocus={streamState.finished}
               showCharCount={true}
             />
+            <div className='bg-neutral-100 px-1 pt-2 rounded-b-lg dark:bg-neutral-800 flex flex-col items-end'>
+              {/* <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>Send Message:</h3> */}
 
-            <div className='flex items-center gap-3 flex-wrap mt-2'></div>
+              {/* {messageInput.content.length > 0 && (
+              <small className='text-stone-800 dark:text-stone-200 text-xs mb-3 block text-right w-full'>
+                Press Enter to send, Shift+Enter for new line
+              </small>
+            )} */}
+
+              {/* <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-1'>Model Selection:</h3> */}
+              <div className='flex items-center gap-3 mb-3 justify-end w-full flex-wrap'>
+                {streamState.active && (
+                  <Button
+                    variant='secondary'
+                    onClick={handleStopGeneration}
+                    className='ml-2'
+                    disabled={!streamState.streamingMessageId}
+                  >
+                    Stop
+                  </Button>
+                )}
+                <Button variant='primary' className='rounded-full' size='small' onClick={() => setSettingsOpen(true)}>
+                  <i className='bx bx-cog text-xl' aria-hidden='true'></i>
+                </Button>
+
+                {/* <span className='text-stone-800 dark:text-stone-200 text-sm'>Available: {providers.providers.length}</span> */}
+                <Select
+                  value={providers.currentProvider || ''}
+                  onChange={handleProviderSelect}
+                  options={providers.providers.map(p => p.name)}
+                  placeholder='Select a provider...'
+                  disabled={providers.providers.length === 0}
+                  className='max-w-md'
+                />
+                {/* <span className='text-stone-800 dark:text-stone-200 text-sm'>{models.length} models</span> */}
+                <Select
+                  value={selectedModel || ''}
+                  onChange={handleModelSelect}
+                  options={models}
+                  placeholder='Select a model...'
+                  disabled={models.length === 0}
+                  className='w-full max-w-xs'
+                />
+                <Button variant='primary' className='rounded-full' size='small' onClick={handleRefreshModels}>
+                  <i className='bx bx-refresh text-xl' aria-hidden='true'></i>
+                </Button>
+                <Button variant='primary' className='rounded-full' size='small' onClick={() => setThink(t => !t)}>
+                  {think ? (
+                    <i className='bx bxs-bulb text-xl text-yellow-400' aria-hidden='true'></i>
+                  ) : (
+                    <i className='bx bx-bulb text-xl' aria-hidden='true'></i>
+                  )}
+                </Button>
+                <Button
+                  variant={canSend && currentConversationId ? 'primary' : 'secondary'}
+                  disabled={!canSend || !currentConversationId}
+                  onClick={() => handleSend(multiReplyCount)}
+                >
+                  {!currentConversationId
+                    ? 'Creating...'
+                    : sendingState.streaming
+                      ? 'Streaming...'
+                      : sendingState.sending
+                        ? 'Sending...'
+                        : 'Send'}
+                </Button>
+              </div>
+            </div>
           </div>
-          {messageInput.content.length > 0 && (
-            <small className='text-stone-800 dark:text-stone-200 text-xs mt-2 block'>
-              Press Enter to send, Shift+Enter for new line
-            </small>
-          )}
         </div>
-
-        {/* Model Selection */}
-        <div className='mb-6 bg-gray-800 px-4  rounded-lg bg-neutral-100 dark:bg-neutral-800'>
-          <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-1'>Model Selection:</h3>
-          <div className='flex items-center gap-3 mb-3'>
-            <Button
-              variant={canSend && currentConversationId ? 'primary' : 'secondary'}
-              disabled={!canSend || !currentConversationId}
-              onClick={() => handleSend(multiReplyCount)}
-            >
-              {!currentConversationId
-                ? 'Creating...'
-                : sendingState.streaming
-                  ? 'Streaming...'
-                  : sendingState.sending
-                    ? 'Sending...'
-                    : 'Send'}
-            </Button>
-            <Button variant='primary' size='small' onClick={handleRefreshModels}>
-              Refresh Models
-            </Button>
-            <Button onClick={() => dispatch(chatSliceActions.heimdallCompactModeToggled())}> compact </Button>
-            <span className='text-stone-800 dark:text-stone-200 text-sm'>
-              Available: {providers.providers.length} providers
-            </span>
-            <select
-              value={providers.currentProvider || ''}
-              onChange={e => handleProviderSelect(e.target.value)}
-              className='max-w-md p-2 rounded bg-neutral-50 dark:bg-gray-700 text-stone-800 dark:text-stone-200'
-              disabled={providers.providers.length === 0}
-            >
-              <option value=''>Select a provider...</option>
-              {providers.providers.map(provider => (
-                <option key={provider.name} value={provider.name}>
-                  {provider.name}
-                </option>
-              ))}
-            </select>
-            <span className='text-stone-800 dark:text-stone-200 text-sm'>Available: {models.length} models</span>
-            <select
-              value={selectedModel || ''}
-              onChange={e => handleModelSelect(e.target.value)}
-              className='w-full max-w-md p-2 rounded bg-neutral-50 dark:bg-gray-700 text-stone-800 dark:text-stone-200'
-              disabled={models.length === 0}
-            >
-              <option value=''>Select a model...</option>
-              {models.map(model => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Conversation Title Editor */}
-        {currentConversationId && (
-          <div className='flex items-center gap-2 mb-4'>
-            <TextField value={titleInput} onChange={setTitleInput} placeholder='Conversation title' size='large' />
-            <Button variant='primary' size='small' disabled={!titleChanged} onClick={handleTitleSave}>
-              Save
-            </Button>
-          </div>
-        )}
-        {/* Test Instructions */}
-        {/* <div className=' bg-stone-100 bg-opacity-50 p-4 rounded-lg dark:bg-neutral-800 dark:border-neutral-700 mb-4'>
-          <h4 className='font-semibold mb-2 text-stone-800 dark:text-stone-200'>Test Instructions:</h4>
-          <ol className='list-decimal list-inside space-y-1 text-sm text-stone-800 dark:text-stone-200'>
-            <li>Make sure your server is running on localhost:3001</li>
-            <li>Make sure Ollama is running on localhost:11434</li>
-            <li>Click "Refresh Models" to load available models from Ollama</li>
-            <li>Select a model from the dropdown</li>
-            <li>Type a message in the textarea</li>
-            <li>Click Send or press Enter to send</li>
-            <li>Watch the streaming response in the messages area</li>
-            <li>Check the Chat State panel for real-time state updates</li>
-            <li>Open browser console to see detailed logs</li>
-          </ol>
-          <p className='text-sm mt-2 text-stone-800 dark:text-stone-200'>
-            <strong>Note:</strong> This tests the chat Redux logic without requiring actual conversation management.
-          </p>
-        </div> */}
-
-        {/* Chat State Display */}
-        {/* <div className='bg-gray-800 p-4 mb-6 rounded-lg text-gray-300 text-sm font-mono bg-neutral-100 dark:bg-neutral-800'>
-          <h3 className='text-lg font-semibold mb-3 text-stone-800 dark:text-stone-200'>Chat State:</h3>
-          <div className='grid grid-cols-2 gap-2 text-stone-800 dark:text-stone-200'>
-            <p>
-              <strong>Models Available:</strong> {models.length}
-            </p>
-            <p>
-              <strong>Selected Model:</strong> {selectedModel || 'None'}
-            </p>
-            <p>
-              <strong>Conversation ID:</strong> {currentConversationId || 'Creating...'}
-            </p>
-            <p>
-              <strong>Can Send:</strong> {canSend && currentConversationId ? 'Yes' : 'No'}
-            </p>
-            <p>
-              <strong>Sending:</strong> {sendingState.sending ? 'Yes' : 'No'}
-            </p>
-            <p>
-              <strong>Streaming:</strong> {sendingState.streaming ? 'Yes' : 'No'}
-            </p>
-            <p>
-              <strong>Stream Active:</strong> {streamState.active ? 'Yes' : 'No'}
-            </p>
-            <p>
-              <strong>Input Length:</strong> {messageInput.content.length}
-            </p>
-            <p>
-              <strong>Messages Count:</strong> {conversationMessages.length}
-            </p>
-            <p>
-              <strong>Heimdall Data:</strong> {heimdallData ? 'Loaded' : 'Null'}
-            </p>
-            <p>
-              <strong>Tree Loading:</strong> {loading ? 'Yes' : 'No'}
-            </p>
-          </div>
-          {streamState.buffer && (
-            <p className='mt-2'>
-              <strong>Stream Buffer:</strong> "{streamState.buffer.slice(0, 50)}..."
-            </p>
-          )}
-          {sendingState.error && (
-            <p className='text-red-400 mt-2'>
-              <strong>Error:</strong> {sendingState.error}
-            </p>
-          )}
-          {error && (
-            <p className='text-red-400 mt-2'>
-              <strong>Tree Error:</strong> {error}
-            </p>
-          )}
-        </div> */}
       </div>
 
+      {/* SEPARATOR */}
       <div
-        className='w-1 bg-neutral-300 dark:bg-neutral-700 hover:bg-blue-400 cursor-col-resize select-none'
+        className='w-2 bg-neutral-300 dark:bg-neutral-700 hover:bg-neutral-400 cursor-col-resize select-none'
         role='separator'
         aria-orientation='vertical'
         onMouseDown={() => setIsResizing(true)}
@@ -771,6 +785,7 @@ function Chat() {
           onNodeSelect={handleNodeSelect}
         />
       </div>
+      <SettingsPane open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }

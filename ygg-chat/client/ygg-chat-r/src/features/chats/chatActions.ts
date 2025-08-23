@@ -1,9 +1,16 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
 import type { RootState } from '../../store/store'
-import { apiCall, createStreamingRequest, API_BASE } from '../../utils/api'
+import { API_BASE, apiCall, createStreamingRequest } from '../../utils/api'
 import type { Conversation } from '../conversations/conversationTypes'
 import { chatSliceActions } from './chatSlice'
-import { Attachment, BranchMessagePayload, EditMessagePayload, Message, ModelsResponse, SendMessagePayload } from './chatTypes'
+import {
+  Attachment,
+  BranchMessagePayload,
+  EditMessagePayload,
+  Message,
+  ModelsResponse,
+  SendMessagePayload,
+} from './chatTypes'
 // TODO: Import when conversations feature is available
 // import { conversationActions } from '../conversations'
 
@@ -208,11 +215,24 @@ export const fetchModelsForCurrentProvider = createAsyncThunk(
   }
 )
 
+// Model selection with persistence
+export const selectModel = createAsyncThunk('chat/selectModel', async (modelName: string, { dispatch, getState }) => {
+  const state = getState() as RootState
+
+  // Verify model exists
+  if (!state.chat.models.available.includes(modelName)) {
+    throw new Error(`Model ${modelName} not available`)
+  }
+
+  dispatch(chatSliceActions.modelSelected({ modelName, persist: true }))
+  return modelName
+})
+
 // Streaming message sending with proper error handling
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
   async (
-    { conversationId, input, parent, repeatNum }: SendMessagePayload,
+    { conversationId, input, parent, repeatNum, think }: SendMessagePayload,
     { dispatch, getState, rejectWithValue, signal }
   ) => {
     dispatch(chatSliceActions.sendingStarted())
@@ -227,7 +247,7 @@ export const sendMessage = createAsyncThunk(
       const { messages: currentMessages } = state.chat.conversation
       const currentPathIds = state.chat.conversation.currentPath
       const currentPathMessages = currentPathIds.map(id => currentMessages.find(m => m.id === id))
-      console.log('currentPathMessages', currentPathMessages)
+      // console.log('currentPathMessages', currentPathMessages)
       const modelName = input.modelOverride || state.chat.models.selected || state.chat.models.default
       // Map UI provider to server provider id
       const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
@@ -242,7 +262,7 @@ export const sendMessage = createAsyncThunk(
       if (!modelName) {
         throw new Error('No model selected')
       }
-      console.log('last currentMessage - ', currentMessages?.at(-1)?.id)
+      // console.log('last currentMessage - ', currentMessages?.at(-1)?.id)
 
       console.log(
         'finalMessage sent to the server ---------------------- ',
@@ -269,10 +289,11 @@ export const sendMessage = createAsyncThunk(
             modelName: modelName,
             // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
             parentId: parent,
-            systemPrompt: input.systemPrompt,
+            systemPrompt: state.conversations.systemPrompt,
             provider: serverProvider,
             repeatNum: repeatNum,
             attachmentsBase64,
+            think,
           }),
           signal: controller.signal,
         })
@@ -287,6 +308,7 @@ export const sendMessage = createAsyncThunk(
               parent_id: m.parent_id,
               children_ids: m.children_ids,
               role: m.role,
+              thinking_block: m.thinking_block,
               content: m.content,
               created_at: m.created_at,
             })),
@@ -294,9 +316,10 @@ export const sendMessage = createAsyncThunk(
             modelName: modelName,
             // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
             parentId: parent,
-            systemPrompt: input.systemPrompt,
+            systemPrompt: state.conversations.systemPrompt,
             provider: serverProvider,
             attachmentsBase64,
+            think,
           }),
           signal: controller.signal,
         })
@@ -350,7 +373,9 @@ export const sendMessage = createAsyncThunk(
               }
 
               // For streaming, accumulate or finalize per event
-              if (chunk.type === 'chunk') {
+              if (chunk.type === 'generation_started') {
+                dispatch(chatSliceActions.streamChunkReceived(chunk))
+              } else if (chunk.type === 'chunk') {
                 dispatch(chatSliceActions.streamChunkReceived(chunk))
               } else if (chunk.type === 'complete' && chunk.message) {
                 // Push each assistant reply as its own message
@@ -394,18 +419,6 @@ export const sendMessage = createAsyncThunk(
     }
   }
 )
-// Model selection with persistence
-export const selectModel = createAsyncThunk('chat/selectModel', async (modelName: string, { dispatch, getState }) => {
-  const state = getState() as RootState
-
-  // Verify model exists
-  if (!state.chat.models.available.includes(modelName)) {
-    throw new Error(`Model ${modelName} not available`)
-  }
-
-  dispatch(chatSliceActions.modelSelected({ modelName, persist: true }))
-  return modelName
-})
 
 export const updateMessage = createAsyncThunk(
   'chat/updateMessage',
@@ -469,7 +482,7 @@ export const deleteMessage = createAsyncThunk(
 export const editMessageWithBranching = createAsyncThunk(
   'chat/editMessageWithBranching',
   async (
-    { conversationId, originalMessageId, newContent, modelOverride, systemPrompt }: EditMessagePayload,
+    { conversationId, originalMessageId, newContent, modelOverride, think }: EditMessagePayload,
     { dispatch, getState, rejectWithValue, signal }
   ) => {
     dispatch(chatSliceActions.sendingStarted())
@@ -482,7 +495,16 @@ export const editMessageWithBranching = createAsyncThunk(
 
       const state = getState() as RootState
       const originalMessage = state.chat.conversation.messages.find(m => m.id === originalMessageId)
-
+      const { messages: currentMessages } = state.chat.conversation
+      const currentPathIds = state.chat.conversation.currentPath
+      // Truncate path to only include messages strictly before the originalMessageId
+      const idxOriginal = currentPathIds.indexOf(originalMessageId)
+      const truncatedPathIds = idxOriginal >= 0 ? currentPathIds.slice(0, idxOriginal) : currentPathIds
+      console.log('currentPathIds branch (truncated) ---', truncatedPathIds)
+      const currentPathMessages = truncatedPathIds
+        .map(id => currentMessages.find(m => m.id === id))
+        .filter((m): m is Message => !!m)
+      console.log('currentPathMessages branch ---', currentPathMessages)
       if (!originalMessage) {
         throw new Error('Original message not found')
       }
@@ -502,9 +524,7 @@ export const editMessageWithBranching = createAsyncThunk(
       const existingMinusDeleted = artifactsExisting.filter(a => !deletedBackup.includes(a))
       const draftDataUrls = drafts.map(d => d.dataUrl)
       const combinedArtifacts = [...existingMinusDeleted, ...draftDataUrls]
-      const attachmentsBase64 = combinedArtifacts.length
-        ? combinedArtifacts.map(dataUrl => ({ dataUrl }))
-        : null
+      const attachmentsBase64 = combinedArtifacts.length ? combinedArtifacts.map(dataUrl => ({ dataUrl })) : null
 
       // Before sending, reflect current image drafts in the UI by appending them
       // to the artifacts of the message being branched from.
@@ -526,12 +546,23 @@ export const editMessageWithBranching = createAsyncThunk(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          messages: currentPathMessages.map(m => ({
+            id: m.id,
+            conversation_id: m.conversation_id,
+            parent_id: m.parent_id,
+            children_ids: m.children_ids,
+            role: m.role,
+            thinking_block: m.thinking_block,
+            content: m.content,
+            created_at: m.created_at,
+          })),
           content: newContent,
           modelName,
           parentId: parentId, // Branch from the same parent as original
-          systemPrompt,
+          systemPrompt: state.conversations.systemPrompt,
           provider: serverProvider,
           attachmentsBase64,
+          think,
         }),
         signal: controller.signal,
       })
@@ -570,18 +601,23 @@ export const editMessageWithBranching = createAsyncThunk(
                 dispatch(chatSliceActions.messageAdded(chunk.message))
                 // And update currentPath to this new user branch node
                 dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
-                // Live-update: append current image drafts to this new user message's artifacts
-                if (drafts.length > 0) {
+                // Live-update: ensure the new branched user message shows all intended artifacts immediately
+                // Use the combined list (existing - deleted + drafts) we computed prior to the request
+                if (combinedArtifacts.length > 0) {
                   dispatch(
-                    chatSliceActions.messageArtifactsAppended({
+                    chatSliceActions.messageArtifactsSet({
                       messageId: chunk.message.id,
-                      artifacts: drafts.map(d => d.dataUrl),
+                      artifacts: combinedArtifacts,
                     })
                   )
                 }
               }
 
-              dispatch(chatSliceActions.streamChunkReceived(chunk))
+              if (chunk.type === 'generation_started') {
+                dispatch(chatSliceActions.streamChunkReceived(chunk))
+              } else {
+                dispatch(chatSliceActions.streamChunkReceived(chunk))
+              }
 
               if (chunk.type === 'complete' && chunk.message) {
                 messageId = chunk.message.id
@@ -627,7 +663,7 @@ export const editMessageWithBranching = createAsyncThunk(
 export const sendMessageToBranch = createAsyncThunk(
   'chat/sendMessageToBranch',
   async (
-    { conversationId, parentId, content, modelOverride, systemPrompt }: BranchMessagePayload,
+    { conversationId, parentId, content, modelOverride, systemPrompt, think }: BranchMessagePayload,
     { dispatch, getState, rejectWithValue, signal }
   ) => {
     dispatch(chatSliceActions.sendingStarted())
@@ -662,6 +698,7 @@ export const sendMessageToBranch = createAsyncThunk(
           systemPrompt,
           provider: serverProvider,
           attachmentsBase64,
+          think,
         }),
         signal: controller.signal,
       })
@@ -696,7 +733,11 @@ export const sendMessageToBranch = createAsyncThunk(
                 dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
               }
 
-              dispatch(chatSliceActions.streamChunkReceived(chunk))
+              if (chunk.type === 'generation_started') {
+                dispatch(chatSliceActions.streamChunkReceived(chunk))
+              } else {
+                dispatch(chatSliceActions.streamChunkReceived(chunk))
+              }
 
               if (chunk.type === 'complete' && chunk.message) {
                 messageId = chunk.message.id
@@ -840,10 +881,7 @@ export const updateConversationTitle = createAsyncThunk<Conversation, { id: numb
 /* Attachments: upload, link, fetch, delete */
 
 // Upload an image file as multipart/form-data to /api/attachments
-export const uploadAttachment = createAsyncThunk<
-  Attachment,
-  { file: File; messageId?: number | null }
->(
+export const uploadAttachment = createAsyncThunk<Attachment, { file: File; messageId?: number | null }>(
   'chat/uploadAttachment',
   async ({ file, messageId }, { dispatch, rejectWithValue }) => {
     try {
@@ -874,10 +912,7 @@ export const uploadAttachment = createAsyncThunk<
 )
 
 // Link existing attachments to a message
-export const linkAttachmentsToMessage = createAsyncThunk<
-  Attachment[],
-  { messageId: number; attachmentIds: number[] }
->(
+export const linkAttachmentsToMessage = createAsyncThunk<Attachment[], { messageId: number; attachmentIds: number[] }>(
   'chat/linkAttachmentsToMessage',
   async ({ messageId, attachmentIds }, { dispatch, rejectWithValue }) => {
     try {
@@ -931,10 +966,7 @@ export const fetchAttachmentsByMessage = createAsyncThunk<Attachment[], { messag
 )
 
 // Delete all attachments for a message
-export const deleteAttachmentsByMessage = createAsyncThunk<
-  { deleted: number },
-  { messageId: number }
->(
+export const deleteAttachmentsByMessage = createAsyncThunk<{ deleted: number }, { messageId: number }>(
   'chat/deleteAttachmentsByMessage',
   async ({ messageId }, { dispatch, rejectWithValue }) => {
     try {
@@ -967,6 +999,27 @@ export const fetchAttachmentById = createAsyncThunk<Attachment, { id: number }>(
       return attachment
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch attachment'
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Abort a running generation
+export const abortStreaming = createAsyncThunk<{ success: boolean }, { messageId: number }, { state: RootState }>(
+  'chat/abortStreaming',
+  async ({ messageId }, { dispatch, rejectWithValue }) => {
+    try {
+      const response = await apiCall<{ success: boolean }>(`/messages/${messageId}/abort`, {
+        method: 'POST',
+      })
+
+      if (response.success) {
+        dispatch(chatSliceActions.streamingAborted())
+      }
+
+      return response
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to abort generation'
       return rejectWithValue(message)
     }
   }

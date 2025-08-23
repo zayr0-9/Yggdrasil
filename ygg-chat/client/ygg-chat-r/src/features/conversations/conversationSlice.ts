@@ -1,12 +1,15 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import { ConversationsState, Conversation } from './conversationTypes'
-import { fetchConversations, createConversation, deleteConversation, updateConversation } from './conversationActions'
 import { updateConversationTitle } from '../chats'
+import { createConversation, deleteConversation, fetchConversations, updateConversation } from './conversationActions'
+import { Conversation, ConversationsState } from './conversationTypes'
 
 const initialState: ConversationsState = {
   items: [],
   loading: false,
   error: null,
+  activeConversationId: null,
+  systemPrompt: null,
+  convContext: null,
 }
 
 const conversationSlice = createSlice({
@@ -16,6 +19,19 @@ const conversationSlice = createSlice({
     conversationsCleared: state => {
       state.items = []
       state.error = null
+    },
+    activeConversationIdSet: (state, action: PayloadAction<number | null>) => {
+      state.activeConversationId = action.payload
+    },
+    systemPromptSet: (state, action: PayloadAction<string | null>) => {
+      state.systemPrompt = action.payload
+    },
+    updateSystemPrompt: (state, action: PayloadAction<string | null>) => {
+      state.systemPrompt = action.payload
+    },
+    convContextSet: (state, action: PayloadAction<string | null>) => {
+      console.log('convContext set')
+      state.convContext = action.payload
     },
   },
   extraReducers: builder => {
@@ -85,5 +101,6 @@ const conversationSlice = createSlice({
   },
 })
 
-export const { conversationsCleared } = conversationSlice.actions
+export const { conversationsCleared, activeConversationIdSet, systemPromptSet, updateSystemPrompt, convContextSet } =
+  conversationSlice.actions
 export default conversationSlice.reducer
