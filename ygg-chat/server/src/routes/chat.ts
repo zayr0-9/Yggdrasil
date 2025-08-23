@@ -672,7 +672,7 @@ router.post(
 
     // Use conversation's model or provided model or default
     const selectedModel = modelName || conversation.model_name || (await modelService.getDefaultModel())
-
+    console.log('messages server received -------', messages)
     // Determine parent ID: use requested parentId if provided, otherwise get last message
     let parentId: number | null = null
     if (requestedParentId !== undefined) {
@@ -786,7 +786,11 @@ router.post(
           ConversationService.updateTitle(conversationId, title)
         }
       } catch (error: any) {
-        const isAbort = error?.name === 'AbortError' || String(error || '').toLowerCase().includes('abort')
+        const isAbort =
+          error?.name === 'AbortError' ||
+          String(error || '')
+            .toLowerCase()
+            .includes('abort')
         if (isAbort) {
           // Persist whatever we have as a partial message
           if (assistantContent.trim() || assistantThinking.trim()) {

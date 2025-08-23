@@ -88,7 +88,7 @@ const Homepage: React.FC = () => {
       <div className='p-6 max-w-3xl mx-auto'>
         <div className='flex items-center justify-between mb-4'>
           <h1 className='text-2xl font-bold dark:text-neutral-100'>Conversations</h1>
-          <Button variant='outline' size='small' onClick={() => navigate('/settings')}>
+          <Button variant='primary' size='small' onClick={() => navigate('/settings')}>
             Settings
           </Button>
         </div>

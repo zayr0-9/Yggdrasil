@@ -238,6 +238,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const handleSaveBranch = () => {
     if (onBranch) {
+      console.log('Saving branch for message', id)
       onBranch(id, editContent.trim())
     }
     dispatch(chatSliceActions.editingBranchSet(false))
@@ -452,7 +453,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           </div>
           {showThinking && (
             <div id={`reasoning-content-${id}`} className='prose max-w-none dark:prose-invert w-full text-sm'>
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ pre: PreRenderer }}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
+                components={{ pre: PreRenderer }}
+              >
                 {thinking}
               </ReactMarkdown>
             </div>

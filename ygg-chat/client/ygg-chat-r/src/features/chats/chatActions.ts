@@ -497,7 +497,13 @@ export const editMessageWithBranching = createAsyncThunk(
       const originalMessage = state.chat.conversation.messages.find(m => m.id === originalMessageId)
       const { messages: currentMessages } = state.chat.conversation
       const currentPathIds = state.chat.conversation.currentPath
-      const currentPathMessages = currentPathIds.map(id => currentMessages.find(m => m.id === id))
+      // Truncate path to only include messages strictly before the originalMessageId
+      const idxOriginal = currentPathIds.indexOf(originalMessageId)
+      const truncatedPathIds = idxOriginal >= 0 ? currentPathIds.slice(0, idxOriginal) : currentPathIds
+      console.log('currentPathIds branch (truncated) ---', truncatedPathIds)
+      const currentPathMessages = truncatedPathIds
+        .map(id => currentMessages.find(m => m.id === id))
+        .filter((m): m is Message => !!m)
       console.log('currentPathMessages branch ---', currentPathMessages)
       if (!originalMessage) {
         throw new Error('Original message not found')

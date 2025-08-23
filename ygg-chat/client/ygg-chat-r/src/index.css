@@ -3,7 +3,7 @@
 @plugin "@tailwindcss/typography";
 /* Override Tailwind v4 default font stack */
 @theme {
-  --font-sans: "DM Sans", Inter, system-ui, sans-serif;
+  --font-sans: 'DM Sans', Inter, system-ui, sans-serif;
 }
 /* Highlight.js theme for rehype-highlight (dark) */
 @import 'highlight.js/styles/atom-one-light.css' (prefers-color-scheme: light);
@@ -108,4 +108,23 @@ body.ygg-no-select * {
 }
 .animate-pulse-slow {
   animation: ygg-pulse 4s ease-in-out infinite;
+}
+
+/* Thin scrollbar utility */
+.thin-scrollbar {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgb(145, 145, 145) transparent; /* neutral-800 thumb on transparent track */
+}
+/* Chromium/WebKit */
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #262626; /* neutral-800 */
+  border-radius: 9999px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }

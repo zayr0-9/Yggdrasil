@@ -482,6 +482,19 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     return () => window.removeEventListener('resize', updateDimensions)
   }, [])
 
+  // When compact mode changes, re-fit the view using the updated bounds/layout.
+  useEffect(() => {
+    // Ensure we have data and measured dimensions before resetting
+    if (!currentChatData) return
+    if (!dimensions.width || !dimensions.height) return
+    if (Object.keys(positions).length === 0) return
+
+    const raf = requestAnimationFrame(() => {
+      resetView()
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [compactMode, currentChatData, dimensions.width, dimensions.height, positions])
+
   // Prevent body scroll when mouse is over the component
   useEffect(() => {
     const container = containerRef.current
@@ -844,15 +857,37 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     // Dispatch the nodesSelected action (filtered to the dominant branch)
     const filteredNodes = filterToDominantBranch(newSelectedNodes)
     dispatch(chatSliceActions.nodesSelected(filteredNodes))
-
-    // Important: Do NOT call onNodeSelect on right-click.
-    // Right-click is used for selection only and must not update currentPath.
   }
 
   const resetView = (): void => {
-    // Fit-to-screen zoom based on current bounds and container dimensions
-    const contentW = Math.max(1, bounds.maxX - bounds.minX + 100)
-    const contentH = Math.max(1, bounds.maxY - bounds.minY + 140)
+    // Compute bounds for fitting that ignore focusedNodeId so fit is consistent
+    // across calls regardless of previous focus state.
+    const fitBounds = (() => {
+      const values = Object.values(positions)
+      if (values.length === 0) {
+        return { minX: 0, maxX: 0, minY: 0, maxY: 0 }
+      }
+      return values.reduce<Bounds>(
+        (acc, pos) => {
+          // For fitting, treat nodes as expanded only when not in compactMode
+          const isExpandedForFit = !compactMode
+          const halfWidth = isExpandedForFit ? nodeWidth / 2 : circleRadius
+          const height = isExpandedForFit ? nodeHeight : circleRadius * 2
+
+          return {
+            minX: Math.min(acc.minX, pos.x - halfWidth),
+            maxX: Math.max(acc.maxX, pos.x + halfWidth),
+            minY: Math.min(acc.minY, pos.y),
+            maxY: Math.max(acc.maxY, pos.y + height),
+          }
+        },
+        { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
+      )
+    })()
+
+    // Fit-to-screen zoom based on local fitBounds and container dimensions
+    const contentW = Math.max(1, fitBounds.maxX - fitBounds.minX + 100)
+    const contentH = Math.max(1, fitBounds.maxY - fitBounds.minY + 140)
     const availW = Math.max(1, dimensions.width - 120)
     const availH = Math.max(1, dimensions.height - 180)
     const fitZoom = Math.min(availW / contentW, availH / contentH)
@@ -860,8 +895,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     const newZoom = Math.max(0.1, Math.min(3, Math.min(fitZoom, preferredMaxInitialZoom)))
     setZoom(newZoom)
     setFocusedNodeId(null)
-    // Recompute base offset based on current bounds
-    offsetRef.current = { x: -bounds.minX + 50, y: -bounds.minY + 50 }
+
+    // Recompute base offset based on local fitBounds
+    offsetRef.current = { x: -fitBounds.minX + 50, y: -fitBounds.minY + 50 }
 
     // Center the root node in the viewport using the new zoom
     const id = currentChatData?.id
@@ -874,7 +910,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     const centerX = dimensions.width / 2
     const centerY = dimensions.height / 2
     const px = centerX - ((root.x ?? 0) + ox) * s - centerX
-    const py = centerY - ((root.y ?? 0) + oy) * s - 100
+    const py = centerY - ((root.y ?? 0) + oy) * s - 440
     setPan({ x: px, y: py })
 
     // We've just centered explicitly
@@ -1232,6 +1268,15 @@ export const Heimdall: React.FC<HeimdallProps> = ({
           title='Reset View'
         >
           <RotateCcw size={20} />
+        </button>
+        <button
+          onClick={() => {
+            dispatch(chatSliceActions.heimdallCompactModeToggled())
+          }}
+          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-gray-700 dark:bg-neutral-700 transition-colors'
+          title='Toggle Compact Mode'
+        >
+          compact
         </button>
       </div>
       <div className='absolute top-4 right-4 z-10 flex flex-col gap-2 items-end'>

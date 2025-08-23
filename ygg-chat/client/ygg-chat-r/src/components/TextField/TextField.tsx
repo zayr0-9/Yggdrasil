@@ -47,7 +47,7 @@ export const TextField: React.FC<TextFieldProps> = ({
 
   // Base input styles that apply to all text fields
   const baseInputStyles =
-    'w-full border rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 dark:border-neutral-800 dark:bg-neutral-700 dark:text-neutral-200 dark:focus:ring-neutral-600 dark:focus:border-neutral-600'
+    'w-full px-4 py-3 rounded-xl transition-all duration-200 overflow-hidden bg-neutral-50 dark:bg-neutral-900 bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-gray-600 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50'
 
   // Size variants control padding and text size
   const sizeStyles = {

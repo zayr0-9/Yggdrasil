@@ -192,7 +192,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
           onDrop={handleDrop}
           disabled={state === 'disabled'}
           // maxLength={maxLength}
-          className={`${stateStyles[state]} ${dragOver ? 'border-blue-500 ring-2 ring-blue-500' : ''} ${className}`}
+          className={`${stateStyles[state]} thin-scrollbar ${dragOver ? 'border-blue-500 ring-2 ring-blue-500' : ''} ${className}`}
           aria-invalid={state === 'error'}
           aria-describedby={state === 'error' && errorMessage ? errorId : undefined}
           autoFocus={autoFocus}
@@ -204,9 +204,20 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
 
         {/* Character count indicator */}
         {showCharCount && (
-          <div className='absolute bottom-2 right-3 text-xs text-stone-800 dark:text-stone-200'>
+          <div className='absolute bottom-2 right-5 text-xs text-stone-800 dark:text-stone-200'>
             {/* {value.length}/{maxLength} */}
             {value.length}
+          </div>
+        )}
+
+        {/* Character count indicator */}
+        {value.length <= 0 && (
+          <div className='absolute top-1 right-6 text-xs text-stone-800 dark:text-stone-200'>
+            {/* {value.length}/{maxLength} */}
+            <br />
+            Enter to send
+            <br />
+            Shift+Enter new line
           </div>
         )}
       </div>
