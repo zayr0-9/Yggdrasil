@@ -601,12 +601,13 @@ export const editMessageWithBranching = createAsyncThunk(
                 dispatch(chatSliceActions.messageAdded(chunk.message))
                 // And update currentPath to this new user branch node
                 dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
-                // Live-update: append current image drafts to this new user message's artifacts
-                if (drafts.length > 0) {
+                // Live-update: ensure the new branched user message shows all intended artifacts immediately
+                // Use the combined list (existing - deleted + drafts) we computed prior to the request
+                if (combinedArtifacts.length > 0) {
                   dispatch(
-                    chatSliceActions.messageArtifactsAppended({
+                    chatSliceActions.messageArtifactsSet({
                       messageId: chunk.message.id,
-                      artifacts: drafts.map(d => d.dataUrl),
+                      artifacts: combinedArtifacts,
                     })
                   )
                 }

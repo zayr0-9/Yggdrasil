@@ -212,7 +212,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const [editMode, setEditMode] = useState<'edit' | 'branch'>('edit')
   const [copied, setCopied] = useState(false)
   // Toggle visibility of the reasoning/thinking block
-  const [showThinking, setShowThinking] = useState(true)
+  const [showThinking, setShowThinking] = useState(false)
 
   const handleEdit = () => {
     dispatch(chatSliceActions.editingBranchSet(false))
@@ -329,13 +329,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       case 'user':
         return {
           container: 'bg-gray-800 border-l-4 border-l-blue-500 bg-indigo-50 dark:bg-neutral-800',
-          role: 'text-indigo-800',
+          role: 'text-indigo-800 dark:text-indigo-300',
           roleText: 'User',
         }
       case 'assistant':
         return {
-          container: 'bg-gray-850 border-l-4 border-l-green-500 bg-lime-50 dark:bg-neutral-800',
-          role: 'text-lime-800',
+          container: 'bg-gray-850 border-l-4 border-l-yellow-500 bg-yellow-50 dark:bg-neutral-800',
+          role: 'text-lime-800 dark:text-lime-300',
           roleText: 'Assistant',
         }
       case 'system':

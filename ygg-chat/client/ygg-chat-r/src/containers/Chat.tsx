@@ -2,7 +2,7 @@ import 'boxicons' // Types
 import 'boxicons/css/boxicons.min.css'
 import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
-import { Button, ChatMessage, Heimdall, InputTextArea, SettingsPane, TextField } from '../components'
+import { Button, ChatMessage, Heimdall, InputTextArea, Select, SettingsPane, TextField } from '../components'
 import {
   abortStreaming,
   chatSliceActions,
@@ -76,6 +76,8 @@ function Chat() {
   // Measure input area (controls + textarea) height so messages list can avoid being overlapped
   const inputAreaRef = useRef<HTMLDivElement>(null)
   const [inputAreaHeight, setInputAreaHeight] = useState<number>(0)
+  // Track if we already applied the URL hash-based path to avoid overriding user branch switches
+  const hashAppliedRef = useRef<number | null>(null)
 
   useEffect(() => {
     const el = inputAreaRef.current
@@ -373,19 +375,25 @@ function Chat() {
     return null
   }, [location.hash])
 
-  // When we have messages loaded and a hashMessageId, build path to that message and set it
-  // Do NOT truncate an existing deeper path if it already includes the hash target.
+  // When we have messages loaded and a hashMessageId, build path to that message and set it ONCE per hash.
+  // This avoids resetting currentPath when the user switches branches after landing from a search result.
   useEffect(() => {
-    if (hashMessageId && conversationMessages.length > 0) {
+    // If hash cleared, allow future re-application when a new hash appears
+    if (!hashMessageId) {
+      hashAppliedRef.current = null
+      return
+    }
+    // Skip if we've already applied this hash
+    if (hashAppliedRef.current === hashMessageId) return
+
+    if (conversationMessages.length > 0) {
       const path = getParentPath(conversationMessages, hashMessageId)
-      const alreadyIncludesTarget = Array.isArray(selectedPath) && selectedPath.includes(hashMessageId)
-      if (!alreadyIncludesTarget) {
-        dispatch(chatSliceActions.conversationPathSet(path))
-      }
+      dispatch(chatSliceActions.conversationPathSet(path))
       // Ensure the focused message id is set so scrolling targets the correct element
       dispatch(chatSliceActions.focusedChatMessageSet(hashMessageId))
+      hashAppliedRef.current = hashMessageId
     }
-  }, [hashMessageId, conversationMessages, selectedPath, dispatch])
+  }, [hashMessageId, conversationMessages, dispatch])
 
   // useEffect(() => {
   //   if (focusedChatMessageId && conversationMessages.length > 0) {
@@ -623,7 +631,7 @@ function Chat() {
         <div className='relative ml-2 flex flex-col thin-scrollbar bg-gray-800 rounded-lg bg-neutral-50 dark:bg-neutral-900 flex-1 min-h-0'>
           <div
             ref={messagesContainerRef}
-            className='px-2 dark:border-neutral-700 border-b border-stone-200 rounded-lg py-4 overflow-y-auto overscroll-y-contain touch-pan-y p-3 bg-neutral-50 bg-slate-50 dark:bg-neutral-900 flex-1 min-h-0'
+            className='px-2 dark:border-neutral-700 border-b border-stone-200 rounded-lg py-4 overflow-y-auto overscroll-y-contain touch-pan-y p-3 bg-neutral-50 dark:bg-neutral-900 flex-1 min-h-0'
             style={{ paddingBottom: `${inputAreaHeight}px` }}
           >
             {displayMessages.length === 0 ? (
@@ -702,42 +710,32 @@ function Chat() {
                     Stop
                   </Button>
                 )}
-                <Button variant='secondary' size='small' onClick={() => setSettingsOpen(true)}>
+                <Button variant='primary' className='rounded-full' size='small' onClick={() => setSettingsOpen(true)}>
                   <i className='bx bx-cog text-xl' aria-hidden='true'></i>
                 </Button>
 
                 {/* <span className='text-stone-800 dark:text-stone-200 text-sm'>Available: {providers.providers.length}</span> */}
-                <select
+                <Select
                   value={providers.currentProvider || ''}
-                  onChange={e => handleProviderSelect(e.target.value)}
-                  className='max-w-md p-2 rounded bg-neutral-50 dark:bg-gray-700 text-stone-800 dark:text-stone-200'
+                  onChange={handleProviderSelect}
+                  options={providers.providers.map(p => p.name)}
+                  placeholder='Select a provider...'
                   disabled={providers.providers.length === 0}
-                >
-                  <option value=''>Select a provider...</option>
-                  {providers.providers.map(provider => (
-                    <option key={provider.name} value={provider.name}>
-                      {provider.name}
-                    </option>
-                  ))}
-                </select>
+                  className='max-w-md'
+                />
                 {/* <span className='text-stone-800 dark:text-stone-200 text-sm'>{models.length} models</span> */}
-                <select
+                <Select
                   value={selectedModel || ''}
-                  onChange={e => handleModelSelect(e.target.value)}
-                  className='w-full max-w-xs p-2 rounded bg-neutral-50 dark:bg-gray-700 text-stone-800 dark:text-stone-200'
+                  onChange={handleModelSelect}
+                  options={models}
+                  placeholder='Select a model...'
                   disabled={models.length === 0}
-                >
-                  <option value=''>Select a model...</option>
-                  {models.map(model => (
-                    <option key={model} value={model}>
-                      {model}
-                    </option>
-                  ))}
-                </select>
-                <Button variant='secondary' size='small' onClick={handleRefreshModels}>
+                  className='w-full max-w-xs'
+                />
+                <Button variant='primary' className='rounded-full' size='small' onClick={handleRefreshModels}>
                   <i className='bx bx-refresh text-xl' aria-hidden='true'></i>
                 </Button>
-                <Button variant={'secondary'} size='small' onClick={() => setThink(t => !t)}>
+                <Button variant='primary' className='rounded-full' size='small' onClick={() => setThink(t => !t)}>
                   {think ? (
                     <i className='bx bxs-bulb text-xl text-yellow-400' aria-hidden='true'></i>
                   ) : (

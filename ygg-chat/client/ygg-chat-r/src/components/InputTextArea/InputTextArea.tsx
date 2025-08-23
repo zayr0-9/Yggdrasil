@@ -212,12 +212,11 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
 
         {/* Character count indicator */}
         {value.length <= 0 && (
-          <div className='absolute top-1 right-6 text-xs text-stone-800 dark:text-stone-200'>
+          <div className='absolute top-1 right-2 text-xs text-stone-800 dark:text-stone-200'>
             {/* {value.length}/{maxLength} */}
+            Shift+Enter
             <br />
-            Enter to send
-            <br />
-            Shift+Enter new line
+            for new line
           </div>
         )}
       </div>

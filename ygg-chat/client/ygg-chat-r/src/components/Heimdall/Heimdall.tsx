@@ -493,7 +493,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       resetView()
     })
     return () => cancelAnimationFrame(raf)
-  }, [compactMode, currentChatData, dimensions.width, dimensions.height, positions])
+  }, [compactMode])
 
   // Prevent body scroll when mouse is over the component
   useEffect(() => {
@@ -862,6 +862,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const resetView = (): void => {
     // Compute bounds for fitting that ignore focusedNodeId so fit is consistent
     // across calls regardless of previous focus state.
+    console.log('resetView called -------------')
     const fitBounds = (() => {
       const values = Object.values(positions)
       if (values.length === 0) {
@@ -1035,36 +1036,36 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 y={-6}
                 rx='14'
                 fill='none'
-                stroke='oklch(0.9456 0.0247 208 / 85.55%)'
+                stroke='currentColor'
                 strokeWidth='3'
-                className='animate-pulse-slow'
+                className='animate-pulse-slow stroke-rose-300 dark:stroke-slate-100'
               />
             )}
             {/* Selection highlight */}
             {isNodeSelected && (
               <rect
-                width={nodeWidth + 8}
-                height={nodeHeight + 8}
-                x={-4}
-                y={-4}
+                width={nodeWidth + 16}
+                height={nodeHeight + 16}
+                x={-10}
+                y={-10}
                 rx='12'
                 fill='none'
-                stroke='rgba(59, 130, 246, 0.8)'
+                stroke='currentColor'
                 strokeWidth='3'
                 strokeDasharray='5,5'
-                className='animate-pulse'
+                className='animate-pulse stroke-neutral-500 dark:stroke-neutral-200'
               />
             )}
             <rect
               width={nodeWidth}
               height={nodeHeight}
               rx='8'
-              fill={node.sender === 'user' ? 'oklch(98.6% 0.031 120.757)' : 'oklch(96.2% 0.018 272.314)'}
+              fill={node.sender === 'user' ? 'oklch(98.7% 0.026 102.212)' : 'oklch(96.2% 0.018 272.314)'}
               stroke='oklch(92.3% 0.003 48.717)' // Border color
               strokeWidth='1' // Border thickness
               className={`cursor-pointer hover:opacity-90 transition-opacity duration-200 ${
                 compactMode && focusedNodeId === node.id ? 'animate-pulse' : ''
-              } ${node.sender === 'user' ? 'dark:fill-indigo-900' : 'dark:fill-red-900'} dark:stroke-slate-700`}
+              } ${node.sender === 'user' ? 'dark:fill-sky-900' : 'dark:fill-lime-900'} dark:stroke-slate-700`}
               style={{
                 filter:
                   compactMode && focusedNodeId === node.id ? 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.5))' : 'none',
@@ -1072,9 +1073,6 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               onMouseEnter={() => setSelectedNode(node)}
               onMouseLeave={() => setSelectedNode(null)}
               onClick={() => {
-                if (compactMode) {
-                  setFocusedNodeId(node.id === focusedNodeId ? null : node.id)
-                }
                 if (onNodeSelect) {
                   const path = getPathWithDescendants(node.id)
                   onNodeSelect(node.id, path)
@@ -1116,12 +1114,12 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               <circle
                 cx={x}
                 cy={y + circleRadius}
-                r={circleRadius + 6}
+                r={circleRadius + 10}
                 fill='none'
-                stroke='rgba(59, 130, 246, 0.8)'
+                stroke='currentColor'
                 strokeWidth='3'
                 strokeDasharray='5,5'
-                className='animate-pulse'
+                className='animate-pulse stroke-blue-500 dark:stroke-blue-300'
               />
             )}
             <circle
@@ -1139,7 +1137,6 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               onMouseEnter={() => setSelectedNode(node)}
               onMouseLeave={() => setSelectedNode(null)}
               onClick={() => {
-                setFocusedNodeId(node.id === focusedNodeId ? null : node.id)
                 // Trigger node selection callback
                 if (onNodeSelect) {
                   const path = getPathWithDescendants(node.id)
@@ -1175,7 +1172,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   return (
     <div
       ref={containerRef}
-      className='w-full h-screen border-l border-stone-200 bg-stone-50 relative overflow-hidden dark:bg-neutral-900'
+      className='w-full h-screen border-l border-stone-200 bg-neutral-50 relative overflow-hidden dark:bg-neutral-900'
       onContextMenu={e => e.preventDefault()}
       style={{
         filter: isTransitioning ? 'none' : 'none',
@@ -1250,21 +1247,21 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       <div className='absolute top-4 left-4 z-10 flex gap-2'>
         <button
           onClick={zoomIn}
-          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-gray-700 dark:bg-neutral-700 transition-colors'
+          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-amber-100 dark:hover:bg-neutral-500 dark:bg-neutral-700 transition-colors'
           title='Zoom In'
         >
           <ZoomIn size={20} />
         </button>
         <button
           onClick={zoomOut}
-          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-gray-700 dark:bg-neutral-700 transition-colors'
+          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-amber-100 dark:hover:bg-neutral-500 dark:bg-neutral-700 transition-colors'
           title='Zoom Out'
         >
           <ZoomOut size={20} />
         </button>
         <button
           onClick={resetView}
-          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-gray-700 dark:bg-neutral-700 transition-colors'
+          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-amber-100 dark:hover:bg-neutral-500 dark:bg-neutral-700 transition-colors'
           title='Reset View'
         >
           <RotateCcw size={20} />
@@ -1273,10 +1270,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
           onClick={() => {
             dispatch(chatSliceActions.heimdallCompactModeToggled())
           }}
-          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-gray-700 dark:bg-neutral-700 transition-colors'
+          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-amber-100 dark:hover:bg-neutral-500 dark:bg-neutral-700 transition-colors'
           title='Toggle Compact Mode'
         >
-          compact
+          {compactMode ? 'Compact' : 'Full'}
         </button>
       </div>
       <div className='absolute top-4 right-4 z-10 flex flex-col gap-2 items-end'>
@@ -1284,23 +1281,19 @@ export const Heimdall: React.FC<HeimdallProps> = ({
           Zoom: {Math.round(zoom * 100)}%
         </div>
         {compactMode && (
-          <div className='bg-gray-800 text-white px-3 py-1 rounded-lg text-xs'>Compact Mode: Click to expand</div>
+          <div className='bg-amber-50 dark:bg-neutral-700 text:stone-800 dark:text-stone-200 px-3 py-1 rounded-lg text-xs'>
+            Compact Mode
+          </div>
         )}
         <div className='bg-amber-50 dark:bg-neutral-700 text-stone-800 dark:text-stone-200 px-3 py-2 rounded-lg text-xs space-y-1'>
           <div className='flex items-center gap-2'>
-            <div className='w-3 h-3 bg-indigo-300 rounded '></div>
+            <div className='w-3 h-3 bg-yellow-50 dark:bg-lime-900 rounded border-1 border-stone-400'></div>
             <span>User messages</span>
           </div>
           <div className='flex items-center gap-2'>
-            <div className='w-3 h-3 bg-red-200 rounded'></div>
+            <div className='w-3 h-3 bg-sky-50 dark:bg-sky-900 rounded border-1 border-stone-400'></div>
             <span>Assistant messages</span>
           </div>
-          {compactMode && (
-            <div className='flex items-center gap-2 pt-1 border-t border-gray-700'>
-              <div className='w-3 h-3 bg-white opacity-30 rounded-full'></div>
-              <span>Multiple branches</span>
-            </div>
-          )}
         </div>
       </div>
       <svg
@@ -1349,26 +1342,25 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         )}
       </svg>
       <div className='absolute bottom-4 left-4 flex flex-col gap-2'>
-        <div className='dark:bg-gray-800 bg-amber-50 text-stone-800 dark:text-stone-200 px-3 py-2 rounded-lg text-xs space-y-1 dark:bg-neutral-800'>
+        <div className='dark:bg-gray-800 bg-amber-50 text-stone-800 dark:text-stone-200 px-3 py-2 rounded-lg text-xs space-y-1 dark:bg-neutral-800 w-fit'>
           <div>Messages: {stats.totalNodes}</div>
           <div>Max depth: {stats.maxDepth}</div>
           <div>Branches: {stats.branches}</div>
-          <div className='pt-1 border-t border-gray-700'>Mode: {compactMode ? 'Compact' : 'Full'}</div>
+          {/* <div className='pt-1 border-t border-gray-700'>Mode: {compactMode ? 'Compact' : 'Full'}</div> */}
         </div>
         <div className='text-stone-800 dark:text-stone-200 text-sm flex items-center gap-2'>
           <Move size={16} />
-          <span>Drag to pan • Scroll to zoom • Right-click drag to select{compactMode && ' • Click to focus'}</span>
+          <span>Drag to pan • Scroll to zoom • Right-click drag to select</span>
         </div>
       </div>
       {selectedNode && (
         <div
-          className={`absolute ${compactMode ? 'top-4' : 'top-20'} left-4 right-4 max-w-2xl bg-amber-50 dark:bg-neutral-800 text-stone-800 dark:text-stone-200 p-4 rounded-lg shadow-xl z-20 ${compactMode ? 'border-2 border-gray-600' : ''}`}
+          className={`absolute bottom-4 right-4 max-w-md bg-amber-50 dark:bg-neutral-800 text-stone-800 dark:text-stone-200 p-4 rounded-lg shadow-xl z-20 ${compactMode ? 'border-2 border-gray-600' : ''}`}
         >
           <div className='text-xs text-stone-800 bg-amber-50 dark:bg-neutral-800 dark:text-stone-200 mb-1'>
             {selectedNode.sender === 'user' ? 'User' : 'Assistant'}
-            {compactMode && focusedNodeId !== selectedNode.id && ' (Click to expand)'}
           </div>
-          <div className='text-sm max-h-60 overflow-y-auto whitespace-pre-wrap break-words pr-1'>
+          <div className='text-sm whitespace-normal break-words overflow-hidden ygg-line-clamp-6'>
             {selectedNode.message}
           </div>
         </div>

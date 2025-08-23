@@ -22,20 +22,22 @@ export const Button: React.FC<ButtonProps> = ({
   ...rest
 }) => {
   // Base styles that all buttons share
-  const baseStyles = 'font-medium rounded-lg transition-colors duration-200 focus:outline-none'
+  const baseStyles =
+    'inline-flex items-center justify-center gap-1 font-medium rounded-lg leading-none transition-colors duration-200 focus:outline-none'
 
   // Variant styles define the color scheme
   const variantStyles = {
     primary:
-      'bg-indigo-400 text-white hover:bg-indigo-500 dark:bg-indigo-900 dark:hover:bg-indigo-800 focus:ring-1 dark:focus:gray-500 dark:focus:opacity-50',
-    secondary: 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-1 dark:focus:gray-500 dark:focus:opacity-50',
-    outline: 'border-2 border-slate-600 text-blue-600 hover:bg-blue-50',
+      'bg-indigo-400 text-white hover:bg-indigo-500 dark:bg-sky-900 dark:hover:bg-sky-800 focus:ring-1 dark:focus:gray-500 dark:focus:opacity-50',
+    secondary:
+      'bg-indigo-300 hover:bg-indigo-400 dark:bg-gray-600 text-neutral-50 dark:text-white dark:hover:bg-gray-700 focus:ring-1 dark:focus:gray-500 dark:focus:opacity-50',
+    outline: 'border-2 border-neutral-300 text-blue-600 hover:bg-blue-50',
     danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
   }
 
   // Size styles control padding and text size
   const sizeStyles = {
-    smaller: 'px-2 py-1 text-xs',
+    smaller: 'px-1.5 py-1 text-xs',
     small: 'px-3 py-1.5 text-sm',
     medium: 'px-4 py-2 text-base',
     large: 'px-6 py-3 text-lg',

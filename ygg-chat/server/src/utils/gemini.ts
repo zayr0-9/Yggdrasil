@@ -43,28 +43,40 @@ export async function generateResponse(
     const parts: any[] = []
     for (const att of imageAtts) {
       try {
-        const baseDir = path.resolve(__dirname, '..') // dist root
+        const baseDir = path.resolve(__dirname, '..') // server/src when running ts-node-dev
         let abs = path.isAbsolute(att.filePath!) ? att.filePath! : path.join(baseDir, att.filePath!)
         if (!fs.existsSync(abs)) {
-          // Fallbacks: server cwd (e.g., project/server), and dist/src guesses
+          // Additional likely locations based on where uploads are saved
+          const tryRoutes = path.resolve(__dirname, '..', 'routes', att.filePath!) // server/src/routes/...
+          const tryHere = path.resolve(__dirname, att.filePath!) // server/src/utils/...
+          // Fallbacks: server cwd (project/server), and dist/src guesses
           const tryCwd = path.resolve(process.cwd(), att.filePath!)
           const tryDist = path.resolve(process.cwd(), 'dist', att.filePath!)
           const trySrc = path.resolve(process.cwd(), 'src', att.filePath!)
-          abs = [tryCwd, tryDist, trySrc].find(p => fs.existsSync(p)) || abs
+          const candidates = [tryRoutes, tryHere, tryCwd, tryDist, trySrc]
+          const found = candidates.find(p => fs.existsSync(p))
+          if (found) {
+            abs = found
+            console.log(`Resolved attachment path: ${abs}`)
+          }
         }
         const buf = fs.readFileSync(abs)
         const mediaType = att.mimeType || 'image/jpeg'
-        // Use unified file part (AI SDK will translate to provider-specific format)
-        parts.push({ type: 'file', data: buf, mediaType })
+        // Use AI SDK image part shape for Google provider
+        parts.push({ type: 'image', image: buf, mediaType })
       } catch {
         // Ignore failed attachment read
       }
     }
-    // Prepend file parts before the existing text part to preserve user text
+    // Append image parts after the existing text to match provider expectations (text first)
     const existing = Array.isArray(formattedMessages[lastUserIdx].content)
       ? formattedMessages[lastUserIdx].content
       : [{ type: 'text', text: String(formattedMessages[lastUserIdx].content || '') }]
-    formattedMessages[lastUserIdx] = { role: 'user', content: [...parts, ...existing] }
+    formattedMessages[lastUserIdx] = { role: 'user', content: [...existing, ...parts] }
+    console.log(
+      'final messages sent to gemini',
+      formattedMessages.map(m => m.content)
+    )
   }
   let aborted = false
   let result: any
@@ -78,7 +90,7 @@ export async function generateResponse(
             google: {
               thinkingConfig: {
                 thinkingBudget: 8192,
-                includeThoughts: true,
+                includeThoughts: think,
               },
             },
           }

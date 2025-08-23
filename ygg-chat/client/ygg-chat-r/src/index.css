@@ -114,7 +114,7 @@ body.ygg-no-select * {
 .thin-scrollbar {
   /* Firefox */
   scrollbar-width: thin;
-  scrollbar-color: rgb(145, 145, 145) transparent; /* neutral-800 thumb on transparent track */
+  scrollbar-color: rgb(163, 163, 163) transparent; /* light: neutral-400 thumb on transparent track */
 }
 /* Chromium/WebKit */
 .thin-scrollbar::-webkit-scrollbar {
@@ -122,9 +122,28 @@ body.ygg-no-select * {
   height: 6px;
 }
 .thin-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #262626; /* neutral-800 */
+  background-color: #a3a3a3; /* light: neutral-400 */
   border-radius: 9999px;
 }
 .thin-scrollbar::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Dark mode overrides */
+.dark .thin-scrollbar {
+  /* Firefox */
+  scrollbar-color: #262626 transparent; /* dark: neutral-800 thumb on transparent track */
+}
+.dark .thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #262626; /* dark: neutral-800 */
+}
+
+/* Utility: multi-line clamp without Tailwind plugin */
+.ygg-line-clamp-6 {
+  display: -webkit-box;
+  line-clamp: 6; /* standard property for compatibility */
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
