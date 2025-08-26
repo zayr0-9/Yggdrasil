@@ -62,6 +62,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 })
   const [selectedNode, setSelectedNode] = useState<ChatNode | null>(null)
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null)
+  const [mousePosition, setMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isSelecting, setIsSelecting] = useState<boolean>(false)
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [selectionEnd, setSelectionEnd] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -1070,7 +1071,16 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 filter:
                   compactMode && focusedNodeId === node.id ? 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.5))' : 'none',
               }}
-              onMouseEnter={() => setSelectedNode(node)}
+              onMouseEnter={(e) => {
+                setSelectedNode(node)
+                const containerRect = containerRef.current?.getBoundingClientRect()
+                if (containerRect) {
+                  setMousePosition({
+                    x: e.clientX - containerRect.left,
+                    y: e.clientY - containerRect.top
+                  })
+                }
+              }}
               onMouseLeave={() => setSelectedNode(null)}
               onClick={() => {
                 if (onNodeSelect) {
@@ -1128,13 +1138,22 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               r={circleRadius}
               fill={node.sender === 'user' ? '#64748b' : '#1e293b'}
               className={`cursor-pointer transition-transform duration-150 ${
-                node.sender === 'user' ? 'fill-red-300 dark:fill-indigo-700' : 'fill-indigo-300 dark:fill-red-700'
+                node.sender === 'user' ? 'fill-red-300 dark:fill-lime-900' : 'fill-indigo-300 dark:fill-sky-900'
               }`}
               style={{
                 transform: selectedNode?.id === node.id ? 'scale(1.1)' : 'scale(1)',
                 transformOrigin: `${x}px ${y + circleRadius}px`,
               }}
-              onMouseEnter={() => setSelectedNode(node)}
+              onMouseEnter={(e) => {
+                setSelectedNode(node)
+                const containerRect = containerRef.current?.getBoundingClientRect()
+                if (containerRect) {
+                  setMousePosition({
+                    x: e.clientX - containerRect.left,
+                    y: e.clientY - containerRect.top
+                  })
+                }
+              }}
               onMouseLeave={() => setSelectedNode(null)}
               onClick={() => {
                 // Trigger node selection callback
@@ -1238,9 +1257,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       {!error && !loading && !lastDataRef.current && (
         <div className='absolute inset-0 z-10 flex items-center justify-center bg-slate-50 text-stone-800 dark:text-stone-200 dark:bg-neutral-900'>
           <div className='text-white text-center max-w-md'>
-            <div className='text-gray-500 text-6xl mb-4'>💬</div>
-            <p className='text-lg mb-2'>No conversation selected</p>
-            <p className='text-sm text-gray-400'>Select a conversation to view its message tree</p>
+            {/* <div className='text-gray-500 text-6xl mb-4'>💬</div> */}
+            <p className='text-lg mb-2'>Loading / Tree will appear here</p>
+            {/* <p className='text-sm text-gray-400'>Select a conversation to view its message tree</p> */}
           </div>
         </div>
       )}
@@ -1355,7 +1374,12 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       </div>
       {selectedNode && (
         <div
-          className={`absolute bottom-4 right-4 max-w-md bg-amber-50 dark:bg-neutral-800 text-stone-800 dark:text-stone-200 p-4 rounded-lg shadow-xl z-20 ${compactMode ? 'border-2 border-gray-600' : ''}`}
+          className={`absolute max-w-md bg-amber-50 dark:bg-neutral-800 text-stone-800 dark:text-stone-200 p-4 rounded-lg shadow-xl z-20 ${compactMode ? 'border-2 border-gray-600' : ''}`}
+          style={{
+            left: Math.min(mousePosition.x + 10, dimensions.width - 400),
+            top: Math.max(mousePosition.y + 10, 10),
+            maxWidth: '300px'
+          }}
         >
           <div className='text-xs text-stone-800 bg-amber-50 dark:bg-neutral-800 dark:text-stone-200 mb-1'>
             {selectedNode.sender === 'user' ? 'User' : 'Assistant'}

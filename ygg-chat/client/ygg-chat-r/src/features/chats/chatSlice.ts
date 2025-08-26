@@ -6,15 +6,31 @@ import {
   ImageDraft,
   Message,
   MessageInput,
+  Model,
   ModelSelectionPayload,
   ModelsResponse,
   StreamChunk,
 } from './chatTypes'
 
+const getStoredSelectedModel = (): Model | null => {
+  try {
+    const raw = localStorage.getItem('selectedModel')
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && typeof parsed.name === 'string') {
+      return parsed as Model
+    }
+    // Legacy formats (plain string, etc.) are ignored
+    return null
+  } catch {
+    return null
+  }
+}
+
 const makeInitialState = (): ChatState => ({
   models: {
     available: [],
-    selected: localStorage.getItem('selectedModel') || null,
+    selected: getStoredSelectedModel(),
     default: null,
     loading: false,
     error: null,
@@ -65,6 +81,8 @@ const makeInitialState = (): ChatState => ({
     loading: false,
     error: null,
     compactMode: false,
+    lastFetchedAt: null,
+    lastConversationId: null,
   },
   initialization: {
     loading: false,
@@ -89,7 +107,7 @@ export const chatSlice = createSlice({
       state.providerState.currentProvider = action.payload
       localStorage.setItem('currentProvider', action.payload)
     },
-    // Model management - simplified for string models
+    // Model management - preserve server-provided fields
     modelsLoaded: (state, action: PayloadAction<ModelsResponse>) => {
       state.models.available = action.payload.models
       state.models.default = action.payload.default
@@ -100,14 +118,15 @@ export const chatSlice = createSlice({
       // If no model selected yet, use the default
       if (!state.models.selected && action.payload.default) {
         state.models.selected = action.payload.default
-        localStorage.setItem('selectedModel', action.payload.default)
+        localStorage.setItem('selectedModel', JSON.stringify(action.payload.default))
       }
     },
 
     modelSelected: (state, action: PayloadAction<ModelSelectionPayload>) => {
-      state.models.selected = action.payload.modelName
+      state.models.selected = action.payload.model
+
       if (action.payload.persist) {
-        localStorage.setItem('selectedModel', action.payload.modelName)
+        localStorage.setItem('selectedModel', JSON.stringify(action.payload.model))
       }
     },
 
@@ -165,6 +184,7 @@ export const chatSlice = createSlice({
       state.streaming.active = true
       state.streaming.buffer = ''
       state.streaming.thinkingBuffer = ''
+      state.composition.input.content = ''
       state.streaming.error = null
       state.streaming.finished = false
       state.streaming.streamingMessageId = null

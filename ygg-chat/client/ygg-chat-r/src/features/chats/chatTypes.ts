@@ -40,11 +40,22 @@ export interface StreamState {
   streamingMessageId: number | null
 }
 
+export interface Model {
+  name: string
+  version: string
+  displayName: string
+  description: string
+  inputTokenLimit: number
+  outputTokenLimit: number
+  thinking: boolean
+  supportedGenerationMethods: string[]
+}
+
 // Model types - simplified to match server
 export interface ModelState {
-  available: string[] // Just model names
-  selected: string | null
-  default: string | null // Default model from server
+  available: Model[] // Just model names
+  selected: Model | null
+  default: Model | null // Default model from server
   loading: boolean
   error: string | null
   lastRefresh: number | null
@@ -109,6 +120,8 @@ export interface HeimdallState {
   loading: boolean
   error: string | null
   compactMode: boolean
+  lastFetchedAt: number | null
+  lastConversationId: number | null
 }
 
 export interface InitializationState {
@@ -160,18 +173,18 @@ export interface BranchMessagePayload {
 }
 
 export interface ModelSelectionPayload {
-  modelName: string
+  model: Model
   persist?: boolean
 }
 
 // Server response types
 export interface ModelsResponse {
-  models: string[]
-  default: string
+  models: Model[]
+  default: Model
 }
 
 // Re-export for backward compatibility if needed
-export type Model = string
+// export type Model = string
 
 // Attachment types (mirror server `Attachment` interface)
 export interface Attachment {

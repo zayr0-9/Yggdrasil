@@ -6,7 +6,6 @@ import path from 'path'
 import { initializeDatabase, initializeStatements } from './database/db'
 import chatRoutes from './routes/chat'
 import settingsRoutes from './routes/settings'
-import { modelService } from './utils/modelService'
 
 dotenv.config({ path: '../.env' })
 
@@ -30,8 +29,8 @@ initializeDatabase()
 // Prepare statements (requires tables to exist)
 initializeStatements()
 ;(async () => {
-  await modelService.getAvailableModels() // Force cache population
-  console.log('Models discovered:', await modelService.getAvailableModels())
+  // await modelService.getAvailableModels() // Force cache population
+  // console.log('Models discovered:', await modelService.getAvailableModels())
   app.listen(3001, () => console.log('Server on :3001'))
 })()
 

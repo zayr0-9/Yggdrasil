@@ -4,6 +4,7 @@ export type {
   CompositionState,
   Message,
   MessageInput,
+  Model,
   ModelSelectionPayload,
   ModelsResponse,
   ModelState,

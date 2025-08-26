@@ -1,5 +1,4 @@
 import { BaseMessage } from '../../../shared/types'
-import { modelService } from '../utils/modelService'
 import { statements } from './db'
 
 export interface User {
@@ -172,7 +171,7 @@ export class UserService {
 
 export class ConversationService {
   static async create(userId: number, title?: string, modelName?: string): Promise<Conversation> {
-    const selectedModel = modelName || (await modelService.getDefaultModel())
+    const selectedModel = modelName || null
     const result = statements.createConversation.run(userId, title, selectedModel)
     return statements.getConversationById.get(result.lastInsertRowid) as Conversation
   }
@@ -249,7 +248,23 @@ export class MessageService {
   }
 
   static getByConversation(conversationId: number): Message[] {
-    return statements.getMessagesByConversation.all(conversationId) as Message[]
+    const rows = statements.getMessagesByConversation.all(conversationId) as any[]
+    // Normalize SQLite return types to match BaseMessage (boolean/number)
+    return rows.map(r => ({
+      ...r,
+      has_attachments:
+        typeof r.has_attachments === 'number'
+          ? r.has_attachments > 0
+          : typeof r.has_attachments === 'string'
+            ? r.has_attachments === '1' || r.has_attachments.toLowerCase() === 'true'
+            : !!r.has_attachments,
+      attachments_count:
+        typeof r.attachments_count === 'number'
+          ? r.attachments_count
+          : r.attachments_count != null
+            ? Number(r.attachments_count)
+            : undefined,
+    })) as Message[]
   }
 
   // Simple tree fetch - let frontend handle tree logic

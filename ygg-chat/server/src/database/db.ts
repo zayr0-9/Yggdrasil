@@ -206,7 +206,23 @@ export function initializeStatements() {
     ),
     getMessageById: db.prepare('SELECT * FROM messages WHERE id = ?'),
     getChildrenIds: db.prepare('SELECT children_ids FROM messages WHERE id = ?'),
-    getMessagesByConversation: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'),
+    getMessagesByConversation: db.prepare(`
+      SELECT 
+        m.*, 
+        EXISTS(
+          SELECT 1 
+          FROM message_attachment_links mal 
+          WHERE mal.message_id = m.id
+        ) AS has_attachments,
+        (
+          SELECT COUNT(1) 
+          FROM message_attachment_links mal2 
+          WHERE mal2.message_id = m.id
+        ) AS attachments_count
+      FROM messages m 
+      WHERE m.conversation_id = ? 
+      ORDER BY m.created_at ASC
+    `),
     getLastMessage: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1'),
     deleteMessagesByConversation: db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
     updateMessage: db.prepare('UPDATE messages SET content = ?, thinking_block = ? WHERE id = ?'),

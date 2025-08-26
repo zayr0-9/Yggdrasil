@@ -87,27 +87,50 @@ router.get(
         },
         signal: AbortSignal.timeout(5000),
       })
-      console.log('openrouter response', response)
 
       if (!response.ok) {
         const text = await response.text()
         return res.status(response.status).json({ error: text || response.statusText })
       }
 
-      console.log('openrouter response', response)
-
       const data = (await response.json()) as { data?: any[]; models?: any[] }
       const rawModels: any[] = Array.isArray(data?.data) ? data.data! : Array.isArray(data?.models) ? data.models! : []
 
-      const names: string[] = rawModels
-        .map(m => String(m?.id || m?.name || ''))
-        .filter(n => n.length > 0)
-        .map(n => n.replace(/^models\//, ''))
+      // Map OpenRouter response to client Model shape (same as Gemini endpoint)
+      const models = rawModels
+        .map(m => {
+          const rawId = String(m?.id || m?.name || '')
+          const name = rawId.replace(/^models\//, '')
+          if (!name) return null
+          const displayName = String(m?.display_name || m?.displayName || name)
+          const description = String(m?.description || '')
+          const inputTokenLimit = Number(m?.context_length ?? m?.context_length_tokens ?? 0)
+          const outputTokenLimit = Number(m?.output_token_limit ?? m?.max_output_tokens ?? 0)
+          const supportedParams: string[] = Array.isArray(m?.supported_parameters) ? m.supported_parameters : []
+          const capabilities = (m as any)?.capabilities || {}
+          const thinking =
+            supportedParams.includes('reasoning') ||
+            supportedParams.includes('include_reasoning') ||
+            !!capabilities?.reasoning ||
+            /thinking/i.test(name) ||
+            /thinking/i.test(displayName)
+          return {
+            name,
+            version: String(m?.version || ''),
+            displayName,
+            description,
+            inputTokenLimit,
+            outputTokenLimit,
+            thinking,
+            supportedGenerationMethods: supportedParams,
+          }
+        })
+        .filter(Boolean) as any[]
 
       const preferredDefault = 'gpt-4o'
-      const defaultModel = names.includes(preferredDefault) ? preferredDefault : names[0] || ''
+      const defaultModel = models.find((m: any) => m.name === preferredDefault) || models[0] || null
 
-      res.json({ models: names, default: defaultModel })
+      res.json({ models, default: defaultModel })
     } catch (error) {
       console.error('Error fetching OpenRouter models:', error)
       res.status(500).json({ error: 'Failed to fetch OpenRouter models' })
@@ -139,14 +162,38 @@ router.get(
       }
 
       const data = (await response.json()) as { data?: any[]; models?: any[] }
+
       const list: any[] = Array.isArray(data.data) ? data.data : Array.isArray(data.models) ? data.models : []
 
-      const names: string[] = list.map(m => String(m?.id || m?.name || '')).filter(n => n.length > 0)
+      // Map Anthropic response to the same shape as the Gemini endpoint
+      const anthropicThinkingIds = new Set([
+        'claude-opus-4-1-20250805',
+        'claude-opus-4-20250514',
+        'claude-sonnet-4-20250514',
+        'claude-3-7-sonnet-20250219',
+      ])
+      const models = list
+        .map(m => {
+          const id = String(m?.id || m?.name || '')
+          if (!id) return null
+          const displayName = String(m?.display_name || m?.displayName || id)
+          return {
+            name: id,
+            version: '',
+            displayName,
+            description: '',
+            inputTokenLimit: 0,
+            outputTokenLimit: 0,
+            thinking: anthropicThinkingIds.has(id) || /thinking/i.test(id) || /thinking/i.test(displayName),
+            supportedGenerationMethods: [] as string[],
+          }
+        })
+        .filter(Boolean) as any[]
 
       const preferredDefault = 'claude-3-5-sonnet-latest'
-      const defaultModel = names.includes(preferredDefault) ? preferredDefault : names[0] || ''
+      const defaultModel = models.find((m: any) => m.name === preferredDefault) || models[0] || null
 
-      res.json({ models: names, default: defaultModel })
+      res.json({ models, default: defaultModel })
     } catch (error) {
       console.error('Failed to fetch Anthropic models:', error)
       res.status(500).json({ error: 'Failed to fetch Anthropic models' })
@@ -184,20 +231,44 @@ router.get(
       const data = (await response.json()) as { models?: any[] }
       const rawModels: any[] = Array.isArray(data.models) ? data.models : []
 
-      // Filter for chat-capable models and strip the 'models/' prefix
-      const names: string[] = rawModels
-        .filter(m => {
-          const methods = m?.supportedGenerationMethods || m?.supportedActions || []
-          return Array.isArray(methods) && methods.includes('generateContent')
+      // Only include chat-capable models (support generateContent)
+      const chatCapable = rawModels.filter(m => {
+        const methods = m?.supportedGenerationMethods || m?.supportedActions || []
+        return Array.isArray(methods) && methods.includes('generateContent')
+      })
+      // console.log('chatCapable', chatCapable)
+      // Map Google response to client Model shape
+      const models = chatCapable
+        .map(m => {
+          const rawName = String(m?.name || '')
+          const name = rawName.replace(/^models\//, '')
+          const methods = Array.isArray(m?.supportedGenerationMethods)
+            ? m.supportedGenerationMethods
+            : Array.isArray(m?.supportedActions)
+              ? m.supportedActions
+              : []
+          const displayName = String(m?.displayName || name)
+          const description = String(m?.description || '')
+          const inputTokenLimit = Number(m?.inputTokenLimit ?? m?.inputTokenLimitTokens ?? 0)
+          const outputTokenLimit = Number(m?.outputTokenLimit ?? m?.outputTokenLimitTokens ?? 0)
+          const version = String(m?.version ?? '')
+          const thinking = /thinking/i.test(name) || /thinking/i.test(displayName)
+          return {
+            name,
+            version,
+            displayName,
+            description,
+            inputTokenLimit,
+            outputTokenLimit,
+            thinking,
+            supportedGenerationMethods: methods,
+          }
         })
-        .map(m => String(m?.name || ''))
-        .filter(n => n.length > 0)
-        .map(n => n.replace(/^models\//, ''))
+        .filter(m => m.name.length > 0)
 
       const preferredDefault = 'gemini-2.5-flash'
-      const defaultModel = names.includes(preferredDefault) ? preferredDefault : names[0] || ''
-
-      res.json({ models: names, default: defaultModel })
+      const defaultModel = models.find(m => m.name === preferredDefault) || models[0] || null
+      res.json({ models, default: defaultModel })
     } catch (error) {
       console.error('Failed to fetch Gemini models:', error)
       res.status(500).json({ error: 'Failed to fetch Gemini models' })
@@ -372,13 +443,13 @@ router.get(
   asyncHandler(async (req, res) => {
     const conversationId = parseInt(req.params.id)
     const conversation = ConversationService.getById(conversationId)
-    console.log('conversation', conversation)
+
     if (!conversation) {
       console.log('Conversation not found')
       return res.status(404).json({ error: 'Conversation not found' })
     }
     const context = ConversationService.getConversationContext(conversationId)
-    console.log('context', context)
+
     res.json({ context })
   })
 )
@@ -556,7 +627,6 @@ router.post(
       // Only clear on close; do NOT abort automatically
       // Don't clear on close - let it complete naturally or be aborted manually
       // req.on('close', () => clearGeneration(messageId))
-
       for (let i = 0; i < repeats; i++) {
         let assistantContent = ''
         let assistantThinking = ''
@@ -621,7 +691,7 @@ router.post(
 
       const messages = MessageService.getByConversation(conversationId)
       if (!conversation.title && messages.length === 1) {
-        const title = content.slice(0, 50) + (content.length > 50 ? '...' : '')
+        const title = content.slice(0, 100) + (content.length > 100 ? '...' : '')
         ConversationService.updateTitle(conversationId, title)
       }
     } catch (error) {
@@ -646,7 +716,6 @@ router.post(
 router.post(
   '/conversations/:id/messages',
   asyncHandler(async (req, res) => {
-    console.log('received message from client, starting generation')
     const conversationId = parseInt(req.params.id)
     const {
       content,
@@ -672,7 +741,6 @@ router.post(
 
     // Use conversation's model or provided model or default
     const selectedModel = modelName || conversation.model_name || (await modelService.getDefaultModel())
-    console.log('messages server received -------', messages)
     // Determine parent ID: use requested parentId if provided, otherwise get last message
     let parentId: number | null = null
     if (requestedParentId !== undefined) {
@@ -717,15 +785,12 @@ router.post(
 
       // Ensure latest prompt is included with prior context before generating
       const combinedMessages = Array.isArray(messages) ? [...messages, userMessage] : [userMessage]
-      console.log('server | combined messages', combinedMessages)
 
       let assistantContent = ''
       let assistantThinking = ''
 
       // Stream AI response with manual abort control
-      console.log('calling create generation')
       const { id: messageId, controller } = createGeneration(userMessage.id)
-      console.log('created generation', messageId)
       res.write(`data: ${JSON.stringify({ type: 'generation_started', messageId: userMessage.id })}\n\n`)
       // Don't clear on close - let it complete naturally or be aborted manually
       // req.on('close', () => clearGeneration(messageId))
@@ -780,9 +845,11 @@ router.post(
           })}\n\n`
         )
 
-        // Auto-generate title for new conversations
-        if (!conversation.title && messages.length === 1) {
-          const title = content.slice(0, 50) + (content.length > 50 ? '...' : '')
+        // Auto-generate title for new conversations (only if first message and no existing title)
+        const allMessages = MessageService.getByConversation(conversationId)
+        if (!conversation.title && allMessages.length >= 0) {
+          console.log('Auto-generating title for new conversation', conversationId)
+          const title = content.slice(0, 100) + (content.length > 100 ? '...' : '')
           ConversationService.updateTitle(conversationId, title)
         }
       } catch (error: any) {
@@ -879,7 +946,7 @@ router.delete(
 
 // Create an attachment metadata record (local file path or CDN URL). No binary upload here.
 // Configure uploads directory and multer storage
-const uploadsDir = path.join(__dirname, 'data', 'uploads')
+const uploadsDir = path.join(path.resolve(__dirname, '..'), 'data', 'uploads')
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true })
 }
@@ -1040,9 +1107,7 @@ router.post(
   '/messages/:id/abort',
   asyncHandler(async (req, res) => {
     const messageId = parseInt(req.params.id)
-    console.log('Abort request received for message', messageId)
     const success = abortGeneration(messageId)
-    console.log('Abort result:', success)
     res.json({ success })
   })
 )

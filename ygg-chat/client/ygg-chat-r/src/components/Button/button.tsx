@@ -28,11 +28,11 @@ export const Button: React.FC<ButtonProps> = ({
   // Variant styles define the color scheme
   const variantStyles = {
     primary:
-      'bg-indigo-400 text-white hover:bg-indigo-500 dark:bg-sky-900 dark:hover:bg-sky-800 focus:ring-1 dark:focus:gray-500 dark:focus:opacity-50',
+      'bg-indigo-400 text-white hover:bg-indigo-500 dark:bg-sky-900 dark:hover:bg-sky-800 focus:ring-1 dark:focus:ring-sky-700',
     secondary:
       'bg-indigo-300 hover:bg-indigo-400 dark:bg-gray-600 text-neutral-50 dark:text-white dark:hover:bg-gray-700 focus:ring-1 dark:focus:gray-500 dark:focus:opacity-50',
-    outline: 'border-2 border-neutral-300 text-blue-600 hover:bg-blue-50',
-    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
+    outline: 'border-2 border-neutral-300 text-neutral-300 hover:bg-blue-50',
+    danger: 'bg-neutral-900 border-2 border-rose-700 text-white hover:bg-rose-800 focus:ring-red-500',
   }
 
   // Size styles control padding and text size

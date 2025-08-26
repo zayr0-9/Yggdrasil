@@ -27,7 +27,7 @@ const Settings: React.FC = () => {
         throw new Error('Failed to fetch environment variables')
       }
       const data = await response.json()
-      
+
       // Convert object to array of key-value pairs
       const vars = Object.entries(data).map(([key, value]) => ({
         key,
@@ -48,12 +48,15 @@ const Settings: React.FC = () => {
       setSuccess(null)
 
       // Convert array back to object, filtering out empty keys
-      const envObject = envVars.reduce((acc, { key, value }) => {
-        if (key.trim()) {
-          acc[key.trim()] = value
-        }
-        return acc
-      }, {} as Record<string, string>)
+      const envObject = envVars.reduce(
+        (acc, { key, value }) => {
+          if (key.trim()) {
+            acc[key.trim()] = value
+          }
+          return acc
+        },
+        {} as Record<string, string>
+      )
 
       const response = await fetch('/api/settings/env', {
         method: 'PUT',
@@ -121,7 +124,7 @@ const Settings: React.FC = () => {
         </div>
 
         {/* Description */}
-        <div className='mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800'>
+        <div className='mb-6 p-4 rounded-lg border border-blue-200 dark:border-sky-800'>
           <p className='text-sm text-blue-800 dark:text-blue-200'>
             Configure environment variables for your application. Changes require a server restart to take effect.
           </p>
@@ -143,13 +146,16 @@ const Settings: React.FC = () => {
         {/* Environment Variables List */}
         <div className='space-y-4 mb-6'>
           {envVars.map((envVar, index) => (
-            <div key={index} className='flex gap-4 items-start p-4 bg-white dark:bg-zinc-800 rounded-lg border border-gray-200 dark:border-zinc-700'>
+            <div
+              key={index}
+              className='flex gap-4 items-start p-4 bg-white dark:bg-zinc-800 rounded-lg border border-gray-200 dark:border-zinc-700'
+            >
               <div className='flex-1'>
                 <TextField
                   label='Variable Name'
                   placeholder='VARIABLE_NAME'
                   value={envVar.key}
-                  onChange={(value) => handleKeyChange(index, value)}
+                  onChange={value => handleKeyChange(index, value)}
                 />
               </div>
               <div className='flex-1'>
@@ -157,15 +163,11 @@ const Settings: React.FC = () => {
                   label='Value'
                   placeholder='variable_value'
                   value={envVar.value}
-                  onChange={(value) => handleValueChange(index, value)}
+                  onChange={value => handleValueChange(index, value)}
                 />
               </div>
               <div className='pt-6'>
-                <Button
-                  variant='danger'
-                  size='small'
-                  onClick={() => handleRemoveVariable(index)}
-                >
+                <Button variant='danger' size='small' onClick={() => handleRemoveVariable(index)}>
                   Remove
                 </Button>
               </div>
@@ -181,14 +183,10 @@ const Settings: React.FC = () => {
 
         {/* Action Buttons */}
         <div className='flex gap-4'>
-          <Button variant='outline' onClick={handleAddVariable}>
+          <Button variant='secondary' onClick={handleAddVariable}>
             Add Variable
           </Button>
-          <Button
-            variant='primary'
-            onClick={handleSave}
-            disabled={saving}
-          >
+          <Button variant='primary' onClick={handleSave} disabled={saving}>
             {saving ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
@@ -196,8 +194,8 @@ const Settings: React.FC = () => {
         {/* Warning */}
         <div className='mt-8 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800'>
           <p className='text-sm text-yellow-800 dark:text-yellow-200'>
-            <strong>Warning:</strong> Be careful when editing environment variables. Invalid values may cause the application to malfunction. 
-            Always backup your .env file before making changes.
+            <strong>Warning:</strong> Be careful when editing environment variables. Invalid values may cause the
+            application to malfunction. Always backup your .env file before making changes.
           </p>
         </div>
       </div>

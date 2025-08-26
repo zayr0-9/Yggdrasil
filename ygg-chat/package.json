@@ -15,7 +15,7 @@
     "format:server": "prettier --write 'ygg-chat/server/**/*.{js,jsx,ts,tsx,json,css,md}'",
     "format:shared": "prettier --write 'ygg-chat/shared/**/*.{js,jsx,ts,tsx,json,css,md}'",
     "format:chat": "prettier --write 'ygg-chat/**/*.{js,jsx,ts,tsx,json,css,md}'",
-    "dev": "npm run dev:server && npm run dev:client",
+    "dev": "concurrently -n server,client -c yellow,cyan \"npm --prefix server run dev\" \"npm --prefix client/ygg-chat-r run dev\"",
     "dev:client": "cd client/ygg-chat-r && npm run dev",
     "dev:server": "cd server && npm run dev",
     "build": "npm run build:client && npm run build:server",
@@ -24,6 +24,7 @@
     "install:all": "npm install && cd ygg-chat/client/ygg-chat-r && npm install && cd ../../server && npm install"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "prettier": "^3.6.2"
   }
 }

@@ -30,7 +30,7 @@ export const selectEffectiveModel = createSelector(
 // Check if a specific model is available
 export const selectIsModelAvailable = createSelector(
   [selectModels, (_state: RootState, modelName: string) => modelName],
-  (models, modelName) => models.includes(modelName)
+  (models, modelName) => models.some(m => m.name === modelName)
 )
 
 // Composition selectors

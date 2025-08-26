@@ -89,7 +89,7 @@ const Homepage: React.FC = () => {
     <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900'>
       <div className='p-6 max-w-6xl mx-auto'>
         <div className='flex items-center justify-between mb-4'>
-          <h1 className='text-2xl font-bold dark:text-neutral-100'>Conversations</h1>
+          <h1 className='text-3xl py-4 font-bold dark:text-neutral-100'>Conversations</h1>
           <Button variant='primary' size='small' onClick={() => navigate('/settings')}>
             Settings
           </Button>
@@ -97,7 +97,7 @@ const Homepage: React.FC = () => {
 
         {/* New Conversation + Search inline row */}
         <div className='mb-6 flex items-center gap-3'>
-          <Button variant='primary' onClick={handleNewConversation} className='shrink-0'>
+          <Button variant='primary' size='medium' onClick={handleNewConversation} className='shrink-0'>
             New Conversation
           </Button>
         </div>

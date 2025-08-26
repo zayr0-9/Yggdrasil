@@ -30,7 +30,6 @@ const conversationSlice = createSlice({
       state.systemPrompt = action.payload
     },
     convContextSet: (state, action: PayloadAction<string | null>) => {
-      console.log('convContext set')
       state.convContext = action.payload
     },
   },

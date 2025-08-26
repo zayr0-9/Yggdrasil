@@ -11,6 +11,9 @@ export interface BaseMessage {
   updated_at?: string
   model_name: string
   partial: boolean
+  // Optional metadata for optimized attachment fetching
+  has_attachments?: boolean
+  attachments_count?: number
 }
 
 export interface ChatSession {

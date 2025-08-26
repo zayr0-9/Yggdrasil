@@ -106,6 +106,9 @@ export async function generateResponse(
     if (aborted || err?.name === 'AbortError') {
       return
     }
+    // Send the specific error message as a chunk before throwing
+    const errorMessage = err?.data?.error?.message || err?.message || String(err)
+    onChunk(JSON.stringify({ part: 'error', delta: errorMessage }))
     throw err
   }
 
