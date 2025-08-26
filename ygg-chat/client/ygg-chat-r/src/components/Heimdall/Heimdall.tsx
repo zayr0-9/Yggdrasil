@@ -1238,9 +1238,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       {!error && !loading && !lastDataRef.current && (
         <div className='absolute inset-0 z-10 flex items-center justify-center bg-slate-50 text-stone-800 dark:text-stone-200 dark:bg-neutral-900'>
           <div className='text-white text-center max-w-md'>
-            <div className='text-gray-500 text-6xl mb-4'>💬</div>
-            <p className='text-lg mb-2'>No conversation selected</p>
-            <p className='text-sm text-gray-400'>Select a conversation to view its message tree</p>
+            {/* <div className='text-gray-500 text-6xl mb-4'>💬</div> */}
+            <p className='text-lg mb-2'>Loading / Tree will appear here</p>
+            {/* <p className='text-sm text-gray-400'>Select a conversation to view its message tree</p> */}
           </div>
         </div>
       )}

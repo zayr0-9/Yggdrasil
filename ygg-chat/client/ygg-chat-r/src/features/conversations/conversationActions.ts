@@ -45,7 +45,7 @@ export const createConversation = createAsyncThunk<Conversation, { title?: strin
       }
       return await api.post<Conversation>('/conversations', {
         userId,
-        title: title || 'New Conversation',
+        title: title || null,
       })
     } catch (err) {
       return rejectWithValue(err instanceof Error ? err.message : 'Failed to create conversation')

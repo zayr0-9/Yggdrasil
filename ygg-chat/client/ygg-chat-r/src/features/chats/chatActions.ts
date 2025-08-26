@@ -8,6 +8,7 @@ import {
   BranchMessagePayload,
   EditMessagePayload,
   Message,
+  Model,
   ModelsResponse,
   SendMessagePayload,
 } from './chatTypes'
@@ -216,16 +217,16 @@ export const fetchModelsForCurrentProvider = createAsyncThunk(
 )
 
 // Model selection with persistence
-export const selectModel = createAsyncThunk('chat/selectModel', async (modelName: string, { dispatch, getState }) => {
+export const selectModel = createAsyncThunk('chat/selectModel', async (model: Model, { dispatch, getState }) => {
   const state = getState() as RootState
 
   // Verify model exists
-  if (!state.chat.models.available.includes(modelName)) {
-    throw new Error(`Model ${modelName} not available`)
+  if (!state.chat.models.available.includes(model)) {
+    throw new Error(`Model ${model.name} not available`)
   }
 
-  dispatch(chatSliceActions.modelSelected({ modelName, persist: true }))
-  return modelName
+  dispatch(chatSliceActions.modelSelected({ model, persist: true }))
+  return model
 })
 
 // Streaming message sending with proper error handling
@@ -248,7 +249,8 @@ export const sendMessage = createAsyncThunk(
       const currentPathIds = state.chat.conversation.currentPath
       const currentPathMessages = currentPathIds.map(id => currentMessages.find(m => m.id === id))
       // console.log('currentPathMessages', currentPathMessages)
-      const modelName = input.modelOverride || state.chat.models.selected || state.chat.models.default
+      const selectedName = state.chat.models.selected?.name || state.chat.models.default?.name
+      const modelName = input.modelOverride || selectedName
       // Map UI provider to server provider id
       const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
       const serverProvider = appProvider === 'google' ? 'gemini' : appProvider
@@ -439,7 +441,7 @@ export const updateMessage = createAsyncThunk(
 // Fetch conversation messages from server
 export const fetchConversationMessages = createAsyncThunk(
   'chat/fetchConversationMessages',
-  async (conversationId: number, { dispatch, rejectWithValue }) => {
+  async (conversationId: number, { dispatch, rejectWithValue, getState }) => {
     try {
       const raw = await apiCall<Message[]>(`/conversations/${conversationId}/messages`)
       // Ensure client-only fields exist
@@ -451,10 +453,21 @@ export const fetchConversationMessages = createAsyncThunk(
 
       dispatch(chatSliceActions.messagesLoaded(messages))
 
-      // Two-step: fetch attachments for each message
+      // Conditional attachments fetch: only when metadata indicates or when metadata absent (back-compat)
+      const state = getState() as RootState
+      const attachmentsByMessage = state.chat.attachments.byMessage || {}
+
       for (const msg of messages) {
-        // Fire-and-forget; errors handled inside thunk
-        dispatch(fetchAttachmentsByMessage({ messageId: msg.id }))
+        const alreadyFetched = Array.isArray(attachmentsByMessage[msg.id]) && attachmentsByMessage[msg.id].length > 0
+        const hasMeta = typeof msg.has_attachments !== 'undefined' || typeof msg.attachments_count !== 'undefined'
+        const indicatesAttachments = msg.has_attachments === true || (typeof msg.attachments_count === 'number' && msg.attachments_count > 0)
+
+        if (!alreadyFetched) {
+          if ((hasMeta && indicatesAttachments) || (!hasMeta /* fallback to previous behavior */)) {
+            // Fire-and-forget; errors handled inside thunk
+            dispatch(fetchAttachmentsByMessage({ messageId: msg.id }))
+          }
+        }
       }
 
       return messages
@@ -511,7 +524,8 @@ export const editMessageWithBranching = createAsyncThunk(
 
       // Find the parent of the original message to branch from
       const parentId = originalMessage.parent_id
-      const modelName = modelOverride || state.chat.models.selected || state.chat.models.default
+      const selectedName = state.chat.models.selected?.name || state.chat.models.default?.name
+      const modelName = modelOverride || selectedName
       // Map UI provider to server provider id
       const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
       const serverProvider = appProvider === 'google' ? 'gemini' : appProvider
@@ -675,7 +689,8 @@ export const sendMessageToBranch = createAsyncThunk(
       signal.addEventListener('abort', () => controller?.abort())
 
       const state = getState() as RootState
-      const modelName = modelOverride || state.chat.models.selected || state.chat.models.default
+      const selectedName = state.chat.models.selected?.name || state.chat.models.default?.name
+      const modelName = modelOverride || selectedName
       // Map UI provider to server provider id
       const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
       const serverProvider = appProvider === 'google' ? 'gemini' : appProvider
@@ -778,7 +793,24 @@ export const sendMessageToBranch = createAsyncThunk(
 // Fetch Heimdall message tree
 export const fetchMessageTree = createAsyncThunk(
   'chat/fetchMessageTree',
-  async (conversationId: number, { dispatch, rejectWithValue }) => {
+  async (conversationId: number, { dispatch, rejectWithValue, getState }) => {
+    // Gating: avoid duplicate in-flight fetches and throttle rapid refetches
+    const state = getState() as RootState
+    const { heimdall } = state.chat
+    const now = Date.now()
+    if (heimdall.loading && heimdall.lastConversationId === conversationId) {
+      // Skip: already fetching for this conversation
+      return null as any
+    }
+    if (
+      heimdall.lastConversationId === conversationId &&
+      typeof heimdall.lastFetchedAt === 'number' &&
+      now - heimdall.lastFetchedAt < 250
+    ) {
+      // Skip: fetched very recently for same conversation
+      return null as any
+    }
+
     dispatch(chatSliceActions.heimdallLoadingStarted())
     try {
       const treeData = await apiCall<any>(`/conversations/${conversationId}/messages/tree`)

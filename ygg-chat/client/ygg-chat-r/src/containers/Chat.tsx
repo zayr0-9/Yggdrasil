@@ -107,8 +107,13 @@ function Chat() {
 
   // Consider the user to be "at the bottom" if within this many pixels
   const NEAR_BOTTOM_PX = 48
-  const isNearBottom = (el: HTMLElement, threshold = NEAR_BOTTOM_PX) =>
-    el.scrollHeight - el.scrollTop - el.clientHeight <= threshold
+  const isNearBottom = (el: HTMLElement, threshold = NEAR_BOTTOM_PX) => {
+    // Account for the absolute-positioned input area occupying visual space at the bottom.
+    // The messages container uses paddingBottom equal to inputAreaHeight; treat being within
+    // that padding as "near bottom" so user pinning behaves intuitively.
+    const remaining = el.scrollHeight - el.scrollTop - el.clientHeight
+    return remaining <= threshold + inputAreaHeight
+  }
 
   // Heimdall state from Redux
   const heimdallData = useAppSelector(selectHeimdallData)
@@ -159,6 +164,10 @@ function Chat() {
   const [isResizing, setIsResizing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [think, setThink] = useState<boolean>(false)
+  // Session-level delete confirmation preference and modal state
+  const [confirmDel, setconfirmDel] = useState<boolean>(true)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [dontAskAgain, setDontAskAgain] = useState<boolean>(false)
 
   useEffect(() => {
     if (!isResizing) return
@@ -303,6 +312,7 @@ function Chat() {
     streamState.active,
     streamState.finished,
     selectedPath,
+    inputAreaHeight,
   ])
 
   // Cleanup any pending rAF on unmount
@@ -328,7 +338,7 @@ function Chat() {
     return () => {
       el.removeEventListener('scroll', onScroll)
     }
-  }, [streamState.active])
+  }, [streamState.active, inputAreaHeight])
 
   // Reset the user scroll override when the stream finishes
   useEffect(() => {
@@ -458,7 +468,12 @@ function Chat() {
 
   // Handle model selection
   const handleModelSelect = (modelName: string) => {
-    dispatch(chatSliceActions.modelSelected({ modelName, persist: true }))
+    const model = models.find(m => m.name === modelName)
+    if (model) {
+      dispatch(chatSliceActions.modelSelected({ model, persist: true }))
+    } else {
+      console.warn('Selected model not found:', modelName)
+    }
   }
   const handleProviderSelect = (providerName: string) => {
     dispatch(chatSliceActions.providerSelected(providerName))
@@ -504,7 +519,7 @@ function Chat() {
           conversationId: currentConversationId,
           originalMessageId: parseInt(id),
           newContent: newContent,
-          modelOverride: selectedModel || undefined,
+          modelOverride: selectedModel?.name,
           think: think,
         })
       )
@@ -567,7 +582,7 @@ function Chat() {
   //   }
   // }
 
-  const handleMessageDelete = (id: string) => {
+  const performDelete = (id: string) => {
     const messageId = parseInt(id)
     dispatch(chatSliceActions.messageDeleted(messageId))
     if (currentConversationId) {
@@ -575,6 +590,25 @@ function Chat() {
       dispatch(refreshCurrentPathAfterDelete({ conversationId: currentConversationId, messageId }))
     }
     console.log(messageId)
+  }
+
+  const handleRequestDelete = (id: string) => {
+    if (!confirmDel) {
+      performDelete(id)
+    } else {
+      setPendingDeleteId(id)
+    }
+  }
+
+  const closeDeleteModal = () => {
+    setPendingDeleteId(null)
+    setDontAskAgain(false)
+  }
+
+  const confirmDeleteModal = () => {
+    if (dontAskAgain) setconfirmDel(false)
+    if (pendingDeleteId) performDelete(pendingDeleteId)
+    closeDeleteModal()
   }
 
   // Handle key press
@@ -650,7 +684,7 @@ function Chat() {
                   artifacts={msg.artifacts}
                   onEdit={handleMessageEdit}
                   onBranch={handleMessageBranch}
-                  onDelete={handleMessageDelete}
+                  onDelete={handleRequestDelete}
                   onResend={handleResend}
                 />
               ))
@@ -664,12 +698,12 @@ function Chat() {
                 content={streamState.buffer}
                 thinking={streamState.thinkingBuffer}
                 width='w-full'
-                modelName={selectedModel || undefined}
+                modelName={selectedModel?.name || undefined}
                 className=''
               />
             )}
             {/* Bottom sentinel for robust scrolling */}
-            <div ref={bottomRef} data-bottom-sentinel='true' />
+            <div ref={bottomRef} data-bottom-sentinel='true' className='h-px' />
           </div>
         </div>
         {/* Absolute input area: controls row + textarea, measured as one block */}
@@ -722,26 +756,30 @@ function Chat() {
                   placeholder='Select a provider...'
                   disabled={providers.providers.length === 0}
                   className='max-w-md'
+                  searchBarVisible={true}
                 />
                 {/* <span className='text-stone-800 dark:text-stone-200 text-sm'>{models.length} models</span> */}
                 <Select
-                  value={selectedModel || ''}
+                  value={selectedModel?.name || ''}
                   onChange={handleModelSelect}
-                  options={models}
+                  options={models.map(m => m.name)}
                   placeholder='Select a model...'
                   disabled={models.length === 0}
                   className='w-full max-w-xs'
+                  searchBarVisible={true}
                 />
                 <Button variant='primary' className='rounded-full' size='small' onClick={handleRefreshModels}>
                   <i className='bx bx-refresh text-xl' aria-hidden='true'></i>
                 </Button>
-                <Button variant='primary' className='rounded-full' size='small' onClick={() => setThink(t => !t)}>
-                  {think ? (
-                    <i className='bx bxs-bulb text-xl text-yellow-400' aria-hidden='true'></i>
-                  ) : (
-                    <i className='bx bx-bulb text-xl' aria-hidden='true'></i>
-                  )}
-                </Button>
+                {selectedModel?.thinking && (
+                  <Button variant='primary' className='rounded-full' size='small' onClick={() => setThink(t => !t)}>
+                    {think ? (
+                      <i className='bx bxs-bulb text-xl text-yellow-400' aria-hidden='true'></i>
+                    ) : (
+                      <i className='bx bx-bulb text-xl' aria-hidden='true'></i>
+                    )}
+                  </Button>
+                )}
                 <Button
                   variant={canSend && currentConversationId ? 'primary' : 'secondary'}
                   disabled={!canSend || !currentConversationId}
@@ -786,6 +824,35 @@ function Chat() {
         />
       </div>
       <SettingsPane open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+      {/* Centered custom delete confirmation modal */}
+      {pendingDeleteId && confirmDel && (
+        <div className='fixed inset-0 z-[100] flex items-center justify-center bg-black/50' onClick={closeDeleteModal}>
+          <div
+            className='bg-white dark:bg-neutral-800 rounded-lg shadow-xl p-6 w-[90%] max-w-sm'
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className='text-lg font-semibold mb-2 text-neutral-900 dark:text-neutral-100'>Delete message?</h3>
+            <p className='text-sm text-neutral-700 dark:text-neutral-300 mb-4'>This action cannot be undone.</p>
+            <label className='flex items-center gap-2 mb-4 text-sm text-neutral-700 dark:text-neutral-300'>
+              <input type='checkbox' checked={dontAskAgain} onChange={e => setDontAskAgain(e.target.checked)} />
+              Don't ask again this session
+            </label>
+            <div className='flex justify-end gap-2'>
+              <Button variant='secondary' onClick={closeDeleteModal}>
+                Cancel
+              </Button>
+              <Button
+                variant='primary'
+                className='bg-red-600 hover:bg-red-700 border-red-700 text-white'
+                onClick={confirmDeleteModal}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
