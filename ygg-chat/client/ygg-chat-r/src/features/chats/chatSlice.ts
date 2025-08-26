@@ -184,6 +184,7 @@ export const chatSlice = createSlice({
       state.streaming.active = true
       state.streaming.buffer = ''
       state.streaming.thinkingBuffer = ''
+      state.composition.input.content = ''
       state.streaming.error = null
       state.streaming.finished = false
       state.streaming.streamingMessageId = null
