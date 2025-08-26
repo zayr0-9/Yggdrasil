@@ -382,7 +382,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
     return (
       <div className='relative group my-3 not-prose'>
-        {role === 'assistant' && (
+        {
           <Button
             type='button'
             onClick={handleCopyCode}
@@ -392,7 +392,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           >
             {copied ? 'Copied' : 'Copy'}
           </Button>
-        )}
+        }
         <pre
           ref={preRef}
           className={`not-prose overflow-auto rounded-lg border-0 ring-0 outline-none shadow-none bg-gray-100 text-gray-900 dark:bg-neutral-900 dark:text-neutral-100 p-3`}

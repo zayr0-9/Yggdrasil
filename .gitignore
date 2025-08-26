@@ -67,3 +67,4 @@ ygg-chat/server/*.log
 ygg-chat/server/.cache
 ygg-chat/server/tsconfig.tsbuildinfo
 ygg-chat/server/src/data/yggdrasil.db
+ygg-chat/server/src/data/uploads/*
