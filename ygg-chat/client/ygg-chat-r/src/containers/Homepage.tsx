@@ -134,7 +134,7 @@ const Homepage: React.FC = () => {
                 )}
               </li>
             ))}
-            {conversations.length === 0 && !loading && <p>No conversations yet.</p>}
+            {conversations.length === 0 && !loading && <p className='dark:text-neutral-300'>No conversations yet.</p>}
           </ul>
           <div className='relative w-128'>
             <TextField
