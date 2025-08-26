@@ -1071,13 +1071,13 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 filter:
                   compactMode && focusedNodeId === node.id ? 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.5))' : 'none',
               }}
-              onMouseEnter={(e) => {
+              onMouseEnter={e => {
                 setSelectedNode(node)
                 const containerRect = containerRef.current?.getBoundingClientRect()
                 if (containerRect) {
                   setMousePosition({
                     x: e.clientX - containerRect.left,
-                    y: e.clientY - containerRect.top
+                    y: e.clientY - containerRect.top,
                   })
                 }
               }}
@@ -1138,19 +1138,20 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               r={circleRadius}
               fill={node.sender === 'user' ? '#64748b' : '#1e293b'}
               className={`cursor-pointer transition-transform duration-150 ${
-                node.sender === 'user' ? 'fill-red-300 dark:fill-lime-900' : 'fill-indigo-300 dark:fill-sky-900'
+                node.sender === 'user' ? 'fill-yellow-100 dark:fill-lime-900' : 'fill-indigo-300 dark:fill-sky-900'
               }`}
               style={{
                 transform: selectedNode?.id === node.id ? 'scale(1.1)' : 'scale(1)',
                 transformOrigin: `${x}px ${y + circleRadius}px`,
               }}
-              onMouseEnter={(e) => {
+              stroke={node.sender === 'user' ? 'oklch(70.5% 0.015 286.067)' : ''}
+              onMouseEnter={e => {
                 setSelectedNode(node)
                 const containerRect = containerRef.current?.getBoundingClientRect()
                 if (containerRect) {
                   setMousePosition({
                     x: e.clientX - containerRect.left,
-                    y: e.clientY - containerRect.top
+                    y: e.clientY - containerRect.top,
                   })
                 }
               }}
@@ -1165,7 +1166,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               onContextMenu={e => handleContextMenu(e, node.id)}
             />
             {/* Add a small indicator for branch nodes */}
-            {node.children && node.children.length > 1 && (
+            {/* {node.children && node.children.length > 1 && (
               <circle
                 cx={x}
                 cy={y + circleRadius}
@@ -1175,7 +1176,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 className='animate-pulse'
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
               />
-            )}
+            )} */}
           </motion.g>
         )
       }
@@ -1378,7 +1379,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
           style={{
             left: Math.min(mousePosition.x + 10, dimensions.width - 400),
             top: Math.max(mousePosition.y + 10, 10),
-            maxWidth: '300px'
+            maxWidth: '300px',
           }}
         >
           <div className='text-xs text-stone-800 bg-amber-50 dark:bg-neutral-800 dark:text-stone-200 mb-1'>
