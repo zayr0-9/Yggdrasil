@@ -16,6 +16,15 @@ export interface BaseMessage {
   attachments_count?: number
 }
 
+export interface Project {
+  id: number
+  name: string
+  created_at: string
+  updated_at: string
+  context: string
+  system_prompt: string
+}
+
 export interface ChatSession {
   id: string
   title: string

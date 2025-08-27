@@ -1,4 +1,4 @@
-import { BaseMessage } from '../../../shared/types'
+import { BaseMessage, Project } from '../../../shared/types'
 import { statements } from './db'
 
 export interface User {
@@ -169,15 +169,68 @@ export class UserService {
   }
 }
 
+export class ProjectService {
+  static async create(
+    name: string,
+    created_at: string,
+    updated_at: string,
+    conversation_id: number,
+    context: string,
+    system_prompt: string
+  ): Promise<Project> {
+    const result = statements.createProject.run(name, created_at, updated_at, conversation_id, context, system_prompt)
+    return statements.getProjectById.get(result.lastInsertRowid) as Project
+  }
+
+  static getAll(): Project[] {
+    return statements.getAllProjects.all() as Project[]
+  }
+
+  static getById(id: number): Project | undefined {
+    return statements.getProjectById.get(id) as Project | undefined
+  }
+
+  static update(
+    id: number,
+    name: string,
+    updated_at: string,
+    context: string,
+    system_prompt: string
+  ): Project | undefined {
+    statements.updateProject.run(name, updated_at, context, system_prompt, id)
+    return statements.getProjectById.get(id) as Project | undefined
+  }
+
+  static getProjectContext(id: number): string | null {
+    const row = statements.getProjectContext.get(id) as { context: string | null } | undefined
+    console.log(`row ${row}`)
+    return row?.context ?? null
+  }
+
+  static getProjectIdFromConversation(conversationId: number): number | null {
+    const row = statements.getConversationProjectId.get(conversationId) as { project_id: number | null } | undefined
+    console.log(`getProjectIdFromConversation - conversationId: ${conversationId}, row:`, row)
+    return row?.project_id ?? null
+  }
+
+  static delete(id: number): void {
+    statements.deleteProject.run(id)
+  }
+}
+
 export class ConversationService {
-  static async create(userId: number, title?: string, modelName?: string): Promise<Conversation> {
+  static async create(userId: number, title?: string, modelName?: string, projectId?: number): Promise<Conversation> {
     const selectedModel = modelName || null
-    const result = statements.createConversation.run(userId, title, selectedModel)
+    const result = statements.createConversation.run(userId, title, selectedModel, projectId)
     return statements.getConversationById.get(result.lastInsertRowid) as Conversation
   }
 
   static getByUser(userId: number): Conversation[] {
     return statements.getConversationsByUser.all(userId) as Conversation[]
+  }
+
+  static getByProjectId(id: number): Conversation[] {
+    return statements.getConversationByProjectId.all(id) as Conversation[]
   }
 
   static getById(id: number): Conversation | undefined {
@@ -337,6 +390,10 @@ export class MessageService {
 
   static searchAllUserMessages(query: string, userId: number, limit: number = 50): SearchResult[] {
     return statements.searchAllUserMessages.all(query, userId) as SearchResult[]
+  }
+
+  static searchMessagesByProject(query: string, projectId: number): SearchResult[] {
+    return statements.searchMessagesByProject.all(query, projectId) as SearchResult[]
   }
 
   static searchWithSnippets(query: string, conversationId: number): SearchResultWithSnippet[] {

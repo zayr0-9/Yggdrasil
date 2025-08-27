@@ -165,15 +165,15 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
   const labelClasses = state === 'disabled' ? 'opacity-40' : ''
 
   const stateStyles = {
-    default: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-gray-600 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50`,
+    default: `${baseStyles} bg-gray-800 text-stone-900 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-gray-600 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50`,
     error: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-red-500 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500 focus:ring-opacity-50`,
     disabled: `${baseStyles} bg-gray-900 text-stone-800 dark:text-stone-200 border-gray-700 placeholder-neutral-700 dark:placeholder-neutral-200 cursor-not-allowed`,
   }
 
   return (
-    <div className='flex flex-col gap-1'>
+    <div className={`flex flex-col gap-1 ${className}`}>
       {label && (
-        <label htmlFor={id} className={`text-sm font-medium text-neutral-800 dark:text-neutral-200 ${labelClasses}`}>
+        <label htmlFor={id} className={`text-md font-medium text-neutral-800 dark:text-neutral-200 ${labelClasses}`}>
           {label}
         </label>
       )}

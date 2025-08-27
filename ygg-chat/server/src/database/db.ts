@@ -27,20 +27,32 @@ export function initializeDatabase() {
     )
   `)
 
+  // Projects table
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    context TEXT,
+    system_prompt TEXT
+  )`)
+
   // Conversations table
   db.exec(`
-    CREATE TABLE IF NOT EXISTS conversations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      title TEXT,
-      model_name TEXT DEFAULT 'gemma3:4b',
-      system_prompt TEXT,
-      conversation_context TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )
-  `)
+  CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER, -- Add this line
+    user_id INTEGER NOT NULL,
+    title TEXT,
+    model_name TEXT DEFAULT 'gemma3:4b',
+    system_prompt TEXT,
+    conversation_context TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`)
 
   // Messages table with hybrid parent_id + children_ids design
   db.exec(`
@@ -158,6 +170,13 @@ export function initializeDatabase() {
     END;
   `)
 
+  // Add migration for project_id column if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE conversations ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE`)
+  } catch (error) {
+    // Column already exists, ignore the error
+  }
+
   // Initialize prepared statements after tables exist
   initializeStatements()
 
@@ -181,8 +200,23 @@ export function initializeStatements() {
     updateUser: db.prepare('UPDATE users SET username = ? WHERE id = ?'),
     deleteUser: db.prepare('DELETE FROM users WHERE id = ?'),
 
+    //Projects
+    createProject: db.prepare(
+      'INSERT INTO projects (name, created_at, updated_at, conversation_id, context, system_prompt) VALUES (?, ?, ?, ?, ?, ?)'
+    ),
+    getAllProjects: db.prepare('SELECT * FROM projects ORDER BY created_at DESC'),
+    getProjectById: db.prepare('SELECT * FROM projects WHERE id = ?'),
+    updateProject: db.prepare(
+      'UPDATE projects SET name = ?, updated_at = ?, context = ?, system_prompt = ? WHERE id = ?'
+    ),
+    deleteProject: db.prepare('DELETE FROM projects WHERE id = ?'),
+    getProjectContext: db.prepare('SELECT context FROM projects WHERE id = ?'),
+    getConversationProjectId: db.prepare('SELECT project_id FROM conversations WHERE id = ?'),
+
     // Conversations
-    createConversation: db.prepare('INSERT INTO conversations (user_id, title, model_name) VALUES (?, ?, ?)'),
+    createConversation: db.prepare(
+      'INSERT INTO conversations (user_id, title, model_name, project_id) VALUES (?, ?, ?, ?)'
+    ),
     getConversationsByUser: db.prepare('SELECT * FROM conversations WHERE user_id = ? ORDER BY updated_at DESC'),
     getConversationById: db.prepare('SELECT * FROM conversations WHERE id = ?'),
     getConversationSystemPrompt: db.prepare('SELECT system_prompt FROM conversations WHERE id = ?'),
@@ -195,6 +229,7 @@ export function initializeStatements() {
     updateConversationContext: db.prepare(
       'UPDATE conversations SET conversation_context = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
     ),
+    getConversationByProjectId: db.prepare('SELECT * FROM conversations WHERE project_id = ?'),
     getConversationContext: db.prepare('SELECT conversation_context FROM conversations WHERE id = ?'),
     updateConversationTimestamp: db.prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?'),
     deleteConversation: db.prepare('DELETE FROM conversations WHERE id = ?'),
@@ -251,6 +286,16 @@ export function initializeStatements() {
       WHERE messages_fts MATCH ? AND c.user_id = ?
       ORDER BY rank
       LIMIT 50
+    `),
+
+    //Search messages by project
+    searchMessagesByProject: db.prepare(`
+      SELECT m.*, highlight(messages_fts, 0, '<mark>', '</mark>') as highlighted
+      FROM messages m
+      JOIN messages_fts ON m.id = messages_fts.message_id
+      JOIN conversations c ON m.conversation_id = c.id
+      WHERE messages_fts MATCH ? AND c.project_id = ?
+      ORDER BY rank
     `),
 
     // Advanced FTS with snippets (shows context around matches)

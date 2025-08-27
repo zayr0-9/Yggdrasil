@@ -13,6 +13,7 @@ interface TextFieldProps {
   helperText?: string
   required?: boolean
   size?: 'small' | 'medium' | 'large'
+  className?: string
 }
 
 export const TextField: React.FC<TextFieldProps> = ({
@@ -27,6 +28,7 @@ export const TextField: React.FC<TextFieldProps> = ({
   helperText,
   required = false,
   size = 'medium',
+  className = '',
 }) => {
   // We'll use internal state if no value/onChange is provided (uncontrolled component)
   const [internalValue, setInternalValue] = useState('')
@@ -69,6 +71,7 @@ export const TextField: React.FC<TextFieldProps> = ({
     ${sizeStyles[size]}
     ${stateStyles}
     ${disabledStyles}
+    ${className}
   `.trim()
 
   // Label styles with required indicator

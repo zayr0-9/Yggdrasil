@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { updateConversationTitle } from '../chats'
-import { createConversation, deleteConversation, fetchConversations, updateConversation } from './conversationActions'
+import { createConversation, deleteConversation, fetchConversations, fetchConversationsByProjectId, updateConversation } from './conversationActions'
 import { Conversation, ConversationsState } from './conversationTypes'
 
 const initialState: ConversationsState = {
@@ -45,6 +45,19 @@ const conversationSlice = createSlice({
         state.items = action.payload
       })
       .addCase(fetchConversations.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload as string
+      })
+      // fetch by project ID
+      .addCase(fetchConversationsByProjectId.pending, state => {
+        state.loading = true
+        state.error = null
+      })
+      .addCase(fetchConversationsByProjectId.fulfilled, (state, action: PayloadAction<Conversation[]>) => {
+        state.loading = false
+        state.items = action.payload
+      })
+      .addCase(fetchConversationsByProjectId.rejected, (state, action) => {
         state.loading = false
         state.error = action.payload as string
       })

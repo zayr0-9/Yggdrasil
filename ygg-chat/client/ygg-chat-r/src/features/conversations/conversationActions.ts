@@ -32,6 +32,18 @@ export const fetchConversations = createAsyncThunk<Conversation[], void, { state
   }
 )
 
+// Fetch conversations by project ID
+export const fetchConversationsByProjectId = createAsyncThunk<Conversation[], number, { state: RootState }>(
+  'conversations/fetchByProjectId',
+  async (projectId: number, { rejectWithValue }) => {
+    try {
+      return await api.get<Conversation[]>(`/conversations/project/${projectId}`)
+    } catch (err) {
+      return rejectWithValue(err instanceof Error ? err.message : 'Failed to fetch conversations by project')
+    }
+  }
+)
+
 // Create new conversation for current user
 export const createConversation = createAsyncThunk<Conversation, { title?: string }, { state: RootState }>(
   'conversations/create',
@@ -43,9 +55,15 @@ export const createConversation = createAsyncThunk<Conversation, { title?: strin
         const user = await api.post<{ id: number }>('/users', { username: 'homepage-user' })
         userId = user.id
       }
+      
+      // Get selected project ID from state
+      const selectedProject = state.projects.selectedProject
+      const projectId = selectedProject?.id || null
+      
       return await api.post<Conversation>('/conversations', {
         userId,
         title: title || null,
+        projectId,
       })
     } catch (err) {
       return rejectWithValue(err instanceof Error ? err.message : 'Failed to create conversation')

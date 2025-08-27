@@ -1,11 +1,12 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Chat, Homepage, Settings } from './containers'
+import { Chat, ConversationPage, Homepage, Settings } from './containers'
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path='/conversationPage' element={<ConversationPage />} />
         <Route path='/' element={<Homepage />} />
         <Route path='/chat/:id' element={<Chat />} />
         <Route path='/settings' element={<Settings />} />

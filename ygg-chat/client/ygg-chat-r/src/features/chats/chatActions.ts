@@ -2,6 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit'
 import type { RootState } from '../../store/store'
 import { API_BASE, apiCall, createStreamingRequest } from '../../utils/api'
 import type { Conversation } from '../conversations/conversationTypes'
+import { selectSelectedProject } from '../projects/projectSelectors'
 import { chatSliceActions } from './chatSlice'
 import {
   Attachment,
@@ -259,6 +260,11 @@ export const sendMessage = createAsyncThunk(
       const attachmentsBase64 = drafts.length
         ? drafts.map(d => ({ dataUrl: d.dataUrl, name: d.name, type: d.type, size: d.size }))
         : null
+
+      // Use project system prompt as fallback if conversation system prompt is empty
+      const selectedProject = selectSelectedProject(state)
+      const systemPrompt = state.conversations.systemPrompt || selectedProject?.system_prompt || ''
+
       let response = null
 
       if (!modelName) {
@@ -291,7 +297,7 @@ export const sendMessage = createAsyncThunk(
             modelName: modelName,
             // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
             parentId: parent,
-            systemPrompt: state.conversations.systemPrompt,
+            systemPrompt: systemPrompt,
             provider: serverProvider,
             repeatNum: repeatNum,
             attachmentsBase64,
@@ -318,7 +324,7 @@ export const sendMessage = createAsyncThunk(
             modelName: modelName,
             // parentId: (currentPath && currentPath.length ? currentPath[currentPath.length - 1] : currentMessages?.at(-1)?.id) || undefined,
             parentId: parent,
-            systemPrompt: state.conversations.systemPrompt,
+            systemPrompt: systemPrompt,
             provider: serverProvider,
             attachmentsBase64,
             think,
@@ -460,10 +466,11 @@ export const fetchConversationMessages = createAsyncThunk(
       for (const msg of messages) {
         const alreadyFetched = Array.isArray(attachmentsByMessage[msg.id]) && attachmentsByMessage[msg.id].length > 0
         const hasMeta = typeof msg.has_attachments !== 'undefined' || typeof msg.attachments_count !== 'undefined'
-        const indicatesAttachments = msg.has_attachments === true || (typeof msg.attachments_count === 'number' && msg.attachments_count > 0)
+        const indicatesAttachments =
+          msg.has_attachments === true || (typeof msg.attachments_count === 'number' && msg.attachments_count > 0)
 
         if (!alreadyFetched) {
-          if ((hasMeta && indicatesAttachments) || (!hasMeta /* fallback to previous behavior */)) {
+          if ((hasMeta && indicatesAttachments) || !hasMeta /* fallback to previous behavior */) {
             // Fire-and-forget; errors handled inside thunk
             dispatch(fetchAttachmentsByMessage({ messageId: msg.id }))
           }
@@ -516,19 +523,18 @@ export const editMessageWithBranching = createAsyncThunk(
       console.log('currentPathIds branch (truncated) ---', truncatedPathIds)
       const currentPathMessages = truncatedPathIds
         .map(id => currentMessages.find(m => m.id === id))
-        .filter((m): m is Message => !!m)
-      console.log('currentPathMessages branch ---', currentPathMessages)
-      if (!originalMessage) {
-        throw new Error('Original message not found')
-      }
-
-      // Find the parent of the original message to branch from
-      const parentId = originalMessage.parent_id
+        .filter(Boolean) as Message[]
       const selectedName = state.chat.models.selected?.name || state.chat.models.default?.name
       const modelName = modelOverride || selectedName
+      const parentId = originalMessage.parent_id
+
       // Map UI provider to server provider id
       const appProvider = (state.chat.providerState.currentProvider || 'ollama').toLowerCase()
       const serverProvider = appProvider === 'google' ? 'gemini' : appProvider
+
+      // Use project system prompt as fallback if conversation system prompt is empty
+      const selectedProject = selectSelectedProject(state)
+      const systemPrompt = state.conversations.systemPrompt || selectedProject?.system_prompt || ''
       const drafts = state.chat.composition.imageDrafts || []
       // Build attachments: existing artifacts minus deleted (backup) + current drafts
       const artifactsExisting: string[] = Array.isArray(originalMessage.artifacts)
@@ -573,7 +579,7 @@ export const editMessageWithBranching = createAsyncThunk(
           content: newContent,
           modelName,
           parentId: parentId, // Branch from the same parent as original
-          systemPrompt: state.conversations.systemPrompt,
+          systemPrompt: systemPrompt,
           provider: serverProvider,
           attachmentsBase64,
           think,

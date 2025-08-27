@@ -2,43 +2,39 @@ import 'boxicons'
 import 'boxicons/css/boxicons.min.css'
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Project } from '../../../../shared/types'
 import { Button, TextField } from '../components'
 import { chatSliceActions } from '../features/chats'
 import {
-  activeConversationIdSet,
-  Conversation,
-  createConversation,
-  deleteConversation,
-  fetchConversations,
-  selectAllConversations,
-  selectConvError,
-  selectConvLoading,
-} from '../features/conversations'
-import {
-  searchActions,
-  selectSearchLoading as selectSearchLoading2,
-  selectSearchQuery,
-  selectSearchResults,
-} from '../features/search'
+  deleteProject,
+  fetchProjects,
+  selectAllProjects,
+  //   selectProjectsError,
+  selectProjectsLoading,
+} from '../features/projects'
+import { searchActions, selectSearchLoading, selectSearchQuery, selectSearchResults } from '../features/search'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
+import EditProject from './EditProject'
 
 const Homepage: React.FC = () => {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
 
-  const conversations = useAppSelector<Conversation[]>(selectAllConversations)
-  const loading = useAppSelector(selectConvLoading)
-  const searchLoading = useAppSelector(selectSearchLoading2)
-  const error = useAppSelector(selectConvError)
+  const projects = useAppSelector<Project[]>(selectAllProjects)
+  const loading = useAppSelector(selectProjectsLoading)
+  const searchLoading = useAppSelector(selectSearchLoading)
   const searchResults = useAppSelector(selectSearchResults)
   const searchQuery = useAppSelector(selectSearchQuery)
+  //   const error = useAppSelector(selectProjectsError)
 
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [isDropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLUListElement | null>(null)
 
   useEffect(() => {
     dispatch(chatSliceActions.stateReset())
-    dispatch(fetchConversations())
+    dispatch(fetchProjects())
     dispatch(chatSliceActions.heimdallDataLoaded({ treeData: null }))
   }, [dispatch])
 
@@ -53,19 +49,27 @@ const Homepage: React.FC = () => {
     return () => document.removeEventListener('click', handler)
   }, [])
 
-  const handleSelect = (conv: Conversation) => {
-    dispatch(chatSliceActions.conversationSet(conv.id))
-    navigate(`/chat/${conv.id}`)
-    dispatch(activeConversationIdSet(conv.id))
+  const handleSelectProject = (project: Project) => {
+    navigate(`/conversationPage?projectId=${project.id}`)
   }
 
-  const handleDelete = (id: number) => {
-    dispatch(deleteConversation({ id }))
+  const handleDeleteProject = (id: number) => {
+    dispatch(deleteProject(id))
   }
 
-  const handleNewConversation = async () => {
-    const result = await dispatch(createConversation({})).unwrap()
-    handleSelect(result)
+  const handleCloseModal = () => {
+    setShowEditModal(false)
+    setEditingProject(null)
+  }
+
+  const handleEditProject = (project: Project) => {
+    setEditingProject(project)
+    setShowEditModal(true)
+  }
+
+  const handleCreateProject = () => {
+    setEditingProject(null)
+    setShowEditModal(true)
   }
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -87,54 +91,86 @@ const Homepage: React.FC = () => {
 
   return (
     <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900'>
-      <div className='p-6 max-w-6xl mx-auto'>
-        <div className='flex items-center justify-between mb-4'>
-          <h1 className='text-3xl py-4 font-bold dark:text-neutral-100'>Conversations</h1>
+      <div className='py-4 max-w-7xl mx-auto'>
+        <div className='flex items-center justify-between py-4'>
+          <div className='flex items-center gap-3'>
+            {/* <img src='/img/op26cyb01.svg' alt='Yggdrasil Logo' className='w-20 h-20' /> */}
+            <h1 className='text-4xl font-bold dark:text-neutral-100'>Yggdrasil</h1>
+          </div>
           <Button variant='primary' size='small' onClick={() => navigate('/settings')}>
-            Settings
+            <i className='bx bx-cog text-xl' aria-hidden='true'></i>
           </Button>
         </div>
+      </div>
+      <div className='py-2 px-4 max-w-6xl mx-auto'>
+        <div className='mb-4'>
+          <h2 className='text-3xl py-4 font-bold dark:text-neutral-100'>Projects</h2>
+        </div>
 
-        {/* New Conversation + Search inline row */}
+        {/* New Project Button + Search */}
         <div className='mb-6 flex items-center gap-3'>
-          <Button variant='primary' size='medium' onClick={handleNewConversation} className='shrink-0'>
-            New Conversation
+          <Button variant='primary' size='medium' onClick={handleCreateProject} className='shrink-0'>
+            New Project
           </Button>
         </div>
 
         {loading && <p>Loading...</p>}
-        {error && <p className='text-red-500'>{error}</p>}
+        {/* {error && <p className='text-red-500'>{error}</p>} */}
+
         <div className='flex gap-4 items-start'>
           <ul className='space-y-2 rounded flex-1'>
-            {conversations.map(conv => (
+            {projects.map(project => (
               <li
-                key={conv.id}
-                className='p-3 mb-4 bg-indigo-50 rounded-lg cursor-pointer dark:bg-zinc-700 hover:bg-indigo-100 dark:hover:bg-zinc-600'
-                onClick={() => handleSelect(conv)}
+                key={project.id}
+                className='p-4 mb-4 bg-indigo-50 rounded-lg cursor-pointer dark:bg-zinc-700 hover:bg-indigo-100 dark:hover:bg-zinc-600'
+                onClick={() => handleSelectProject(project)}
               >
                 <div className='flex items-center justify-between'>
-                  <span className='font-semibold dark:text-neutral-100'>{conv.title || `Conversation ${conv.id}`}</span>
-                  <Button
-                    variant='secondary'
-                    size='smaller'
-                    onClick={
-                      (e => {
-                        ;(e as unknown as React.MouseEvent).stopPropagation()
-                        handleDelete(conv.id)
-                      }) as unknown as () => void
-                    }
-                  >
-                    <i className='bx bx-trash-alt text-lg' aria-hidden='true'></i>
-                  </Button>
+                  <div className='flex-1'>
+                    <span className='font-semibold text-lg dark:text-neutral-100'>{project.name}</span>
+                    {project.context && (
+                      <p className='text-sm text-gray-600 ygg-line-clamp-6 dark:text-gray-300 mt-1'>
+                        {project.context}
+                      </p>
+                    )}
+                  </div>
+                  <div className='flex gap-1'>
+                    <Button
+                      variant='secondary'
+                      size='smaller'
+                      onClick={
+                        (e => {
+                          ;(e as unknown as React.MouseEvent).stopPropagation()
+                          handleEditProject(project)
+                        }) as unknown as () => void
+                      }
+                    >
+                      <i className='bx bx-edit text-lg' aria-hidden='true'></i>
+                    </Button>
+                    <Button
+                      variant='secondary'
+                      size='smaller'
+                      onClick={
+                        (e => {
+                          ;(e as unknown as React.MouseEvent).stopPropagation()
+                          handleDeleteProject(project.id)
+                        }) as unknown as () => void
+                      }
+                    >
+                      <i className='bx bx-trash-alt text-lg' aria-hidden='true'></i>
+                    </Button>
+                  </div>
                 </div>
-                {conv.created_at && (
-                  <div className='text-xs text-neutral-900 dark:text-neutral-100'>
-                    {new Date(conv.created_at).toLocaleString()}
+                {project.created_at && (
+                  <div className='text-xs text-neutral-600 dark:text-neutral-400 mt-2'>
+                    Created: {new Date(project.created_at).toLocaleString()}
                   </div>
                 )}
               </li>
             ))}
-            {conversations.length === 0 && !loading && <p className='dark:text-neutral-300'>No conversations yet.</p>}
+            {projects.length === 0 && !loading && (
+              <p className='dark:text-neutral-300'>No projects yet. Create your first project to get started!</p>
+            )}
           </ul>
           <div className='relative w-128'>
             <TextField
@@ -175,6 +211,8 @@ const Homepage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <EditProject isOpen={showEditModal} onClose={handleCloseModal} editingProject={editingProject} />
     </div>
   )
 }

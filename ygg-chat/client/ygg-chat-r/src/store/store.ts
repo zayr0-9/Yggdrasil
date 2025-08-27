@@ -4,6 +4,7 @@ import { chatReducer } from '../features/chats'
 import { conversationsReducer } from '../features/conversations'
 import { default as searchReducer } from '../features/search/searchSlice'
 import { usersReducer } from '../features/users'
+import { default as projectsReducer } from '../features/projects/projectSlice'
 
 // Root reducer configuration
 const rootReducer = {
@@ -11,6 +12,7 @@ const rootReducer = {
   chat: chatReducer,
   conversations: conversationsReducer,
   search: searchReducer,
+  projects: projectsReducer,
 }
 
 // Main store for the app

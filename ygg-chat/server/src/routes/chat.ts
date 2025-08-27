@@ -4,7 +4,7 @@ import express from 'express'
 import fs from 'fs'
 import multer from 'multer'
 import path from 'path'
-import { AttachmentService, ConversationService, MessageService, UserService } from '../database/models'
+import { AttachmentService, ConversationService, MessageService, ProjectService, UserService } from '../database/models'
 import { asyncHandler } from '../utils/asyncHandler'
 import { convertMessagesToHeimdall } from '../utils/heimdallConverter'
 import { modelService } from '../utils/modelService'
@@ -25,6 +25,20 @@ router.get(
     }
     const userId = req.query.userId ? parseInt(req.query.userId as string) : 1
     const results = MessageService.searchAllUserMessages(q, userId, 50)
+    res.json(results)
+  })
+)
+
+//Search by project
+router.get(
+  '/search/project',
+  asyncHandler(async (req, res) => {
+    const q = (req.query.q as string) || ''
+    if (!q.trim()) {
+      return res.status(400).json({ error: 'Missing q parameter' })
+    }
+    const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : 1
+    const results = MessageService.searchMessagesByProject(q, projectId)
     res.json(results)
   })
 )
@@ -314,6 +328,16 @@ router.get(
   })
 )
 
+//get conversation by projectID
+router.get(
+  '/conversations/project/:projectId',
+  asyncHandler(async (req, res) => {
+    const projectId = parseInt(req.params.projectId)
+    const conversations = ConversationService.getByProjectId(projectId)
+    res.json(conversations)
+  })
+)
+
 //get all users
 router.get(
   '/users/',
@@ -391,13 +415,13 @@ router.delete(
 router.post(
   '/conversations',
   asyncHandler(async (req, res) => {
-    const { userId, title, modelName } = req.body
+    const { userId, title, modelName, projectId } = req.body
 
     if (!userId) {
       return res.status(400).json({ error: 'userId required' })
     }
 
-    const conversation = await ConversationService.create(userId, title, modelName)
+    const conversation = await ConversationService.create(userId, title, modelName, projectId)
     res.json(conversation)
   })
 )
@@ -535,6 +559,79 @@ router.get(
     res.json(childrenIds)
   })
 )
+
+//PROJECTS
+
+//get projects
+router.get(
+  '/projects',
+  asyncHandler(async (req, res) => {
+    const projects = ProjectService.getAll()
+    res.json(projects)
+  })
+)
+
+//get project by id
+router.get(
+  '/projects/:id',
+  asyncHandler(async (req, res) => {
+    const projectId = parseInt(req.params.id)
+    const project = ProjectService.getById(projectId)
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
+    res.json(project)
+  })
+)
+
+//create project
+router.post(
+  '/projects',
+  asyncHandler(async (req, res) => {
+    const { name, conversation_id, context, system_prompt } = req.body
+    const now = new Date().toISOString()
+    const project = await ProjectService.create(
+      name,
+      now, // created_at - server generated
+      now, // updated_at - server generated
+      conversation_id || null,
+      context || null,
+      system_prompt || null
+    )
+    res.json(project)
+  })
+)
+
+//update project
+router.put(
+  '/projects/:id',
+  asyncHandler(async (req, res) => {
+    const projectId = parseInt(req.params.id)
+    const now = new Date().toISOString()
+    const { name, context, system_prompt } = req.body
+    const project = ProjectService.update(projectId, name, now, context, system_prompt)
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
+    res.json(project)
+  })
+)
+
+//delete project
+router.delete(
+  '/projects/:id',
+  asyncHandler(async (req, res) => {
+    const projectId = parseInt(req.params.id)
+    const project = ProjectService.getById(projectId)
+    if (project) {
+      ProjectService.delete(projectId)
+      res.json({ message: 'Project deleted' })
+    } else {
+      res.status(404).json({ error: 'Project not found' })
+    }
+  })
+)
+
 //get message tree
 router.get(
   '/conversations/:id/messages/tree',
@@ -577,7 +674,21 @@ router.post(
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' })
     }
+    // Get project context and conversation context
+    const projectId = ProjectService.getProjectIdFromConversation(conversationId)
+    const projectContext = projectId ? ProjectService.getProjectContext(projectId) : null
     const conversationContext = ConversationService.getConversationContext(conversationId)
+
+    // Combine contexts: project context first, then conversation context
+    let combinedContext = ''
+    if (projectContext) {
+      combinedContext += projectContext
+    }
+    if (conversationContext) {
+      if (combinedContext) combinedContext += '\n\n'
+      combinedContext += conversationContext
+    }
+
     // const conversationSystemPrompt = ConversationService.getSystemPrompt(conversationId)
     //we should ideally call this but rn we are just passing from front end, cleanup later
 
@@ -666,7 +777,7 @@ router.post(
           })),
           systemPrompt,
           controller.signal,
-          conversationContext ? conversationContext : null,
+          combinedContext ? combinedContext : null,
           think
         )
 
@@ -736,7 +847,22 @@ router.post(
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' })
     }
+    // Get project context and conversation context
+    const projectId = ProjectService.getProjectIdFromConversation(conversationId)
+    const projectContext = projectId ? ProjectService.getProjectContext(projectId) : null
+    // console.log(`projectContext ${projectContext}`)
     const conversationContext = ConversationService.getConversationContext(conversationId)
+
+    // Combine contexts: project context first, then conversation context
+    let combinedContext = ''
+    if (projectContext) {
+      combinedContext += projectContext
+    }
+    if (conversationContext) {
+      if (combinedContext) combinedContext += '\n\n'
+      combinedContext += conversationContext
+    }
+
     // const conversationSystemPrompt = ConversationService.getSystemPrompt(conversationId)
 
     // Use conversation's model or provided model or default
@@ -824,7 +950,7 @@ router.post(
           })),
           systemPrompt,
           controller.signal,
-          conversationContext ? conversationContext : null,
+          combinedContext ? combinedContext : null,
           think
         )
 
