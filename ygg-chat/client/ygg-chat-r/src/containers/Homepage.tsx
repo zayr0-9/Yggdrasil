@@ -178,7 +178,7 @@ const Homepage: React.FC = () => {
             {projects.map(project => (
               <li
                 key={project.id}
-                className='p-4 mb-4 bg-indigo-50 rounded-lg cursor-pointer border-1 border-indigo-100 dark:bg-zinc-700 hover:bg-indigo-100 dark:hover:bg-zinc-600'
+                className='p-4 mb-4 bg-indigo-50 rounded-lg cursor-pointer border-1 border-indigo-100 dark:border-zinc-500 dark:bg-zinc-700 hover:bg-indigo-100 dark:hover:bg-zinc-600'
                 onClick={() => handleSelectProject(project)}
               >
                 <div className='flex place-items-start justify-between'>

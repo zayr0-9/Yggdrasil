@@ -202,7 +202,7 @@ export function initializeStatements() {
 
     //Projects
     createProject: db.prepare(
-      'INSERT INTO projects (name, created_at, updated_at, conversation_id, context, system_prompt) VALUES (?, ?, ?, ?, ?, ?)'
+      'INSERT INTO projects (name, created_at, updated_at, context, system_prompt) VALUES (?, ?, ?, ?, ?)'
     ),
     getAllProjects: db.prepare('SELECT * FROM projects ORDER BY created_at DESC'),
     getProjectById: db.prepare('SELECT * FROM projects WHERE id = ?'),

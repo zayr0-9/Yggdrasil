@@ -1,6 +1,13 @@
 import { BaseMessage, Project } from '../../../shared/types'
 import { statements } from './db'
 
+// Utility function to sanitize FTS queries
+function sanitizeFTSQuery(query: string): string {
+  // Remove or escape problematic characters for FTS5
+  // Wrap the entire query in double quotes to treat it as a phrase search
+  return `"${query.replace(/"/g, '""')}"`
+}
+
 export interface User {
   id: number
   username: string
@@ -385,19 +392,23 @@ export class MessageService {
 
   // Full Text Search methods
   static searchInConversation(query: string, conversationId: number): SearchResult[] {
-    return statements.searchMessages.all(query, conversationId) as SearchResult[]
+    const sanitizedQuery = sanitizeFTSQuery(query)
+    return statements.searchMessages.all(sanitizedQuery, conversationId) as SearchResult[]
   }
 
   static searchAllUserMessages(query: string, userId: number, limit: number = 50): SearchResult[] {
-    return statements.searchAllUserMessages.all(query, userId) as SearchResult[]
+    const sanitizedQuery = sanitizeFTSQuery(query)
+    return statements.searchAllUserMessages.all(sanitizedQuery, userId) as SearchResult[]
   }
 
   static searchMessagesByProject(query: string, projectId: number): SearchResult[] {
-    return statements.searchMessagesByProject.all(query, projectId) as SearchResult[]
+    const sanitizedQuery = sanitizeFTSQuery(query)
+    return statements.searchMessagesByProject.all(sanitizedQuery, projectId) as SearchResult[]
   }
 
   static searchWithSnippets(query: string, conversationId: number): SearchResultWithSnippet[] {
-    return statements.searchMessagesWithSnippet.all(query, conversationId) as SearchResultWithSnippet[]
+    const sanitizedQuery = sanitizeFTSQuery(query)
+    return statements.searchMessagesWithSnippet.all(sanitizedQuery, conversationId) as SearchResultWithSnippet[]
   }
 
   static searchAllUserMessagesPaginated(
@@ -406,7 +417,8 @@ export class MessageService {
     limit: number = 50,
     offset: number = 0
   ): SearchResult[] {
-    return statements.searchAllUserMessagesPaginated.all(query, userId, limit, offset) as SearchResult[]
+    const sanitizedQuery = sanitizeFTSQuery(query)
+    return statements.searchAllUserMessagesPaginated.all(sanitizedQuery, userId, limit, offset) as SearchResult[]
   }
 }
 
