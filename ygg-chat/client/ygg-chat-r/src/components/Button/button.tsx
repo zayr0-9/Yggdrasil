@@ -9,6 +9,7 @@ interface ButtonProps {
   disabled?: boolean
   onClick?: () => void
   type?: 'button' | 'submit' | 'reset'
+  rounded?: 'full' | 'lg' | 'none'
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -19,11 +20,12 @@ export const Button: React.FC<ButtonProps> = ({
   onClick,
   type = 'button',
   className = '',
+  rounded = 'lg',
   ...rest
 }) => {
   // Base styles that all buttons share
   const baseStyles =
-    'inline-flex items-center justify-center gap-1 font-medium rounded-lg leading-none transition-colors duration-200 focus:outline-none'
+    'inline-flex items-center justify-center gap-1 font-medium leading-none transition-colors duration-200 focus:outline-none'
 
   // Variant styles define the color scheme
   const variantStyles = {
@@ -32,15 +34,16 @@ export const Button: React.FC<ButtonProps> = ({
     secondary:
       'bg-indigo-300 hover:bg-indigo-400 dark:bg-gray-600 text-neutral-50 dark:text-white dark:hover:bg-gray-700 focus:ring-1 dark:focus:gray-500 dark:focus:opacity-50',
     outline: 'border-2 border-neutral-300 text-neutral-300 hover:bg-blue-50',
-    danger: 'bg-neutral-900 border-2 border-rose-700 text-white hover:bg-rose-800 focus:ring-red-500',
+    danger:
+      'bg-rose-400 dark:bg-neutral-900 dark:border-2 dark:border-rose-700 text-white dark:hover:bg-rose-800 hover:bg-rose-500 focus:ring-red-500',
   }
 
   // Size styles control padding and text size
   const sizeStyles = {
     smaller: 'px-1.5 py-1 text-xs',
     small: 'px-3 py-1.5 text-sm',
-    medium: 'px-4 py-2 text-base',
-    large: 'px-6 py-3 text-lg',
+    medium: 'px-3 py-2 text-base',
+    large: 'px-4 py-3 text-lg',
   }
 
   // Disabled styles override other styles when button is disabled
@@ -52,16 +55,12 @@ export const Button: React.FC<ButtonProps> = ({
     ${variantStyles[variant]}
     ${sizeStyles[size]}
     ${disabled ? disabledStyles : ''}
+    ${className}
+    ${rounded === 'full' ? 'rounded-full' : rounded === 'lg' ? 'rounded-lg' : 'rounded-none'}
   `.trim()
 
   return (
-    <button
-      type={type}
-      className={`${buttonClasses} ${className}`.trim()}
-      onClick={onClick}
-      disabled={disabled}
-      {...rest}
-    >
+    <button type={type} className={`${buttonClasses}`} onClick={onClick} disabled={disabled} {...rest}>
       {children}
     </button>
   )

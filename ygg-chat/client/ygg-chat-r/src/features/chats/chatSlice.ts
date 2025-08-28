@@ -148,7 +148,7 @@ export const chatSlice = createSlice({
       const content = state.composition.input.content.trim()
       if (content.length === 0) {
         state.composition.validationError = null
-      } else if (content.length > 20000) {
+      } else if (content.length > 1000000) {
         state.composition.validationError = 'Message too long'
       } else {
         state.composition.validationError = null

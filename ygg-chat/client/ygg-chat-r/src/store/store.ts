@@ -5,6 +5,7 @@ import { conversationsReducer } from '../features/conversations'
 import { default as searchReducer } from '../features/search/searchSlice'
 import { usersReducer } from '../features/users'
 import { default as projectsReducer } from '../features/projects/projectSlice'
+import { ideContextReducer } from '../features/ideContext'
 
 // Root reducer configuration
 const rootReducer = {
@@ -13,6 +14,7 @@ const rootReducer = {
   conversations: conversationsReducer,
   search: searchReducer,
   projects: projectsReducer,
+  ideContext: ideContextReducer,
 }
 
 // Main store for the app

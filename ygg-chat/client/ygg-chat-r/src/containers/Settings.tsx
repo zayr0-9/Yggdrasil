@@ -168,7 +168,7 @@ const Settings: React.FC = () => {
               </div>
               <div className='pt-6'>
                 <Button variant='danger' size='small' onClick={() => handleRemoveVariable(index)}>
-                  Remove
+                  <i className='bx bx-trash text-lg'></i>
                 </Button>
               </div>
             </div>
@@ -182,8 +182,8 @@ const Settings: React.FC = () => {
         </div>
 
         {/* Action Buttons */}
-        <div className='flex gap-4'>
-          <Button variant='secondary' onClick={handleAddVariable}>
+        <div className='flex gap-4 justify-end'>
+          <Button variant='primary' onClick={handleAddVariable}>
             Add Variable
           </Button>
           <Button variant='primary' onClick={handleSave} disabled={saving}>

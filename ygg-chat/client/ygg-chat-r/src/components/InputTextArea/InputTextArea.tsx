@@ -13,6 +13,7 @@ interface TextAreaProps {
   value?: string
   onChange?: (value: string) => void
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  onBlur?: () => void
   state?: textAreaState
   errorMessage?: string
   maxLength?: number
@@ -30,6 +31,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
   value = '',
   onChange,
   onKeyDown,
+  onBlur,
   state = 'default',
   errorMessage,
   maxLength = 1000000,
@@ -118,40 +120,57 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
       .catch(err => console.error('Failed to read dropped images', err))
   }
 
-  // Auto-resize functionality
+  // Auto-resize functionality with debounced execution to prevent forced reflows
+  const adjustHeightTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
   const adjustHeight = () => {
     const textarea = textareaRef.current
     if (textarea) {
-      // Reset height to auto to get the correct scrollHeight
-      textarea.style.height = 'auto'
-
-      // Calculate the number of lines
-      const lineHeight = 24 // Approximate line height in pixels
-      const minHeight = minRows * lineHeight + 16 // 16px for padding
-      const maxHeight = maxRows ? maxRows * lineHeight + 16 : undefined
-
-      const scrollHeight = textarea.scrollHeight
-      let newHeight = Math.max(scrollHeight, minHeight)
-
-      if (maxHeight && newHeight > maxHeight) {
-        newHeight = maxHeight
-        textarea.style.overflowY = 'auto'
-      } else {
-        textarea.style.overflowY = 'hidden'
-      }
-
-      textarea.style.height = `${newHeight}px`
+      // Use requestAnimationFrame to batch DOM reads and writes
+      requestAnimationFrame(() => {
+        // Reset height to auto to get the correct scrollHeight
+        textarea.style.height = 'auto'
+        
+        // Calculate the number of lines
+        const lineHeight = 24 // Approximate line height in pixels
+        const minHeight = minRows * lineHeight + 16 // 16px for padding
+        const maxHeight = maxRows ? maxRows * lineHeight + 16 : undefined
+        
+        const scrollHeight = textarea.scrollHeight
+        let newHeight = Math.max(scrollHeight, minHeight)
+        
+        if (maxHeight && newHeight > maxHeight) {
+          newHeight = maxHeight
+          textarea.style.overflowY = 'auto'
+        } else {
+          textarea.style.overflowY = 'hidden'
+        }
+        
+        textarea.style.height = `${newHeight}px`
+      })
     }
   }
+  
+  const debouncedAdjustHeight = () => {
+    if (adjustHeightTimeoutRef.current) {
+      clearTimeout(adjustHeightTimeoutRef.current)
+    }
+    adjustHeightTimeoutRef.current = setTimeout(adjustHeight, 16) // ~60fps
+  }
 
-  // Adjust height when value changes
+  // Adjust height when value changes (debounced)
   useEffect(() => {
-    adjustHeight()
+    debouncedAdjustHeight()
   }, [value])
 
-  // Adjust height on mount
+  // Adjust height on mount and cleanup timeout
   useEffect(() => {
     adjustHeight()
+    return () => {
+      if (adjustHeightTimeoutRef.current) {
+        clearTimeout(adjustHeightTimeoutRef.current)
+      }
+    }
   }, [])
 
   // Programmatic focus when autoFocus toggles to true (e.g., after streaming finishes)
@@ -186,6 +205,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onBlur={onBlur}
           onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}

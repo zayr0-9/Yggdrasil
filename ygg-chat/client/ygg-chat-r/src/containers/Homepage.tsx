@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Project } from '../../../../shared/types'
 import { Button, TextField } from '../components'
+import { Select } from '../components/Select/Select'
 import { chatSliceActions } from '../features/chats'
 import {
   deleteProject,
@@ -20,7 +21,7 @@ const Homepage: React.FC = () => {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
 
-  const projects = useAppSelector<Project[]>(selectAllProjects)
+  const allProjects = useAppSelector<Project[]>(selectAllProjects)
   const loading = useAppSelector(selectProjectsLoading)
   const searchLoading = useAppSelector(selectSearchLoading)
   const searchResults = useAppSelector(selectSearchResults)
@@ -31,6 +32,38 @@ const Homepage: React.FC = () => {
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [isDropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLUListElement | null>(null)
+  const [sortBy, setSortBy] = useState<'updated' | 'created' | 'name'>('updated')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+
+  // Sorting function for projects
+  const sortProjects = (projects: Project[], sortBy: 'updated' | 'created' | 'name', invert: boolean = false) => {
+    const sorted = [...projects].sort((a, b) => {
+      switch (sortBy) {
+        case 'updated':
+          // Use updated_at if available, otherwise fall back to created_at
+          const aDate = a.updated_at || a.created_at || ''
+          const bDate = b.updated_at || b.created_at || ''
+          if (!aDate) return 1
+          if (!bDate) return -1
+          return bDate.localeCompare(aDate)
+
+        case 'created':
+          if (!a.created_at) return 1
+          if (!b.created_at) return -1
+          return b.created_at.localeCompare(a.created_at)
+
+        case 'name':
+          return a.name.localeCompare(b.name)
+
+        default:
+          return 0
+      }
+    })
+
+    return invert ? sorted.reverse() : sorted
+  }
+
+  const projects = sortProjects(allProjects, sortBy, sortOrder === 'asc')
 
   useEffect(() => {
     dispatch(chatSliceActions.stateReset())
@@ -91,27 +124,50 @@ const Homepage: React.FC = () => {
 
   return (
     <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900'>
-      <div className='py-4 max-w-7xl mx-auto'>
+      <div className='py-4 max-w-screen-2xl mx-auto'>
         <div className='flex items-center justify-between py-4'>
           <div className='flex items-center gap-3'>
-            {/* <img src='/img/op26cyb01.svg' alt='Yggdrasil Logo' className='w-20 h-20' /> */}
-            <h1 className='text-4xl font-bold dark:text-neutral-100'>Yggdrasil</h1>
+            <img src='/img/logo-d.svg' alt='Yggdrasil Logo' className='w-22 h-22 dark:hidden' />
+            <img src='/img/logo-l.svg' alt='Yggdrasil Logo' className='w-22 h-22 hidden dark:block' />
+            <h1 className='text-5xl font-bold px-2 dark:text-neutral-100'>Yggdrasil</h1>
           </div>
-          <Button variant='primary' size='small' onClick={() => navigate('/settings')}>
-            <i className='bx bx-cog text-xl' aria-hidden='true'></i>
+          <Button variant='primary' size='smaller' onClick={() => navigate('/settings')} rounded='full'>
+            <i className='bx bx-cog text-3xl p-1' aria-hidden='true'></i>
           </Button>
         </div>
       </div>
-      <div className='py-2 px-4 max-w-6xl mx-auto'>
+      <div className='py-6 px-6 max-w-7xl mx-auto'>
         <div className='mb-4'>
           <h2 className='text-3xl py-4 font-bold dark:text-neutral-100'>Projects</h2>
         </div>
 
-        {/* New Project Button + Search */}
+        {/* New Project Button + Sort Controls + Search */}
         <div className='mb-6 flex items-center gap-3'>
-          <Button variant='primary' size='medium' onClick={handleCreateProject} className='shrink-0'>
+          <Button variant='primary' size='large' onClick={handleCreateProject} className='shrink-0'>
             New Project
           </Button>
+
+          <div className='flex items-center gap-2'>
+            <span className='text-sm text-gray-600 dark:text-gray-300'>Sort by:</span>
+            <Select
+              value={sortBy}
+              onChange={value => setSortBy(value as 'updated' | 'created' | 'name')}
+              options={[
+                { value: 'updated', label: 'Updated' },
+                { value: 'created', label: 'Created' },
+                { value: 'name', label: 'Name' },
+              ]}
+              className='w-32'
+            />
+            <Button
+              variant='secondary'
+              size='smaller'
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              className='shrink-0'
+            >
+              <i className={`bx ${sortOrder === 'asc' ? 'bx-sort-up' : 'bx-sort-down'} text-lg`} aria-hidden='true'></i>
+            </Button>
+          </div>
         </div>
 
         {loading && <p>Loading...</p>}
@@ -122,22 +178,22 @@ const Homepage: React.FC = () => {
             {projects.map(project => (
               <li
                 key={project.id}
-                className='p-4 mb-4 bg-indigo-50 rounded-lg cursor-pointer dark:bg-zinc-700 hover:bg-indigo-100 dark:hover:bg-zinc-600'
+                className='p-4 mb-4 bg-indigo-50 rounded-lg cursor-pointer border-1 border-indigo-100 dark:bg-zinc-700 hover:bg-indigo-100 dark:hover:bg-zinc-600'
                 onClick={() => handleSelectProject(project)}
               >
-                <div className='flex items-center justify-between'>
+                <div className='flex place-items-start justify-between'>
                   <div className='flex-1'>
-                    <span className='font-semibold text-lg dark:text-neutral-100'>{project.name}</span>
+                    <span className='font-semibold text-xl dark:text-neutral-100'>{project.name}</span>
                     {project.context && (
-                      <p className='text-sm text-gray-600 ygg-line-clamp-6 dark:text-gray-300 mt-1'>
+                      <p className='text-sm text-gray-600 ygg-line-clamp-6 dark:text-gray-300 mt-2 mr-2'>
                         {project.context}
                       </p>
                     )}
                   </div>
-                  <div className='flex gap-1'>
+                  <div className='flex gap-2'>
                     <Button
                       variant='secondary'
-                      size='smaller'
+                      size='small'
                       onClick={
                         (e => {
                           ;(e as unknown as React.MouseEvent).stopPropagation()
@@ -149,7 +205,7 @@ const Homepage: React.FC = () => {
                     </Button>
                     <Button
                       variant='secondary'
-                      size='smaller'
+                      size='small'
                       onClick={
                         (e => {
                           ;(e as unknown as React.MouseEvent).stopPropagation()

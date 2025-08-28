@@ -3,6 +3,7 @@ import 'boxicons/css/boxicons.min.css'
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Button, TextField } from '../components'
+import { Select } from '../components/Select/Select'
 import { chatSliceActions } from '../features/chats'
 import {
   activeConversationIdSet,
@@ -40,9 +41,45 @@ const ConversationPage: React.FC = () => {
   const searchQuery = useAppSelector(selectSearchQuery)
 
   const [showEditProjectModal, setShowEditProjectModal] = useState(false)
+  const [sortBy, setSortBy] = useState<'updated' | 'created' | 'name'>('updated')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+
+  // Sorting function for conversations
+  const sortConversations = (
+    convs: Conversation[],
+    sortBy: 'updated' | 'created' | 'name',
+    invert: boolean = false
+  ) => {
+    const sorted = [...convs].sort((a, b) => {
+      switch (sortBy) {
+        case 'updated':
+          // Use updated_at if available, otherwise fall back to created_at
+          const aDate = a.updated_at || a.created_at || ''
+          const bDate = b.updated_at || b.created_at || ''
+          if (!aDate) return 1
+          if (!bDate) return -1
+          return bDate.localeCompare(aDate)
+
+        case 'created':
+          if (!a.created_at) return 1
+          if (!b.created_at) return -1
+          return b.created_at.localeCompare(a.created_at)
+
+        case 'name':
+          const aTitle = a.title || `Conversation ${a.id}`
+          const bTitle = b.title || `Conversation ${b.id}`
+          return aTitle.localeCompare(bTitle)
+
+        default:
+          return 0
+      }
+    })
+
+    return invert ? sorted.reverse() : sorted
+  }
 
   // Use conversations directly from Redux state (already filtered by project ID if applicable)
-  const conversations = allConversations
+  const conversations = sortConversations(allConversations, sortBy, sortOrder === 'asc')
 
   const [isDropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLUListElement | null>(null)
@@ -127,7 +164,7 @@ const ConversationPage: React.FC = () => {
             <Button variant='secondary' size='small' onClick={() => navigate('/')}>
               <i className='bx bx-home text-lg' aria-hidden='true'></i>
             </Button>
-            <h1 className='text-3xl py-4 px-2 font-bold dark:text-neutral-100'>
+            <h1 className='text-5xl py-4 px-2 font-bold dark:text-neutral-100'>
               {selectedProject ? `${selectedProject.name}` : 'Conversations'}
             </h1>
             {/* {selectedProject && (
@@ -142,17 +179,39 @@ const ConversationPage: React.FC = () => {
               </p>
             )} */}
 
-          <Button variant='primary' size='small' onClick={handleEditProject}>
+          <Button variant='primary' size='medium' onClick={handleEditProject}>
             Project Settings
           </Button>
         </div>
       </div>
-      <div className='p-6 max-w-6xl mx-auto'>
-        {/* New Conversation + Search inline row */}
+      <div className='p-6 max-w-7xl mx-auto'>
+        {/* New Conversation + Sort Controls + Search inline row */}
         <div className='mb-6 flex items-center gap-3'>
-          <Button variant='primary' size='medium' onClick={handleNewConversation} className='shrink-0'>
+          <Button variant='primary' size='large' onClick={handleNewConversation}>
             New Conversation
           </Button>
+
+          <div className='flex items-center gap-2'>
+            <span className='text-sm text-gray-600 dark:text-gray-300'>Sort by:</span>
+            <Select
+              value={sortBy}
+              onChange={value => setSortBy(value as 'updated' | 'created' | 'name')}
+              options={[
+                { value: 'updated', label: 'Updated' },
+                { value: 'created', label: 'Created' },
+                { value: 'name', label: 'Name' },
+              ]}
+              className='w-32'
+            />
+            <Button
+              variant='secondary'
+              size='smaller'
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              className='shrink-0'
+            >
+              <i className={`bx ${sortOrder === 'asc' ? 'bx-sort-up' : 'bx-sort-down'} text-lg`} aria-hidden='true'></i>
+            </Button>
+          </div>
         </div>
 
         {loading && <p>Loading...</p>}

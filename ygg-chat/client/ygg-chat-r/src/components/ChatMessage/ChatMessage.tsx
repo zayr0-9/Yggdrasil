@@ -189,7 +189,7 @@ const MessageActions: React.FC<MessageActionsProps> = ({
   )
 }
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({
+const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
   id,
   role,
   content,
@@ -456,7 +456,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             <div id={`reasoning-content-${id}`} className='prose max-w-none dark:prose-invert w-full text-sm'>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
+                rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}
                 components={{ pre: PreRenderer }}
               >
                 {thinking}
@@ -467,7 +467,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       )}
 
       {/* Message content */}
-      <div className='prose max-w-none dark:prose-invert w-full text-base'>
+      <div className='prose max-w-none dark:prose-invert w-full text-lg'>
         {editingState ? (
           <TextArea
             value={editContent}
@@ -494,7 +494,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         ) : (
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
+            rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}
             components={{ pre: PreRenderer }}
           >
             {content}
@@ -544,4 +544,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       {modelName && <div className='mt-2 text-[16px] text-gray-500 flex justify-end'>{modelName}</div>}
     </div>
   )
-}
+})
+
+// Display name for debugging
+ChatMessage.displayName = 'ChatMessage'
+
+export { ChatMessage }

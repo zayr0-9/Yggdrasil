@@ -1,6 +1,6 @@
 import 'boxicons' // Types
 import 'boxicons/css/boxicons.min.css'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { Button, ChatMessage, Heimdall, InputTextArea, Select, SettingsPane, TextField } from '../components'
 import {
@@ -13,7 +13,6 @@ import {
   fetchModelsForCurrentProvider,
   initializeUserAndConversation,
   refreshCurrentPathAfterDelete,
-  selectCanSend,
   selectConversationMessages,
   selectCurrentConversationId,
   selectCurrentPath,
@@ -48,12 +47,15 @@ import { getParentPath } from '../utils/path'
 function Chat() {
   const dispatch = useAppDispatch()
 
+  // Local state for input to completely avoid Redux dispatches during typing
+  const [localInput, setLocalInput] = useState('')
+
   // Redux selectors
   const models = useAppSelector(selectModels)
   const selectedModel = useAppSelector(selectSelectedModel)
   const providers = useAppSelector(selectProviderState)
   const messageInput = useAppSelector(selectMessageInput)
-  const canSend = useAppSelector(selectCanSend)
+  // const canSendFromRedux = useAppSelector(selectCanSend)
   const sendingState = useAppSelector(selectSendingState)
   const streamState = useAppSelector(selectStreamState)
   const conversationMessages = useAppSelector(selectConversationMessages)
@@ -79,18 +81,37 @@ function Chat() {
   // Track if we already applied the URL hash-based path to avoid overriding user branch switches
   const hashAppliedRef = useRef<number | null>(null)
 
+  // Debounced input area height update to prevent excessive scroll recalculations
+  const inputHeightTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   useEffect(() => {
     const el = inputAreaRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
+
+    const debouncedSetHeight = (height: number) => {
+      if (inputHeightTimeoutRef.current) {
+        clearTimeout(inputHeightTimeoutRef.current)
+      }
+      inputHeightTimeoutRef.current = setTimeout(() => {
+        setInputAreaHeight(height)
+      }, 50) // 50ms debounce
+    }
+
     const observer = new ResizeObserver(entries => {
       for (const entry of entries) {
-        setInputAreaHeight(entry.contentRect.height)
+        debouncedSetHeight(entry.contentRect.height)
       }
     })
     observer.observe(el)
-    // Initialize immediately
+    // Initialize immediately (no debounce needed on mount)
     setInputAreaHeight(el.getBoundingClientRect().height)
-    return () => observer.disconnect()
+
+    return () => {
+      observer.disconnect()
+      if (inputHeightTimeoutRef.current) {
+        clearTimeout(inputHeightTimeoutRef.current)
+      }
+    }
   }, [])
 
   // Lock page scroll while chat is mounted
@@ -208,12 +229,6 @@ function Chat() {
       document.body.style.userSelect = prevUserSelect
     }
   }, [isResizing])
-
-  // Simple effect reacting to think changes
-  useEffect(() => {
-    // Minimal side-effect: log the current think mode
-    console.log('Think mode:', think)
-  }, [think])
 
   // Fetch tree when conversation changes
   useEffect(() => {
@@ -447,6 +462,11 @@ function Chat() {
     }
   }, [providers.currentProvider, dispatch])
 
+  // Sync local input with Redux state when conversation changes
+  useEffect(() => {
+    setLocalInput(messageInput.content)
+  }, [messageInput.content, currentConversationId])
+
   // Initialize or set conversation based on route param
   const { id: conversationIdParam } = useParams<{ id?: string }>()
 
@@ -461,96 +481,132 @@ function Chat() {
     }
   }, [conversationIdParam, dispatch])
 
-  // Handle input changes
-  const handleInputChange = (content: string) => {
-    dispatch(chatSliceActions.inputChanged({ content }))
-  }
+  // Handle input changes with pure local state - no Redux dispatches during typing
+  const handleInputChange = useCallback((content: string) => {
+    setLocalInput(content)
+  }, [])
 
   // Handle model selection
-  const handleModelSelect = (modelName: string) => {
-    const model = models.find(m => m.name === modelName)
-    if (model) {
-      dispatch(chatSliceActions.modelSelected({ model, persist: true }))
-    } else {
-      console.warn('Selected model not found:', modelName)
-    }
-  }
-  const handleProviderSelect = (providerName: string) => {
-    dispatch(chatSliceActions.providerSelected(providerName))
-  }
-  const handleSend = (value: number) => {
-    // New send: re-enable auto-pinning until the user scrolls during this stream
-    userScrolledDuringStreamRef.current = false
-    if (canSend && currentConversationId) {
-      // Compute parent message index (last selected path item, if any)
-      const parent: number = selectedPath.length > 0 ? selectedPath[selectedPath.length - 1] : 0
+  const handleModelSelect = useCallback(
+    (modelName: string) => {
+      const model = models.find(m => m.name === modelName)
+      if (model) {
+        dispatch(chatSliceActions.modelSelected({ model, persist: true }))
+      } else {
+        console.warn('Selected model not found:', modelName)
+      }
+    },
+    [models, dispatch]
+  )
+  const handleProviderSelect = useCallback(
+    (providerName: string) => {
+      dispatch(chatSliceActions.providerSelected(providerName))
+    },
+    [dispatch]
+  )
+  // Local version of canSend that checks localInput instead of Redux state
+  const canSendLocal = useMemo(() => {
+    const hasValidInput = localInput.trim().length > 0
+    const isNotSending = !sendingState.sending && !streamState.active
+    const hasModel = !!selectedModel
+    return hasValidInput && isNotSending && hasModel
+  }, [localInput, sendingState.sending, streamState.active, selectedModel])
 
-      // Dispatch a single sendMessage with repeatNum set to value.
-      dispatch(
-        sendMessage({
-          conversationId: currentConversationId,
-          input: messageInput,
-          parent,
-          repeatNum: value,
-          think: think,
-        })
-      )
-    } else if (!currentConversationId) {
-      console.error('📤 No conversation ID available')
-    }
-  }
+  const handleSend = useCallback(
+    (value: number) => {
+      // Update Redux state with current local input before sending
+      dispatch(chatSliceActions.inputChanged({ content: localInput }))
 
-  const handleStopGeneration = () => {
+      // New send: re-enable auto-pinning until the user scrolls during this stream
+      userScrolledDuringStreamRef.current = false
+      if (canSendLocal && currentConversationId) {
+        // Compute parent message index (last selected path item, if any)
+        const parent: number = selectedPath.length > 0 ? selectedPath[selectedPath.length - 1] : 0
+
+        // Use localInput directly for immediate send
+        const inputToSend = { content: localInput }
+
+        // Clear local input immediately after sending
+        setLocalInput('')
+
+        // Dispatch a single sendMessage with repeatNum set to value.
+        dispatch(
+          sendMessage({
+            conversationId: currentConversationId,
+            input: inputToSend,
+            parent,
+            repeatNum: value,
+            think: think,
+          })
+        )
+      } else if (!currentConversationId) {
+        console.error('📤 No conversation ID available')
+      }
+    },
+    [canSendLocal, currentConversationId, selectedPath, think, dispatch, localInput]
+  )
+
+  const handleStopGeneration = useCallback(() => {
     if (streamState.streamingMessageId) {
       dispatch(abortStreaming({ messageId: streamState.streamingMessageId }))
     }
-  }
+  }, [streamState.streamingMessageId, dispatch])
 
-  const handleMessageEdit = (id: string, newContent: string) => {
-    dispatch(chatSliceActions.messageUpdated({ id: parseInt(id), content: newContent }))
-    dispatch(updateMessage({ id: parseInt(id), content: newContent }))
-    console.log(parseInt(id))
-  }
+  const handleMessageEdit = useCallback(
+    (id: string, newContent: string) => {
+      dispatch(chatSliceActions.messageUpdated({ id: parseInt(id), content: newContent }))
+      dispatch(updateMessage({ id: parseInt(id), content: newContent }))
+      console.log(parseInt(id))
+    },
+    [dispatch]
+  )
 
-  const handleMessageBranch = (id: string, newContent: string) => {
-    if (currentConversationId) {
-      dispatch(
-        editMessageWithBranching({
-          conversationId: currentConversationId,
-          originalMessageId: parseInt(id),
-          newContent: newContent,
-          modelOverride: selectedModel?.name,
-          think: think,
-        })
-      )
-    }
-  }
+  const handleMessageBranch = useCallback(
+    (id: string, newContent: string) => {
+      if (currentConversationId) {
+        dispatch(
+          editMessageWithBranching({
+            conversationId: currentConversationId,
+            originalMessageId: parseInt(id),
+            newContent: newContent,
+            modelOverride: selectedModel?.name,
+            think: think,
+          })
+        )
+      }
+    },
+    [currentConversationId, selectedModel?.name, think, dispatch]
+  )
 
-  const handleResend = (id: string) => {
-    // Find the message by id from displayed messages first, fallback to all conversation messages
-    const numericId = parseInt(id)
-    const msg = displayMessages.find(m => m.id === numericId) || conversationMessages.find(m => m.id === numericId)
+  const handleResend = useCallback(
+    (id: string) => {
+      // Find the message by id from displayed messages first, fallback to all conversation messages
+      const numericId = parseInt(id)
+      const msg = displayMessages.find(m => m.id === numericId) || conversationMessages.find(m => m.id === numericId)
 
-    if (!msg) {
-      console.warn('Resend requested for unknown message id:', id)
-      return
-    }
+      if (!msg) {
+        console.warn('Resend requested for unknown message id:', id)
+        return
+      }
 
-    // For resend, branch from the PARENT user message with the parent's content
-    const parentId = msg.parent_id
-    if (!parentId) {
-      console.warn('Resend requested but message has no parent to branch from:', id)
-      return
-    }
-    const parentMsg = displayMessages.find(m => m.id === parentId) || conversationMessages.find(m => m.id === parentId)
-    if (!parentMsg) {
-      console.warn('Parent message not found for resend. Parent id:', parentId)
-      return
-    }
+      // For resend, branch from the PARENT user message with the parent's content
+      const parentId = msg.parent_id
+      if (!parentId) {
+        console.warn('Resend requested but message has no parent to branch from:', id)
+        return
+      }
+      const parentMsg =
+        displayMessages.find(m => m.id === parentId) || conversationMessages.find(m => m.id === parentId)
+      if (!parentMsg) {
+        console.warn('Parent message not found for resend. Parent id:', parentId)
+        return
+      }
 
-    // Use parent message id and its content to create a sibling branch (resend)
-    handleMessageBranch(parentId.toString(), parentMsg.content)
-  }
+      // Use parent message id and its content to create a sibling branch (resend)
+      handleMessageBranch(parentId.toString(), parentMsg.content)
+    },
+    [displayMessages, conversationMessages, handleMessageBranch]
+  )
 
   const handleNodeSelect = (nodeId: string, path: string[]) => {
     if (!nodeId || !path || path.length === 0) return // ignore clicks on empty space
@@ -582,23 +638,28 @@ function Chat() {
   //   }
   // }
 
-  const performDelete = (id: string) => {
-    const messageId = parseInt(id)
-    dispatch(chatSliceActions.messageDeleted(messageId))
-    if (currentConversationId) {
-      dispatch(deleteMessage({ id: messageId, conversationId: currentConversationId }))
-      dispatch(refreshCurrentPathAfterDelete({ conversationId: currentConversationId, messageId }))
-    }
-    console.log(messageId)
-  }
+  const performDelete = useCallback(
+    (id: string) => {
+      const messageId = parseInt(id)
+      dispatch(chatSliceActions.messageDeleted(messageId))
+      if (currentConversationId) {
+        dispatch(deleteMessage({ id: messageId, conversationId: currentConversationId }))
+        dispatch(refreshCurrentPathAfterDelete({ conversationId: currentConversationId, messageId }))
+      }
+    },
+    [dispatch, currentConversationId]
+  )
 
-  const handleRequestDelete = (id: string) => {
-    if (!confirmDel) {
-      performDelete(id)
-    } else {
-      setPendingDeleteId(id)
-    }
-  }
+  const handleRequestDelete = useCallback(
+    (id: string) => {
+      if (!confirmDel) {
+        performDelete(id)
+      } else {
+        setPendingDeleteId(id)
+      }
+    },
+    [confirmDel, performDelete]
+  )
 
   const closeDeleteModal = () => {
     setPendingDeleteId(null)
@@ -612,12 +673,15 @@ function Chat() {
   }
 
   // Handle key press
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend(multiReplyCount)
-    }
-  }
+  const handleKeyPress = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        handleSend(multiReplyCount)
+      }
+    },
+    [handleSend, multiReplyCount]
+  )
 
   // const handleMultiReplyCountChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
   //   const value = e.target.value
@@ -627,9 +691,30 @@ function Chat() {
   // }
 
   // Refresh models
-  const handleRefreshModels = () => {
+  const handleRefreshModels = useCallback(() => {
     dispatch(fetchModelsForCurrentProvider(true))
-  }
+  }, [dispatch])
+
+  // Memoized message list to prevent re-rendering all messages when unrelated state changes
+  const memoizedMessageList = useMemo(() => {
+    return displayMessages.map(msg => (
+      <ChatMessage
+        key={msg.id}
+        id={msg.id.toString()}
+        role={msg.role}
+        content={msg.content}
+        thinking={msg.thinking_block}
+        timestamp={msg.created_at}
+        width='w-full'
+        modelName={msg.model_name}
+        artifacts={msg.artifacts}
+        onEdit={handleMessageEdit}
+        onBranch={handleMessageBranch}
+        onDelete={handleRequestDelete}
+        onResend={handleResend}
+      />
+    ))
+  }, [displayMessages, handleMessageEdit, handleMessageBranch, handleRequestDelete, handleResend])
 
   // Removed obsolete streaming completion effect that synthesized assistant messages.
   // The streaming thunks now dispatch messageAdded and messageBranchCreated directly,
@@ -671,23 +756,7 @@ function Chat() {
             {displayMessages.length === 0 ? (
               <p className='text-stone-800 dark:text-stone-200'>No messages yet...</p>
             ) : (
-              displayMessages.map(msg => (
-                <ChatMessage
-                  key={msg.id}
-                  id={msg.id.toString()}
-                  role={msg.role}
-                  content={msg.content}
-                  thinking={msg.thinking_block}
-                  timestamp={msg.created_at}
-                  width='w-full'
-                  modelName={msg.model_name}
-                  artifacts={msg.artifacts}
-                  onEdit={handleMessageEdit}
-                  onBranch={handleMessageBranch}
-                  onDelete={handleRequestDelete}
-                  onResend={handleResend}
-                />
-              ))
+              memoizedMessageList
             )}
 
             {/* Show streaming content */}
@@ -713,9 +782,10 @@ function Chat() {
           {/* Textarea (bottom, grows upward because wrapper is bottom-pinned) */}
           <div className='bg-neutral-100 px-4 pb-2 pt-4 rounded-t-lg dark:bg-neutral-800'>
             <InputTextArea
-              value={messageInput.content}
+              value={localInput}
               onChange={handleInputChange}
               onKeyDown={handleKeyPress}
+              onBlur={() => dispatch(chatSliceActions.inputChanged({ content: localInput }))}
               placeholder='Type your message...'
               state={sendingState.sending ? 'disabled' : 'default'}
               width='w-full'
@@ -781,8 +851,8 @@ function Chat() {
                   </Button>
                 )}
                 <Button
-                  variant={canSend && currentConversationId ? 'primary' : 'secondary'}
-                  disabled={!canSend || !currentConversationId}
+                  variant={canSendLocal && currentConversationId ? 'primary' : 'secondary'}
+                  disabled={!canSendLocal || !currentConversationId}
                   onClick={() => handleSend(multiReplyCount)}
                 >
                   {!currentConversationId
