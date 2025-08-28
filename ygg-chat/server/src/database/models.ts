@@ -185,7 +185,7 @@ export class ProjectService {
     context: string,
     system_prompt: string
   ): Promise<Project> {
-    const result = statements.createProject.run(name, created_at, updated_at, conversation_id, context, system_prompt)
+    const result = statements.createProject.run(name, created_at, updated_at, context, system_prompt)
     return statements.getProjectById.get(result.lastInsertRowid) as Project
   }
 
