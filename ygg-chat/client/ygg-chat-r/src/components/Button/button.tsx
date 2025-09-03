@@ -4,7 +4,7 @@ import React from 'react'
 interface ButtonProps {
   className?: string
   children: React.ReactNode
-  variant?: 'primary' | 'secondary' | 'outline' | 'danger'
+  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'outline2'
   size?: 'smaller' | 'small' | 'medium' | 'large'
   disabled?: boolean
   onClick?: () => void
@@ -30,10 +30,11 @@ export const Button: React.FC<ButtonProps> = ({
   // Variant styles define the color scheme
   const variantStyles = {
     primary:
-      'bg-indigo-400 text-white hover:bg-indigo-500 dark:bg-sky-900 dark:hover:bg-sky-800 focus:ring-1 dark:focus:ring-sky-700',
+      'bg-indigo-400 text-white hover:bg-indigo-500 dark:bg-yPink-200 dark:hover:bg-yPink-300 focus:ring-1 dark:focus:ring-sky-700',
     secondary:
-      'bg-indigo-300 hover:bg-indigo-400 dark:bg-gray-600 text-neutral-50 dark:text-white dark:hover:bg-gray-700 focus:ring-1 dark:focus:gray-500 dark:focus:opacity-50',
+      'bg-indigo-300 hover:bg-indigo-400 dark:bg-secondary-500 text-neutral-50 dark:text-white dark:hover:bg-secondary-600 focus:ring-1 dark:focus:gray-500 dark:focus:opacity-50',
     outline: 'border-2 border-neutral-300 text-neutral-300 hover:bg-blue-50',
+    outline2: ' text-neutral-300 dark:hover:bg-neutral-700',
     danger:
       'bg-rose-400 dark:bg-neutral-900 dark:border-2 dark:border-rose-700 text-white dark:hover:bg-rose-800 hover:bg-rose-500 focus:ring-red-500',
   }

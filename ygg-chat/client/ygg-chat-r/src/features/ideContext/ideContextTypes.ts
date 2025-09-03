@@ -26,10 +26,21 @@ export interface WorkspaceInfo {
   lastScanned: string
 }
 
+export interface SelectedFileContent {
+  path: string
+  relativePath: string
+  name?: string
+  contents: string
+  contentLength: number
+  requestId?: number
+}
+
 export interface IdeContext {
   // Connection status
   isConnected: boolean
+  extensionConnected: boolean
   lastUpdated: string
+  selectedFilesForChat: SelectedFileContent[]
 
   // Workspace information
   workspace: WorkspaceInfo | null
@@ -50,4 +61,3 @@ export interface IdeContext {
     details?: any
   }[]
 }
-

@@ -55,11 +55,11 @@ export const createConversation = createAsyncThunk<Conversation, { title?: strin
         const user = await api.post<{ id: number }>('/users', { username: 'homepage-user' })
         userId = user.id
       }
-      
+
       // Get selected project ID from state
       const selectedProject = state.projects.selectedProject
       const projectId = selectedProject?.id || null
-      
+
       return await api.post<Conversation>('/conversations', {
         userId,
         title: title || null,
@@ -119,7 +119,7 @@ export const fetchContext = createAsyncThunk<string | null, number>(
     try {
       const res = await getConversationContext(conversationId)
       const value = res.context
-      console.log('dispatching convContext ', res)
+      // console.log('dispatching convContext ', res)
       dispatch(convContextSet(value))
       return value
     } catch (error) {

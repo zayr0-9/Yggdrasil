@@ -23,6 +23,7 @@
     "helmet": "^7.0.0",
     "morgan": "^1.10.0",
     "multer": "^2.0.2",
+    "ws": "^8.18.3",
     "zod": "^3.22.2"
   },
   "devDependencies": {
@@ -32,6 +33,7 @@
     "@types/morgan": "^1.9.4",
     "@types/multer": "^2.0.0",
     "@types/node": "^20.5.9",
+    "@types/ws": "^8.18.1",
     "nodemon": "^3.0.1",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.2.2"

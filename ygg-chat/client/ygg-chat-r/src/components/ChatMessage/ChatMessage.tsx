@@ -1,3 +1,5 @@
+import 'boxicons' // Types
+import 'boxicons/css/boxicons.min.css'
 import React, { useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { useDispatch } from 'react-redux'
@@ -6,7 +8,6 @@ import remarkGfm from 'remark-gfm'
 import { chatSliceActions } from '../../features/chats/chatSlice'
 import { Button } from '../Button/button'
 import { TextArea } from '../TextArea/TextArea'
-
 type MessageRole = 'user' | 'assistant' | 'system'
 // Updated to use valid Tailwind classes
 type ChatMessageWidth =
@@ -157,13 +158,8 @@ const MessageActions: React.FC<MessageActionsProps> = ({
               className='p-1.5 rounded-md text-gray-400 hover:text-indigo-400 hover:bg-neutral-300 transition-colors duration-150'
               title='Resend message'
             >
-              <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  strokeWidth={2}
-                  d='M4 4v6h6M20 20v-6h-6M5 19a9 9 0 1114-7'
-                />
+              <svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' viewBox='0 0 24 24'>
+                <path d='M19.07 4.93a9.9 9.9 0 0 0-3.18-2.14 10.12 10.12 0 0 0-7.79 0c-1.19.5-2.26 1.23-3.18 2.14S3.28 6.92 2.78 8.11A9.95 9.95 0 0 0 1.99 12h2c0-1.08.21-2.13.63-3.11.4-.95.98-1.81 1.72-2.54.73-.74 1.59-1.31 2.54-1.71 1.97-.83 4.26-.83 6.23 0 .95.4 1.81.98 2.54 1.72.17.17.33.34.48.52L16 9.01h6V3l-2.45 2.45c-.15-.18-.31-.36-.48-.52M19.37 15.11c-.4.95-.98 1.81-1.72 2.54-.73.74-1.59 1.31-2.54 1.71-1.97.83-4.26.83-6.23 0-.95-.4-1.81-.98-2.54-1.72-.17-.17-.33-.34-.48-.52l2.13-2.13H2v6l2.45-2.45c.15.18.31.36.48.52.92.92 1.99 1.64 3.18 2.14 1.23.52 2.54.79 3.89.79s2.66-.26 3.89-.79c1.19-.5 2.26-1.23 3.18-2.14s1.64-1.99 2.14-3.18c.52-1.23.79-2.54.79-3.89h-2c0 1.08-.21 2.13-.63 3.11Z'></path>
               </svg>
             </button>
           )}
@@ -189,362 +185,365 @@ const MessageActions: React.FC<MessageActionsProps> = ({
   )
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
-  id,
-  role,
-  content,
-  thinking,
-  timestamp,
-  onEdit,
-  onBranch,
-  onDelete,
-  onCopy,
-  onResend,
-  isEditing = false,
-  width = 'w-3/5',
-  modelName,
-  className,
-  artifacts = [],
-}) => {
-  const dispatch = useDispatch()
-  const [editingState, setEditingState] = useState(isEditing)
-  const [editContent, setEditContent] = useState(content)
-  const [editMode, setEditMode] = useState<'edit' | 'branch'>('edit')
-  const [copied, setCopied] = useState(false)
-  // Toggle visibility of the reasoning/thinking block
-  const [showThinking, setShowThinking] = useState(true)
-
-  const handleEdit = () => {
-    dispatch(chatSliceActions.editingBranchSet(false))
-    setEditingState(true)
-    setEditContent(content)
-    setEditMode('edit')
-  }
-
-  const handleBranch = () => {
-    dispatch(chatSliceActions.editingBranchSet(true))
-    setEditingState(true)
-    setEditContent(content)
-    setEditMode('branch')
-  }
-
-  const handleSave = () => {
-    if (onEdit && editContent.trim() !== content) {
-      onEdit(id, editContent.trim())
-    }
-    dispatch(chatSliceActions.editingBranchSet(false))
-    setEditingState(false)
-  }
-
-  const handleSaveBranch = () => {
-    if (onBranch) {
-      console.log('Saving branch for message', id)
-      onBranch(id, editContent.trim())
-    }
-    dispatch(chatSliceActions.editingBranchSet(false))
-    // Clear any image drafts after branching is initiated
-    dispatch(chatSliceActions.imageDraftsCleared())
-    setEditingState(false)
-  }
-
-  const handleCancel = () => {
-    setEditContent(content)
-    dispatch(chatSliceActions.editingBranchSet(false))
-    if (editMode === 'branch') {
-      dispatch(chatSliceActions.imageDraftsCleared())
-      // Restore any artifacts deleted during branch editing
-      const numericId = Number(id)
-      if (!Number.isNaN(numericId)) {
-        dispatch(chatSliceActions.messageArtifactsRestoreFromBackup({ messageId: numericId }))
-      }
-    }
-    setEditingState(false)
-    setEditMode('edit')
-  }
-
-  const handleCopy = async () => {
-    if (onCopy) {
-      onCopy(content)
-    }
-    const ok = await copyPlainText(content)
-    if (ok) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } else {
-      console.error('Failed to copy message')
-    }
-  }
-
-  const handleDelete = () => {
-    if (onDelete) {
-      onDelete(id)
-    }
-  }
-
-  const handleResend = () => {
-    if (onResend) {
-      onResend(id)
-    }
-  }
-
-  const handleDeleteArtifact = (index: number) => {
-    const numericId = Number(id)
-    if (Number.isNaN(numericId)) return
-    dispatch(chatSliceActions.messageArtifactDeleted({ messageId: numericId, index }))
-  }
-
-  const copyPlainText = async (text: string) => {
-    // Try async clipboard API first
-    try {
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        await navigator.clipboard.writeText(text)
-        return true
-      }
-    } catch (_) {
-      // fall through to fallback
-    }
-
-    // Fallback for non-secure contexts or older browsers
-    try {
-      const textarea = document.createElement('textarea')
-      textarea.value = text
-      textarea.style.position = 'fixed'
-      textarea.style.opacity = '0'
-      textarea.style.left = '-9999px'
-      document.body.appendChild(textarea)
-      textarea.focus()
-      textarea.select()
-      // @ts-ignore - Deprecated API used intentionally as a safe fallback when Clipboard API is unavailable
-      const ok = document.execCommand('copy')
-      document.body.removeChild(textarea)
-      return ok
-    } catch (err) {
-      console.error('Copy fallback failed:', err)
-      return false
-    }
-  }
-
-  const getRoleStyles = () => {
-    switch (role) {
-      case 'user':
-        return {
-          container: 'bg-gray-800 border-l-4 border-l-blue-500 bg-indigo-50 dark:bg-neutral-800',
-          role: 'text-indigo-800 dark:text-indigo-300',
-          roleText: 'User',
-        }
-      case 'assistant':
-        return {
-          container:
-            'bg-gray-850 border-l-4 border-l-yellow-500 dark:border-l-lime-800 bg-yellow-50 dark:bg-neutral-800',
-          role: 'text-lime-800 dark:text-lime-300',
-          roleText: 'Assistant',
-        }
-      case 'system':
-        return {
-          container: 'bg-gray-800 border-l-4 border-l-purple-500 bg-purple-50 dark:bg-neutral-800',
-          role: 'text-purple-400',
-          roleText: 'System',
-        }
-      default:
-        return {
-          container: 'bg-gray-800 border-l-4 border-l-gray-500 bg-gray-50 dark:bg-neutral-800',
-          role: 'text-gray-400',
-          roleText: 'Unknown',
-        }
-    }
-  }
-
-  const styles = getRoleStyles()
-
-  const formatTimestamp = (dateInput: string | Date) => {
-    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
-    if (isNaN(date.getTime())) {
-      return typeof dateInput === 'string' ? dateInput : ''
-    }
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
-
-  // Custom renderer for block code (<pre>) to add a copy button while preserving valid HTML structure
-  const PreRenderer: React.FC<any> = ({ children, ...props }) => {
+const ChatMessage: React.FC<ChatMessageProps> = React.memo(
+  ({
+    id,
+    role,
+    content,
+    thinking,
+    timestamp,
+    onEdit,
+    onBranch,
+    onDelete,
+    onCopy,
+    onResend,
+    isEditing = false,
+    width = 'w-3/5',
+    modelName,
+    className,
+    artifacts = [],
+  }) => {
+    const dispatch = useDispatch()
+    const [editingState, setEditingState] = useState(isEditing)
+    const [editContent, setEditContent] = useState(content)
+    const [editMode, setEditMode] = useState<'edit' | 'branch'>('edit')
     const [copied, setCopied] = useState(false)
-    const preRef = useRef<HTMLPreElement | null>(null)
+    // Toggle visibility of the reasoning/thinking block
+    const [showThinking, setShowThinking] = useState(true)
 
-    const handleCopyCode = async () => {
-      try {
-        const plain = preRef.current?.innerText ?? ''
-        await navigator.clipboard.writeText(plain)
+    const handleEdit = () => {
+      dispatch(chatSliceActions.editingBranchSet(false))
+      setEditingState(true)
+      setEditContent(content)
+      setEditMode('edit')
+    }
+
+    const handleBranch = () => {
+      dispatch(chatSliceActions.editingBranchSet(true))
+      setEditingState(true)
+      setEditContent(content)
+      setEditMode('branch')
+    }
+
+    const handleSave = () => {
+      if (onEdit && editContent.trim() !== content) {
+        onEdit(id, editContent.trim())
+      }
+      dispatch(chatSliceActions.editingBranchSet(false))
+      setEditingState(false)
+    }
+
+    const handleSaveBranch = () => {
+      if (onBranch) {
+        console.log('Saving branch for message', id)
+        onBranch(id, editContent.trim())
+      }
+      dispatch(chatSliceActions.editingBranchSet(false))
+      // Clear any image drafts after branching is initiated
+      dispatch(chatSliceActions.imageDraftsCleared())
+      setEditingState(false)
+    }
+
+    const handleCancel = () => {
+      setEditContent(content)
+      dispatch(chatSliceActions.editingBranchSet(false))
+      if (editMode === 'branch') {
+        dispatch(chatSliceActions.imageDraftsCleared())
+        // Restore any artifacts deleted during branch editing
+        const numericId = Number(id)
+        if (!Number.isNaN(numericId)) {
+          dispatch(chatSliceActions.messageArtifactsRestoreFromBackup({ messageId: numericId }))
+        }
+      }
+      setEditingState(false)
+      setEditMode('edit')
+    }
+
+    const handleCopy = async () => {
+      if (onCopy) {
+        onCopy(content)
+      }
+      const ok = await copyPlainText(content)
+      if (ok) {
         setCopied(true)
         setTimeout(() => setCopied(false), 1500)
-      } catch (err) {
-        console.error('Failed to copy code block:', err)
+      } else {
+        console.error('Failed to copy message')
       }
+    }
+
+    const handleDelete = () => {
+      if (onDelete) {
+        onDelete(id)
+      }
+    }
+
+    const handleResend = () => {
+      if (onResend) {
+        onResend(id)
+      }
+    }
+
+    const handleDeleteArtifact = (index: number) => {
+      const numericId = Number(id)
+      if (Number.isNaN(numericId)) return
+      dispatch(chatSliceActions.messageArtifactDeleted({ messageId: numericId, index }))
+    }
+
+    const copyPlainText = async (text: string) => {
+      // Try async clipboard API first
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(text)
+          return true
+        }
+      } catch (_) {
+        // fall through to fallback
+      }
+
+      // Fallback for non-secure contexts or older browsers
+      try {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        textarea.style.left = '-9999px'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        // @ts-ignore - Deprecated API used intentionally as a safe fallback when Clipboard API is unavailable
+        const ok = document.execCommand('copy')
+        document.body.removeChild(textarea)
+        return ok
+      } catch (err) {
+        console.error('Copy fallback failed:', err)
+        return false
+      }
+    }
+
+    const getRoleStyles = () => {
+      switch (role) {
+        case 'user':
+          return {
+            container:
+              'bg-gray-800 border-l-4 border-l-blue-500 dark:border-l-yPurple-400 bg-indigo-50 dark:bg-neutral-800',
+            role: 'text-indigo-800 dark:text-yPurple-50',
+            roleText: 'User',
+          }
+        case 'assistant':
+          return {
+            container:
+              'bg-gray-850 border-l-4 border-l-yellow-500 dark:border-l-yBrown-400 bg-yellow-50 dark:bg-neutral-800',
+            role: 'text-lime-800 dark:text-yBrown-50',
+            roleText: 'Assistant',
+          }
+        case 'system':
+          return {
+            container: 'bg-gray-800 border-l-4 border-l-purple-500 bg-purple-50 dark:bg-neutral-800',
+            role: 'text-purple-400',
+            roleText: 'System',
+          }
+        default:
+          return {
+            container: 'bg-gray-800 border-l-4 border-l-gray-500 bg-gray-50 dark:bg-neutral-800',
+            role: 'text-gray-400',
+            roleText: 'Unknown',
+          }
+      }
+    }
+
+    const styles = getRoleStyles()
+
+    const formatTimestamp = (dateInput: string | Date) => {
+      const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
+      if (isNaN(date.getTime())) {
+        return typeof dateInput === 'string' ? dateInput : ''
+      }
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+
+    // Custom renderer for block code (<pre>) to add a copy button while preserving valid HTML structure
+    const PreRenderer: React.FC<any> = ({ children, ...props }) => {
+      const [copied, setCopied] = useState(false)
+      const preRef = useRef<HTMLPreElement | null>(null)
+
+      const handleCopyCode = async () => {
+        try {
+          const plain = preRef.current?.innerText ?? ''
+          await navigator.clipboard.writeText(plain)
+          setCopied(true)
+          setTimeout(() => setCopied(false), 1500)
+        } catch (err) {
+          console.error('Failed to copy code block:', err)
+        }
+      }
+
+      return (
+        <div className='relative group my-3 not-prose'>
+          {
+            <Button
+              type='button'
+              onClick={handleCopyCode}
+              className='absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-150 border-1 text-slate-900 dark:text-white border-neutral-600 dark:border-neutral-600 dark:hover:bg-neutral-700'
+              size='smaller'
+              variant='outline'
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </Button>
+          }
+          <pre
+            ref={preRef}
+            className={`not-prose overflow-auto rounded-lg border-0 ring-0 outline-none shadow-none bg-gray-100 text-gray-900 dark:bg-neutral-900 dark:text-neutral-100 p-3`}
+            {...props}
+          >
+            {children}
+          </pre>
+        </div>
+      )
     }
 
     return (
-      <div className='relative group my-3 not-prose'>
-        {
-          <Button
-            type='button'
-            onClick={handleCopyCode}
-            className='absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-150 border-1 text-slate-900 dark:text-white border-neutral-600 dark:border-neutral-600 dark:hover:bg-neutral-700'
-            size='smaller'
-            variant='outline'
-          >
-            {copied ? 'Copied' : 'Copy'}
-          </Button>
-        }
-        <pre
-          ref={preRef}
-          className={`not-prose overflow-auto rounded-lg border-0 ring-0 outline-none shadow-none bg-gray-100 text-gray-900 dark:bg-neutral-900 dark:text-neutral-100 p-3`}
-          {...props}
-        >
-          {children}
-        </pre>
+      <div
+        id={`message-${id}`}
+        className={`group rounded-lg p-4 mb-4 ${styles.container} ${width} transition-all duration-200 hover:bg-opacity-80 ${className ?? ''}`}
+      >
+        {/* Header with role and actions */}
+        <div className='flex items-center justify-between mb-3'>
+          <div className='flex items-center gap-2'>
+            <span className={`text-sm font-semibold ${styles.role}`}>{styles.roleText}</span>
+            {timestamp && formatTimestamp(timestamp) && (
+              <span className='text-xs text-gray-500'>{formatTimestamp(timestamp)}</span>
+            )}
+          </div>
+
+          <MessageActions
+            onEdit={role === 'user' ? handleEdit : undefined}
+            onBranch={role === 'user' ? handleBranch : undefined}
+            onDelete={handleDelete}
+            onCopy={handleCopy}
+            onResend={role === 'assistant' ? handleResend : undefined}
+            onSave={handleSave}
+            onSaveBranch={handleSaveBranch}
+            onCancel={handleCancel}
+            isEditing={editingState}
+            editMode={editMode}
+            copied={copied}
+          />
+        </div>
+
+        {/* Reasoning / thinking block */}
+        {typeof thinking === 'string' && thinking.trim().length > 0 && (
+          <div className='mb-3 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/40 dark:bg-neutral-900'>
+            <div className='mb-2 flex items-center justify-between'>
+              <div className='text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300'>
+                Reasoning
+              </div>
+              <Button
+                type='button'
+                onClick={() => setShowThinking(s => !s)}
+                className='ml-2 text-xs px-2 py-1 border-1 border-amber-300 text-amber-800 dark:text-amber-300 dark:border-amber-900/60 hover:bg-amber-100 dark:hover:bg-neutral-800'
+                size='smaller'
+                variant='outline'
+                aria-expanded={showThinking}
+                aria-controls={`reasoning-content-${id}`}
+              >
+                {showThinking ? 'Hide' : 'Show'}
+              </Button>
+            </div>
+            {showThinking && (
+              <div id={`reasoning-content-${id}`} className='prose max-w-none dark:prose-invert w-full text-sm'>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}
+                  components={{ pre: PreRenderer }}
+                >
+                  {thinking}
+                </ReactMarkdown>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Message content */}
+        <div className='prose max-w-none dark:prose-invert w-full text-lg'>
+          {editingState ? (
+            <TextArea
+              value={editContent}
+              onChange={setEditContent}
+              placeholder='Edit your message...'
+              minRows={2}
+              maxLength={20000}
+              autoFocus
+              width='w-full'
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  if (editMode === 'branch') {
+                    handleSaveBranch()
+                  } else {
+                    handleSave()
+                  }
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  handleCancel()
+                }
+              }}
+            />
+          ) : (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}
+              components={{ pre: PreRenderer }}
+            >
+              {content}
+            </ReactMarkdown>
+          )}
+        </div>
+
+        {/* Artifacts (images) */}
+        {Array.isArray(artifacts) && artifacts.length > 0 && (
+          <div className='mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3'>
+            {artifacts.map((dataUrl, idx) => (
+              <div
+                key={`${id}-artifact-${idx}`}
+                className='relative rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900'
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={dataUrl}
+                  alt={`attachment-${idx}`}
+                  className='w-full h-64 object-contain bg-neutral-100 dark:bg-neutral-800'
+                  loading='lazy'
+                />
+                {editingState && editMode === 'branch' && (
+                  <button
+                    type='button'
+                    title='Remove image'
+                    onClick={() => handleDeleteArtifact(idx)}
+                    className='absolute top-2 right-2 z-10 p-1.5 rounded-md bg-neutral-800/70 text-white hover:bg-neutral-700'
+                  >
+                    <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Edit instructions */}
+        {editingState && (
+          <div className='mt-2 text-xs text-gray-500'>
+            Press Enter to save, Shift+Enter for new line, Escape to cancel
+          </div>
+        )}
+
+        {modelName && <div className='mt-2 text-[16px] text-gray-500 flex justify-end'>{modelName}</div>}
       </div>
     )
   }
-
-  return (
-    <div
-      id={`message-${id}`}
-      className={`group rounded-lg p-4 mb-4 ${styles.container} ${width} transition-all duration-200 hover:bg-opacity-80 ${className ?? ''}`}
-    >
-      {/* Header with role and actions */}
-      <div className='flex items-center justify-between mb-3'>
-        <div className='flex items-center gap-2'>
-          <span className={`text-sm font-semibold ${styles.role}`}>{styles.roleText}</span>
-          {timestamp && formatTimestamp(timestamp) && (
-            <span className='text-xs text-gray-500'>{formatTimestamp(timestamp)}</span>
-          )}
-        </div>
-
-        <MessageActions
-          onEdit={role === 'user' ? handleEdit : undefined}
-          onBranch={role === 'user' ? handleBranch : undefined}
-          onDelete={handleDelete}
-          onCopy={handleCopy}
-          onResend={role === 'assistant' ? handleResend : undefined}
-          onSave={handleSave}
-          onSaveBranch={handleSaveBranch}
-          onCancel={handleCancel}
-          isEditing={editingState}
-          editMode={editMode}
-          copied={copied}
-        />
-      </div>
-
-      {/* Reasoning / thinking block */}
-      {typeof thinking === 'string' && thinking.trim().length > 0 && (
-        <div className='mb-3 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/40 dark:bg-neutral-900'>
-          <div className='mb-2 flex items-center justify-between'>
-            <div className='text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300'>
-              Reasoning
-            </div>
-            <Button
-              type='button'
-              onClick={() => setShowThinking(s => !s)}
-              className='ml-2 text-xs px-2 py-1 border-1 border-amber-300 text-amber-800 dark:text-amber-300 dark:border-amber-900/60 hover:bg-amber-100 dark:hover:bg-neutral-800'
-              size='smaller'
-              variant='outline'
-              aria-expanded={showThinking}
-              aria-controls={`reasoning-content-${id}`}
-            >
-              {showThinking ? 'Hide' : 'Show'}
-            </Button>
-          </div>
-          {showThinking && (
-            <div id={`reasoning-content-${id}`} className='prose max-w-none dark:prose-invert w-full text-sm'>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}
-                components={{ pre: PreRenderer }}
-              >
-                {thinking}
-              </ReactMarkdown>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Message content */}
-      <div className='prose max-w-none dark:prose-invert w-full text-lg'>
-        {editingState ? (
-          <TextArea
-            value={editContent}
-            onChange={setEditContent}
-            placeholder='Edit your message...'
-            minRows={2}
-            maxLength={20000}
-            autoFocus
-            width='w-full'
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                if (editMode === 'branch') {
-                  handleSaveBranch()
-                } else {
-                  handleSave()
-                }
-              } else if (e.key === 'Escape') {
-                e.preventDefault()
-                handleCancel()
-              }
-            }}
-          />
-        ) : (
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}
-            components={{ pre: PreRenderer }}
-          >
-            {content}
-          </ReactMarkdown>
-        )}
-      </div>
-
-      {/* Artifacts (images) */}
-      {Array.isArray(artifacts) && artifacts.length > 0 && (
-        <div className='mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3'>
-          {artifacts.map((dataUrl, idx) => (
-            <div
-              key={`${id}-artifact-${idx}`}
-              className='relative rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900'
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={dataUrl}
-                alt={`attachment-${idx}`}
-                className='w-full h-64 object-contain bg-neutral-100 dark:bg-neutral-800'
-                loading='lazy'
-              />
-              {editingState && editMode === 'branch' && (
-                <button
-                  type='button'
-                  title='Remove image'
-                  onClick={() => handleDeleteArtifact(idx)}
-                  className='absolute top-2 right-2 z-10 p-1.5 rounded-md bg-neutral-800/70 text-white hover:bg-neutral-700'
-                >
-                  <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
-                  </svg>
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Edit instructions */}
-      {editingState && (
-        <div className='mt-2 text-xs text-gray-500'>
-          Press Enter to save, Shift+Enter for new line, Escape to cancel
-        </div>
-      )}
-
-      {modelName && <div className='mt-2 text-[16px] text-gray-500 flex justify-end'>{modelName}</div>}
-    </div>
-  )
-})
+)
 
 // Display name for debugging
 ChatMessage.displayName = 'ChatMessage'

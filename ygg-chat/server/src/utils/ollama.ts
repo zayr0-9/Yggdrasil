@@ -31,7 +31,7 @@ export async function generateResponse(
   if (systemPrompt && systemPrompt.trim().length > 0) {
     requestBody.system = systemPrompt
   }
-  console.log('Sending to ollama:', JSON.stringify(requestBody))
+  // console.log('Sending to ollama:', JSON.stringify(requestBody))
   //changed from localhost to 172.31.32.1 to run from wsl
   const response = await fetch('http://172.31.32.1:11434/api/chat', {
     method: 'POST',

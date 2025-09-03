@@ -103,6 +103,32 @@ export function initializeDatabase() {
     )
   `)
 
+  // Message file content table (files with name and paths)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS message_file_content (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      file_name TEXT NOT NULL,
+      absolute_path TEXT NOT NULL,
+      relative_path TEXT NOT NULL,
+      file_content TEXT,
+      size_bytes INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+
+  // Join table to support many-to-many links between messages and file content
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS message_file_content_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id INTEGER NOT NULL,
+      file_content_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+      FOREIGN KEY (file_content_id) REFERENCES message_file_content(id) ON DELETE CASCADE,
+      UNIQUE(message_id, file_content_id)
+    )
+  `)
+
   // Indexes
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
@@ -120,6 +146,18 @@ export function initializeDatabase() {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_mal_message_id ON message_attachment_links(message_id);
     CREATE INDEX IF NOT EXISTS idx_mal_attachment_id ON message_attachment_links(attachment_id);
+  `)
+
+  // File content indexes
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_file_content_absolute_path ON message_file_content(absolute_path);
+    CREATE INDEX IF NOT EXISTS idx_file_content_relative_path ON message_file_content(relative_path);
+  `)
+
+  // Indexes for file content join table
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_mfcl_message_id ON message_file_content_links(message_id);
+    CREATE INDEX IF NOT EXISTS idx_mfcl_file_content_id ON message_file_content_links(file_content_id);
   `)
 
   // Full Text Search virtual table
@@ -239,7 +277,22 @@ export function initializeStatements() {
     createMessage: db.prepare(
       'INSERT INTO messages (conversation_id, parent_id, role, content, thinking_block, children_ids, model_name) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ),
-    getMessageById: db.prepare('SELECT * FROM messages WHERE id = ?'),
+    getMessageById: db.prepare(`
+      SELECT 
+        m.*,
+        (
+          SELECT COUNT(1) 
+          FROM message_attachment_links mal 
+          WHERE mal.message_id = m.id
+        ) AS attachments_count,
+        (
+          SELECT COUNT(1) 
+          FROM message_file_content_links mfcl 
+          WHERE mfcl.message_id = m.id
+        ) AS file_content_count
+      FROM messages m 
+      WHERE m.id = ?
+    `),
     getChildrenIds: db.prepare('SELECT children_ids FROM messages WHERE id = ?'),
     getMessagesByConversation: db.prepare(`
       SELECT 
@@ -377,6 +430,37 @@ export function initializeStatements() {
        JOIN message_attachments ma ON ma.id = mal.attachment_id
        WHERE mal.message_id = ? AND mal.attachment_id = ?`
     ),
+
+    // File Content operations
+    createFileContent: db.prepare(
+      `INSERT INTO message_file_content (
+         file_name, absolute_path, relative_path, file_content, size_bytes
+       ) VALUES (?, ?, ?, ?, ?)`
+    ),
+    linkFileContentToMessage: db.prepare(
+      'INSERT OR IGNORE INTO message_file_content_links (message_id, file_content_id) VALUES (?, ?)'
+    ),
+    unlinkFileContentFromMessage: db.prepare(
+      'DELETE FROM message_file_content_links WHERE message_id = ? AND file_content_id = ?'
+    ),
+    getFileContentsByMessage: db.prepare(
+      `SELECT
+         mfc.id,
+         mfcl.message_id AS message_id,
+         mfc.file_name,
+         mfc.absolute_path,
+         mfc.relative_path,
+         mfc.file_content,
+         mfc.size_bytes,
+         mfc.created_at
+       FROM message_file_content_links mfcl
+       JOIN message_file_content mfc ON mfc.id = mfcl.file_content_id
+       WHERE mfcl.message_id = ?
+       ORDER BY mfc.id ASC`
+    ),
+    getFileContentById: db.prepare('SELECT * FROM message_file_content WHERE id = ?'),
+    getFileContentByPath: db.prepare('SELECT * FROM message_file_content WHERE absolute_path = ?'),
+    deleteFileContentLinksByMessage: db.prepare('DELETE FROM message_file_content_links WHERE message_id = ?'),
   }
 }
 

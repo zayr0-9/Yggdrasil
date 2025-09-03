@@ -10,6 +10,7 @@ interface SelectProps {
   disabled?: boolean
   className?: string
   searchBarVisible?: boolean
+  size?: 'small' | 'medium' | 'large'
 }
 
 export const Select: React.FC<SelectProps> = ({
@@ -20,6 +21,7 @@ export const Select: React.FC<SelectProps> = ({
   disabled = false,
   className = '',
   searchBarVisible = false,
+  size = 'medium',
 }) => {
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState<number>(-1)
@@ -52,6 +54,19 @@ export const Select: React.FC<SelectProps> = ({
   }, [normOptions, searchTerm, searchBarVisible])
 
   const selected = useMemo(() => normOptions.find(o => o.value === value) || null, [normOptions, value])
+
+  // Size styles to mirror Button component sizes
+  const sizeClass = useMemo(() => {
+    switch (size) {
+      case 'small':
+        return 'px-3 py-1.5 text-sm leading-none'
+      case 'large':
+        return 'px-4 py-3 text-lg leading-none'
+      case 'medium':
+      default:
+        return 'px-3 py-2.5 text-base leading-none'
+    }
+  }, [size])
 
   // Close on outside click
   useEffect(() => {
@@ -153,7 +168,7 @@ export const Select: React.FC<SelectProps> = ({
       <button
         ref={btnRef}
         type='button'
-        className={`w-full inline-flex items-center justify-between gap-2 px-3 py-2 rounded bg-neutral-50 dark:bg-gray-700 text-stone-800 dark:text-stone-200 border border-neutral-200/70 dark:border-neutral-700 shadow-sm hover:bg-neutral-100 dark:hover:bg-gray-600 disabled:opacity-60 disabled:cursor-not-allowed`}
+        className={`w-full inline-flex items-center justify-between gap-2 ${sizeClass} dark:bg-secondary-500 rounded bg-neutral-50 text-stone-800 dark:text-stone-200 border border-neutral-200/70 dark:border-neutral-700 shadow-sm hover:bg-neutral-100 dark:hover:bg-secondary-600 disabled:opacity-60 disabled:cursor-not-allowed`}
         aria-haspopup='listbox'
         aria-expanded={open}
         onClick={() => !disabled && setOpen(o => !o)}
@@ -171,7 +186,7 @@ export const Select: React.FC<SelectProps> = ({
           ref={listRef}
           role='listbox'
           tabIndex={-1}
-          className={`absolute z-50 w-full left-0 ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'} rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-xl`}
+          className={`absolute z-50 w-full left-0 ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'} rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-secondary-600  shadow-xl`}
           style={{ maxHeight: listMaxHeight }}
         >
           {searchBarVisible && (
@@ -208,7 +223,7 @@ export const Select: React.FC<SelectProps> = ({
                     onMouseEnter={() => setActiveIndex(idx)}
                     onClick={() => handleSelect(opt.value)}
                     className={`w-full text-left px-3 py-2 text-sm transition-colors
-                      ${isActive ? 'bg-neutral-100 dark:bg-neutral-700' : ''}
+                      ${isActive ? 'bg-neutral-100 dark:bg-secondary-500' : ''}
                       ${isSelected ? 'font-medium' : ''}
                       text-stone-800 dark:text-stone-100`}
                   >

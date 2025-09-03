@@ -48,3 +48,13 @@ export interface ErrorResponse {
   error: boolean
   message?: string
 }
+
+// Linked file content metadata saved per message
+export interface MessageFileContent {
+  id: number
+  message_id: number
+  file_name: string
+  file_path?: string | null
+  relative_path?: string | null
+  created_at: string
+}

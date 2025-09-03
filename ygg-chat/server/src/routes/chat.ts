@@ -4,12 +4,20 @@ import express from 'express'
 import fs from 'fs'
 import multer from 'multer'
 import path from 'path'
-import { AttachmentService, ConversationService, MessageService, ProjectService, UserService } from '../database/models'
+import {
+  AttachmentService,
+  ConversationService,
+  FileContentService,
+  MessageService,
+  ProjectService,
+  UserService,
+} from '../database/models'
 import { asyncHandler } from '../utils/asyncHandler'
 import { convertMessagesToHeimdall } from '../utils/heimdallConverter'
 import { modelService } from '../utils/modelService'
 // import { generateResponse } from '../utils/ollama'
 import { saveBase64ImageAttachmentsForMessage } from '../utils/attachments'
+import { replaceFileMentionsWithContent, SelectedFileContent } from '../utils/fileMentionProcessor'
 import { abortGeneration, clearGeneration, createGeneration } from '../utils/generationManager'
 import { generateResponse } from '../utils/provider'
 
@@ -836,11 +844,88 @@ router.post(
       provider = 'ollama',
       systemPrompt,
       think,
-    } = req.body
+      selectedFiles,
+    } = req.body as {
+      content: string
+      messages?: any[]
+      modelName?: string
+      parentId?: number
+      provider?: string
+      systemPrompt?: string
+      think?: boolean
+      selectedFiles?: SelectedFileContent[]
+    }
 
     if (!content) {
       return res.status(400).json({ error: 'Message content required' })
     }
+    console.log('server | content', content)
+
+    // If no selectedFiles provided, check database for existing file content from previous messages
+    let filesToUse = selectedFiles || []
+    if (!filesToUse || filesToUse.length === 0) {
+      // Look for file content in recent messages from this conversation that might match file mentions
+      const recentMessages = MessageService.getByConversation(conversationId)
+      const fileContentMap = new Map<string, any>()
+      
+      // Collect all file content from recent messages
+      for (const msg of recentMessages.slice(-10)) { // Check last 10 messages
+        const fileContents = MessageService.getFileContents(msg.id)
+        for (const fc of fileContents) {
+          // Use file name and relative path as keys for lookup
+          const fileName = fc.file_name
+          const baseName = fc.relative_path.split('/').pop() || fc.file_name
+          
+          if (!fileContentMap.has(fileName)) {
+            fileContentMap.set(fileName, fc)
+          }
+          if (!fileContentMap.has(baseName)) {
+            fileContentMap.set(baseName, fc)
+          }
+        }
+      }
+      
+      // Check if current content has file mentions that match our stored files
+      const mentionRegex = /@([A-Za-z0-9._\/-]+)/g
+      const mentions = [...content.matchAll(mentionRegex)].map(match => match[1])
+      
+      if (mentions.length > 0 && fileContentMap.size > 0) {
+        // Convert matching database file content to SelectedFileContent format
+        const matchingFiles: SelectedFileContent[] = []
+        for (const mention of mentions) {
+          const dbFile = fileContentMap.get(mention)
+          if (dbFile) {
+            // Use stored file content if available, otherwise try to read from disk
+            let fileContents = dbFile.file_content || ''
+            if (!fileContents && fs.existsSync(dbFile.absolute_path)) {
+              try {
+                fileContents = fs.readFileSync(dbFile.absolute_path, 'utf8')
+              } catch (error) {
+                console.warn('Could not read file from disk:', dbFile.absolute_path, error)
+                fileContents = `[File content not available - ${dbFile.file_name}]`
+              }
+            } else if (!fileContents) {
+              fileContents = `[File content not available - ${dbFile.file_name}]`
+            }
+            
+            matchingFiles.push({
+              path: dbFile.absolute_path,
+              relativePath: dbFile.relative_path,
+              name: dbFile.file_name,
+              contents: fileContents,
+              contentLength: fileContents.length,
+            })
+          }
+        }
+        filesToUse = matchingFiles
+        console.log('server | using database file content:', filesToUse.length, 'files')
+      }
+    }
+
+    // Process file mentions in the content
+    const processedContent =
+      filesToUse && filesToUse.length > 0 ? replaceFileMentionsWithContent(content, filesToUse) : content
+    console.log('server | processedContent', processedContent)
 
     // Verify conversation exists
     const conversation = ConversationService.getById(conversationId)
@@ -883,7 +968,26 @@ router.post(
 
     // Save user message with proper parent ID
     const userMessage = MessageService.create(conversationId, parentId, 'user', content, '', selectedModel)
-    // console.log('server | user message', userMessage)
+    console.log('server | user message', messages)
+
+    // Store file content in database if selectedFiles were provided
+    if (selectedFiles && selectedFiles.length > 0) {
+      for (const file of selectedFiles) {
+        try {
+          const fileContent = FileContentService.create({
+            fileName: file.name || file.relativePath.split('/').pop() || 'unknown',
+            absolutePath: file.path,
+            relativePath: file.relativePath,
+            fileContent: file.contents,
+            sizeBytes: file.contentLength,
+            messageId: userMessage.id,
+          })
+          console.log('Stored file content:', fileContent.file_name)
+        } catch (error) {
+          console.error('Error storing file content:', error)
+        }
+      }
+    }
 
     // Setup SSE headers
     res.writeHead(200, {
@@ -910,7 +1014,9 @@ router.post(
       // console.log('server | messages', messages)
 
       // Ensure latest prompt is included with prior context before generating
-      const combinedMessages = Array.isArray(messages) ? [...messages, userMessage] : [userMessage]
+      // Use processed content for AI generation while keeping original in database
+      const userMessageForAI = { ...userMessage, content: processedContent }
+      const combinedMessages = Array.isArray(messages) ? [...messages, userMessageForAI] : [userMessageForAI]
 
       let assistantContent = ''
       let assistantThinking = ''
@@ -941,7 +1047,7 @@ router.post(
               res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: chunk, content: chunk })}\n\n`)
             }
           },
-          provider,
+          provider as 'ollama' | 'gemini' | 'anthropic' | 'openai',
           selectedModel,
           createdAttachments.map(a => ({
             url: a?.url || undefined,
@@ -1224,6 +1330,95 @@ router.delete(
       return res.status(400).json({ error: 'Invalid ids' })
     }
     const updated = MessageService.unlinkAttachment(messageId, attachmentId)
+    res.json(updated)
+  })
+)
+
+// File Content API
+
+// Create a file content record (metadata only)
+router.post(
+  '/file-content',
+  asyncHandler(async (req, res) => {
+    const { fileName, absolutePath, relativePath, sizeBytes, messageId } = req.body as {
+      fileName: string
+      absolutePath: string
+      relativePath: string
+      sizeBytes?: number | null
+      messageId?: number | null
+    }
+
+    if (!fileName) return res.status(400).json({ error: 'fileName is required' })
+    if (!absolutePath) return res.status(400).json({ error: 'absolutePath is required' })
+    if (!relativePath) return res.status(400).json({ error: 'relativePath is required' })
+
+    const created = FileContentService.create({
+      fileName,
+      absolutePath,
+      relativePath,
+      sizeBytes: sizeBytes ?? null,
+      messageId: messageId ?? null,
+    })
+
+    res.status(201).json(created)
+  })
+)
+
+// Get a single file content by id
+router.get(
+  '/file-content/:id',
+  asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id)
+    const found = FileContentService.getById(id)
+    if (!found) return res.status(404).json({ error: 'File content not found' })
+    res.json(found)
+  })
+)
+
+// List file content for a message
+router.get(
+  '/messages/:id/file-content',
+  asyncHandler(async (req, res) => {
+    const messageId = parseInt(req.params.id)
+    const fileContents = MessageService.getFileContents(messageId)
+    res.json(fileContents)
+  })
+)
+
+// Link existing file content to a message
+router.post(
+  '/messages/:id/file-content',
+  asyncHandler(async (req, res) => {
+    const messageId = parseInt(req.params.id)
+    const { fileContentIds } = req.body as { fileContentIds?: number[] }
+    if (!Array.isArray(fileContentIds) || fileContentIds.length === 0) {
+      return res.status(400).json({ error: 'fileContentIds must be a non-empty array' })
+    }
+    const fileContents = MessageService.linkFileContents(messageId, fileContentIds)
+    res.json(fileContents)
+  })
+)
+
+// Delete all file content links for a message
+router.delete(
+  '/messages/:id/file-content',
+  asyncHandler(async (req, res) => {
+    const messageId = parseInt(req.params.id)
+    const deleted = FileContentService.deleteByMessage(messageId)
+    res.json({ deleted })
+  })
+)
+
+// Unlink a single file content from a message (preserve shared file content)
+router.delete(
+  '/messages/:id/file-content/:fileContentId',
+  asyncHandler(async (req, res) => {
+    const messageId = parseInt(req.params.id)
+    const fileContentId = parseInt(req.params.fileContentId)
+    if (!Number.isFinite(messageId) || !Number.isFinite(fileContentId)) {
+      return res.status(400).json({ error: 'Invalid ids' })
+    }
+    const updated = MessageService.unlinkFileContent(messageId, fileContentId)
     res.json(updated)
   })
 )

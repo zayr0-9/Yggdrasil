@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import providersList from '../../../../../shared/providers.json'
+
 import {
   Attachment,
   ChatState,

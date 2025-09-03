@@ -160,9 +160,9 @@ const ConversationPage: React.FC = () => {
     <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900'>
       <div className='px-2 pt-2 max-w-7xl mx-auto'>
         <div className='flex items-center justify-between mb-4'>
-          <div className='flex items-center gap-2 mb-2'>
-            <Button variant='secondary' size='small' onClick={() => navigate('/')}>
-              <i className='bx bx-home text-lg' aria-hidden='true'></i>
+          <div className='flex items-center gap-2 pt-2 mb-2'>
+            <Button variant='secondary' size='medium' onClick={() => navigate('/')}>
+              <i className='bx bx-home text-2xl' aria-hidden='true'></i>
             </Button>
             <h1 className='text-5xl py-4 px-2 font-bold dark:text-neutral-100'>
               {selectedProject ? `${selectedProject.name}` : 'Conversations'}
@@ -217,11 +217,11 @@ const ConversationPage: React.FC = () => {
         {loading && <p>Loading...</p>}
         {error && <p className='text-red-500'>{error}</p>}
         <div className='flex gap-4 items-start'>
-          <ul className='space-y-2 rounded flex-1'>
+          <ul className='space-y-2 rounded flex-2'>
             {conversations.map(conv => (
               <li
                 key={conv.id}
-                className='p-3 mb-4 bg-indigo-50 rounded-lg cursor-pointer dark:bg-zinc-700 hover:bg-indigo-100 dark:hover:bg-zinc-600'
+                className='p-3 mb-4 bg-indigo-50 rounded-lg cursor-pointer dark:bg-secondary-700 hover:bg-indigo-100 dark:hover:bg-secondary-800'
                 onClick={() => handleSelect(conv)}
               >
                 <div className='flex items-center justify-between'>
@@ -248,7 +248,7 @@ const ConversationPage: React.FC = () => {
             ))}
             {conversations.length === 0 && !loading && <p className='dark:text-neutral-300'>No conversations yet.</p>}
           </ul>
-          <div className='relative w-128'>
+          <div className='relative flex-1'>
             <TextField
               placeholder='Search messages...'
               value={searchQuery}
@@ -264,19 +264,19 @@ const ConversationPage: React.FC = () => {
                 searchResults.length > 0 && (
                   <ul
                     ref={dropdownRef}
-                    className='absolute z-10 left-0 right-0 max-h-230 overflow-y-auto bg-slate-50 border border-indigo-100 dark:border-neutral-600 rounded shadow-lg dark:bg-neutral-700 thin-scrollbar'
+                    className='absolute z-10 left-0 right-0 max-h-230 overflow-y-auto bg-slate-50 border border-indigo-100 dark:border-secondary-600 rounded shadow-lg dark:bg-neutral-700 thin-scrollbar'
                     style={{ colorScheme: 'dark' }}
                   >
                     {searchResults.map(res => (
                       <li
                         key={`${res.conversationId}-${res.messageId}`}
-                        className='p-3 hover:bg-indigo-100 dark:bg-neutral-700 dark:hover:bg-neutral-500 cursor-pointer text-sm dark:text-neutral-200'
+                        className='p-3 hover:bg-indigo-100 dark:bg-secondary-700 dark:hover:bg-secondary-800 cursor-pointer text-sm dark:text-neutral-200'
                         onClick={() => handleResultClick(res.conversationId, res.messageId)}
                       >
-                        <div className='font-semibold text-indigo-600 dark:text-indigo-400'>
+                        <div className='font-semibold text-indigo-600 dark:text-yBrown-50'>
                           Conv {res.conversationId}
                         </div>
-                        <div className='mt-1 text-neutral-800 dark:text-neutral-100 whitespace-pre-wrap break-words max-h-48 overflow-hidden'>
+                        <div className='mt-1 text-neutral-800 dark:text-neutral-200 whitespace-pre-wrap break-words max-h-48 overflow-hidden'>
                           {res.content}
                         </div>
                       </li>

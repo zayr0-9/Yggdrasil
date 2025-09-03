@@ -89,7 +89,10 @@ const EditProject: React.FC<EditProjectProps> = ({ isOpen, onClose, editingProje
             <h3 className='text-2xl font-semibold dark:text-neutral-100'>
               {isEditing ? `Edit Project: ${editingProject?.name}` : 'Create New Project'}
             </h3>
-            <button onClick={onClose} className='text-neutral-900 hover:text-gray-600 dark:hover:text-gray-300'>
+            <button
+              onClick={onClose}
+              className='text-neutral-900 dark:text-neutral-200 hover:text-gray-600 dark:hover:text-gray-300'
+            >
               <i className='bx bx-x text-2xl'></i>
             </button>
           </div>

@@ -41,11 +41,18 @@ import {
   makeSelectConversationById,
   systemPromptSet,
 } from '../features/conversations'
+import { removeSelectedFileForChat, updateIdeContext } from '../features/ideContext'
+import {
+  selectActiveFile,
+  selectSelectedFilesForChat,
+  selectWorkspace,
+} from '../features/ideContext/ideContextSelectors'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
+import { useIdeContext } from '../hooks/useIdeContext'
 import { getParentPath } from '../utils/path'
-
 function Chat() {
   const dispatch = useAppDispatch()
+  const { ideContext } = useIdeContext()
 
   // Local state for input to completely avoid Redux dispatches during typing
   const [localInput, setLocalInput] = useState('')
@@ -64,6 +71,78 @@ function Chat() {
   const selectedPath = useAppSelector(selectCurrentPath)
   const multiReplyCount = useAppSelector(selectMultiReplyCount)
   const focusedChatMessageId = useAppSelector(selectFocusedChatMessageId)
+  // const ideContext = useAppSelector(selectIdeContext)
+  const workspace = useAppSelector(selectWorkspace)
+  // const isIdeConnected = useAppSelector(selectIsIdeConnected)
+  const activeFile = useAppSelector(selectActiveFile)
+  const selectedFilesForChat = useAppSelector(selectSelectedFilesForChat)
+
+  // File chip expanded modal state
+  const [expandedFilePath, setExpandedFilePath] = useState<string | null>(null)
+  // Temporary closing state to animate back to hover size before hiding
+  const [closingFilePath, setClosingFilePath] = useState<string | null>(null)
+  // Temporary opening state to blur content while expanding
+  const [openingFilePath, setOpeningFilePath] = useState<string | null>(null)
+  // Anchor position for fixed expanded panel (viewport coords)
+  const [expandedAnchor, setExpandedAnchor] = useState<{ left: number; top: number } | null>(null)
+
+  const handleCloseExpandedPreview = useCallback(() => {
+    if (!expandedFilePath) return
+    const path = expandedFilePath
+    setExpandedFilePath(null)
+    setClosingFilePath(path)
+    // Match transition duration (100ms)
+    window.setTimeout(() => setClosingFilePath(null), 130)
+  }, [expandedFilePath])
+
+  const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  const handleRemoveFileSelection = useCallback(
+    (file: { path: string; relativePath: string; name?: string }) => {
+      // Remove from selected files in Redux
+      dispatch(removeSelectedFileForChat(file.path))
+
+      // Also remove the textual @mention from the local input value
+      const mentionName = file.name || file.path.split('/').pop() || file.relativePath.split('/').pop() || ''
+      if (mentionName) {
+        const mentionRegex = new RegExp(`@${escapeRegExp(mentionName)}(\\b|$)\\s*`, 'g')
+        setLocalInput(prev => prev.replace(mentionRegex, ''))
+      }
+    },
+    [dispatch]
+  )
+
+  // Function to replace file mentions with actual content
+  const replaceFileMentionsWithContent = useCallback(
+    (message: string): string => {
+      if (!message || typeof message !== 'string') return message || ''
+
+      // Build a lookup map of mentionable names -> contents
+      const nameToContent = new Map<string, string>()
+      const basename = (p: string) => {
+        if (!p) return p
+        const parts = p.split(/\\\\|\//) // split on both \\ and /
+        return parts[parts.length - 1]
+      }
+      for (const f of selectedFilesForChat) {
+        if (f.name && !nameToContent.has(f.name)) nameToContent.set(f.name, f.contents)
+        const baseRel = basename(f.relativePath)
+        if (baseRel && !nameToContent.has(baseRel)) nameToContent.set(baseRel, f.contents)
+        const basePath = basename(f.path)
+        if (basePath && !nameToContent.has(basePath)) nameToContent.set(basePath, f.contents)
+      }
+
+      // Replace tokens like @filename with the corresponding contents
+      // Allow letters, numbers, underscore, dot, dash, and path separators in the token
+      const mentionRegex = /@([A-Za-z0-9._\/-]+)/g
+      return message.replace(mentionRegex, (full: string, mName: string) => {
+        const content = nameToContent.get(mName)
+        return content != null ? content : full
+      })
+    },
+    [selectedFilesForChat]
+  )
+
   // Ref for auto-scroll
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   // Track whether the upcoming selection change came from an explicit user click in Heimdall
@@ -420,6 +499,18 @@ function Chat() {
     }
   }, [hashMessageId, conversationMessages, dispatch])
 
+  // Clear selectedFilesForChat on route change
+  useEffect(() => {
+    dispatch(updateIdeContext({ selectedFilesForChat: [] }))
+  }, [location.pathname, dispatch])
+
+  // Also clear selectedFilesForChat on unmount
+  useEffect(() => {
+    return () => {
+      dispatch(updateIdeContext({ selectedFilesForChat: [] }))
+    }
+  }, [dispatch])
+
   // useEffect(() => {
   //   if (focusedChatMessageId && conversationMessages.length > 0) {
   //     const path = getParentPath(conversationMessages, focusedChatMessageId)
@@ -514,8 +605,12 @@ function Chat() {
 
   const handleSend = useCallback(
     (value: number) => {
-      // Update Redux state with current local input before sending
-      dispatch(chatSliceActions.inputChanged({ content: localInput }))
+      // Process file mentions with actual content before sending
+      // const processedContent = replaceFileMentionsWithContent(localInput)
+      const processedContent = localInput
+
+      // Update Redux state with processed content before sending
+      dispatch(chatSliceActions.inputChanged({ content: processedContent }))
 
       // New send: re-enable auto-pinning until the user scrolls during this stream
       userScrolledDuringStreamRef.current = false
@@ -523,9 +618,9 @@ function Chat() {
         // Compute parent message index (last selected path item, if any)
         const parent: number = selectedPath.length > 0 ? selectedPath[selectedPath.length - 1] : 0
 
-        // Use localInput directly for immediate send
-        const inputToSend = { content: localInput }
-
+        // Use processed content for immediate send
+        const inputToSend = { content: processedContent }
+        console.log('input to send', inputToSend)
         // Clear local input immediately after sending
         setLocalInput('')
 
@@ -543,7 +638,7 @@ function Chat() {
         console.error('📤 No conversation ID available')
       }
     },
-    [canSendLocal, currentConversationId, selectedPath, think, dispatch, localInput]
+    [canSendLocal, currentConversationId, selectedPath, think, dispatch, localInput, replaceFileMentionsWithContent]
   )
 
   const handleStopGeneration = useCallback(() => {
@@ -556,7 +651,7 @@ function Chat() {
     (id: string, newContent: string) => {
       dispatch(chatSliceActions.messageUpdated({ id: parseInt(id), content: newContent }))
       dispatch(updateMessage({ id: parseInt(id), content: newContent }))
-      console.log(parseInt(id))
+      // console.log(parseInt(id))
     },
     [dispatch]
   )
@@ -564,18 +659,20 @@ function Chat() {
   const handleMessageBranch = useCallback(
     (id: string, newContent: string) => {
       if (currentConversationId) {
+        // Replace any @file mentions with actual file contents before branching
+        const processed = replaceFileMentionsWithContent(newContent)
         dispatch(
           editMessageWithBranching({
             conversationId: currentConversationId,
             originalMessageId: parseInt(id),
-            newContent: newContent,
+            newContent: processed,
             modelOverride: selectedModel?.name,
             think: think,
           })
         )
       }
     },
-    [currentConversationId, selectedModel?.name, think, dispatch]
+    [currentConversationId, selectedModel?.name, think, dispatch, replaceFileMentionsWithContent]
   )
 
   const handleResend = useCallback(
@@ -731,7 +828,12 @@ function Chat() {
           {titleInput} {currentConversationId}
         </h1> */}
         {/* <h1 className='text-lg font-bold text-stone-800 dark:text-stone-200'>Title</h1> */}
+        <div className='ide-status text-neutral-900 dark:text-neutral-200'>
+          IDE: {ideContext?.extensionConnected ? 'Extension Connected' : 'Extension Disconnected'}
+          {workspace?.name && ` - ${workspace.name}`}
+        </div>
 
+        {activeFile && <div className='active-file'>📁 {activeFile.name}</div>}
         {/* Conversation Title Editor */}
         {currentConversationId && (
           <div className='flex items-center gap-2 mb-2 mt-2 px-2'>
@@ -751,7 +853,6 @@ function Chat() {
           <div
             ref={messagesContainerRef}
             className='px-2 dark:border-neutral-700 border-b border-stone-200 rounded-lg py-4 overflow-y-auto overscroll-y-contain touch-pan-y p-3 bg-neutral-50 dark:bg-neutral-900 flex-1 min-h-0'
-            style={{ paddingBottom: `${inputAreaHeight}px` }}
           >
             {displayMessages.length === 0 ? (
               <p className='text-stone-800 dark:text-stone-200'>No messages yet...</p>
@@ -775,8 +876,8 @@ function Chat() {
             <div ref={bottomRef} data-bottom-sentinel='true' className='h-px' />
           </div>
         </div>
-        {/* Absolute input area: controls row + textarea, measured as one block */}
-        <div ref={inputAreaRef} className='absolute left-0 right-0 bottom-0 z-10'>
+        {/* Input area: controls row + textarea (regular flex child to avoid overlap) */}
+        <div ref={inputAreaRef} className='ml-2 flex-none shrink-0'>
           {/* Controls row (above) */}
 
           {/* Textarea (bottom, grows upward because wrapper is bottom-pinned) */}
@@ -793,6 +894,66 @@ function Chat() {
               autoFocus={streamState.finished}
               showCharCount={true}
             />
+            {/* Selected file chips moved from InputTextArea */}
+            {selectedFilesForChat && selectedFilesForChat.length > 0 && (
+              <div className='mt-2 flex flex-wrap gap-2'>
+                {selectedFilesForChat.map(file => {
+                  const displayName =
+                    file.name || file.relativePath.split('/').pop() || file.path.split('/').pop() || file.relativePath
+                  const isExpanded = expandedFilePath === file.path
+                  const isClosing = closingFilePath === file.path
+                  const isOpening = openingFilePath === file.path
+                  return (
+                    <div
+                      key={file.path}
+                      className='relative group inline-flex items-center gap-2 max-w-full rounded-md border border-neutral-500 dark:bg-neutral-700 dark:text-neutral-200 text-neutral-800 px-2 py-1 text-sm'
+                      title={file.relativePath || file.path}
+                      onClick={e => {
+                        if (!isExpanded) {
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                          setExpandedAnchor({ left: rect.left, top: rect.top })
+                          setOpeningFilePath(file.path)
+                          setExpandedFilePath(file.path)
+                          // Clear opening state after transition completes
+                          window.setTimeout(() => setOpeningFilePath(null), 130)
+                        }
+                      }}
+                    >
+                      <span className='truncate max-w-[220px]'>{displayName}</span>
+                      <button
+                        type='button'
+                        className='rounded dark:hover:bg-blue-200 hover:bg-blue-700 p-0.5 text-blue-700 dark:text-blue-200'
+                        aria-label={`Remove ${displayName}`}
+                        onClick={e => {
+                          e.stopPropagation()
+                          handleRemoveFileSelection(file)
+                        }}
+                      >
+                        ✕
+                      </button>
+
+                      {/* Hover tooltip that can expand into anchored modal */}
+                      <div
+                        className={`absolute bottom-full left-0 mb-2 origin-bottom-left rounded-lg shadow-xl border border-gray-600 p-3 transform transition-all duration-100 ease-out ${
+                          isExpanded
+                            ? 'hidden'
+                            : 'z-50 dark:bg-neutral-900 bg-slate-100 opacity-0 invisible scale-95 pointer-events-none w-80 group-hover:opacity-100 group-hover:visible group-hover:scale-100'
+                        }`}
+                      >
+                        <div className='text-xs text-blue-600 dark:text-blue-300 font-medium mb-2 truncate'>
+                          {file.name || file.relativePath.split('/').pop() || file.path.split('/').pop()}
+                        </div>
+                        <div
+                          className={`text-xs font-mono whitespace-pre-wrap break-words text-stone-800 dark:text-stone-300 ${isExpanded ? 'overflow-auto max-h-[60vh]' : isClosing ? 'overflow-hidden' : 'overflow-hidden line-clamp-6'} ${isOpening || isClosing ? 'opacity-50 ' : 'opacity-100 visible'} transition-opacity duration-50 overscroll-contain select-text`}
+                        >
+                          {file.contents}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
             <div className='bg-neutral-100 px-1 pt-2 rounded-b-lg dark:bg-neutral-800 flex flex-col items-end'>
               {/* <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>Send Message:</h3> */}
 
@@ -814,7 +975,12 @@ function Chat() {
                     Stop
                   </Button>
                 )}
-                <Button variant='primary' className='rounded-full' size='small' onClick={() => setSettingsOpen(true)}>
+                <Button
+                  variant='secondary'
+                  className='rounded-full'
+                  size='medium'
+                  onClick={() => setSettingsOpen(true)}
+                >
                   <i className='bx bx-cog text-xl' aria-hidden='true'></i>
                 </Button>
 
@@ -838,11 +1004,11 @@ function Chat() {
                   className='w-full max-w-xs'
                   searchBarVisible={true}
                 />
-                <Button variant='primary' className='rounded-full' size='small' onClick={handleRefreshModels}>
+                <Button variant='secondary' className='rounded-full' size='medium' onClick={handleRefreshModels}>
                   <i className='bx bx-refresh text-xl' aria-hidden='true'></i>
                 </Button>
                 {selectedModel?.thinking && (
-                  <Button variant='primary' className='rounded-full' size='small' onClick={() => setThink(t => !t)}>
+                  <Button variant='secondary' className='rounded-full' size='medium' onClick={() => setThink(t => !t)}>
                     {think ? (
                       <i className='bx bxs-bulb text-xl text-yellow-400' aria-hidden='true'></i>
                     ) : (
@@ -922,6 +1088,51 @@ function Chat() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Fixed expanded panel rendered at root to sit above backdrop and allow scroll */}
+      {(expandedFilePath || closingFilePath) &&
+        (() => {
+          const activePath = expandedFilePath || closingFilePath
+          const file = selectedFilesForChat.find(f => f.path === activePath)
+          if (!file) return null
+          const isClosing = !!closingFilePath && closingFilePath === file.path
+          const name = file.name || file.relativePath.split('/').pop() || file.path.split('/').pop()
+          const left = expandedAnchor?.left ?? 16
+          const top = (expandedAnchor?.top ?? 16) - 8
+          return (
+            <div
+              className={`fixed z-[100000] -translate-y-full rounded-lg shadow-2xl border border-gray-600 p-3 transform transition-all duration-100 ease-out dark:bg-neutral-900 bg-slate-100 pointer-events-auto`}
+              style={{ left, top, maxWidth: 'min(90vw, 56rem)', width: '56rem' }}
+              onMouseDown={e => e.stopPropagation()}
+              onMouseUp={e => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
+              onWheel={e => e.stopPropagation()}
+              onTouchStart={e => e.stopPropagation()}
+              onTouchMove={e => e.stopPropagation()}
+              onTouchEnd={e => e.stopPropagation()}
+            >
+              <div className='flex items-center justify-between mb-2 gap-3'>
+                <div className='text-xs text-blue-600 dark:text-blue-300 font-medium truncate'>{name}</div>
+                <button
+                  className='text-xs px-2 text-neutral-800 dark:text-neutral-300 py-1 rounded border border-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+                  onClick={handleCloseExpandedPreview}
+                >
+                  Close
+                </button>
+              </div>
+              <div
+                className={`text-xs font-mono whitespace-pre-wrap break-words text-stone-800 dark:text-stone-200 ${isClosing ? 'opacity-50' : 'opacity-100'} transition-opacity duration-100 overflow-auto max-h-[60vh] overscroll-contain select-text`}
+              >
+                {file.contents}
+              </div>
+            </div>
+          )
+        })()}
+
+      {/* Transparent backdrop to allow click-out close. Keep during closing to finish animation */}
+      {(expandedFilePath || closingFilePath) && (
+        <div className='fixed inset-0 z-[99998] bg-transparent' onClick={handleCloseExpandedPreview} />
       )}
     </div>
   )

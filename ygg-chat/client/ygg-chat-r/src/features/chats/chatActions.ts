@@ -77,6 +77,18 @@ const resolveAttachmentUrl = (urlOrPath?: string | null, filePath?: string | nul
   }
   return null
 }
+// Helper function to convert model name string to Model object
+const stringToModel = (modelName: string): Model => ({
+  name: modelName,
+  version: '1.0.0',
+  displayName: modelName,
+  description: `${modelName} model`,
+  inputTokenLimit: 4096,
+  outputTokenLimit: 2048,
+  thinking: false,
+  supportedGenerationMethods: ['chat', 'completion'],
+})
+
 // Model operations - cached and optimized
 export const fetchModels = createAsyncThunk(
   'chat/fetchModels',
@@ -101,9 +113,14 @@ export const fetchModels = createAsyncThunk(
     dispatch(chatSliceActions.modelsLoadingStarted())
 
     try {
-      const response = await apiCall<ModelsResponse>('/models')
-      dispatch(chatSliceActions.modelsLoaded(response))
-      return response
+      const response = await apiCall<{ models: string[]; default: string }>('/models')
+      // Convert string arrays to Model objects
+      const convertedResponse: ModelsResponse = {
+        models: response.models.map(stringToModel),
+        default: stringToModel(response.default),
+      }
+      dispatch(chatSliceActions.modelsLoaded(convertedResponse))
+      return convertedResponse
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch models'
       dispatch(chatSliceActions.modelsError(message))
@@ -208,6 +225,7 @@ export const fetchModelsForCurrentProvider = createAsyncThunk(
         return res
       }
       const res = await (dispatch as any)(fetchModels(force)).unwrap()
+      console.log('fetchModelsForCurrentProvider', res)
       return res
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch models for provider'
@@ -265,6 +283,9 @@ export const sendMessage = createAsyncThunk(
       const selectedProject = selectSelectedProject(state)
       const systemPrompt = state.conversations.systemPrompt || selectedProject?.system_prompt || ''
 
+      // Get selected files for chat from IDE context
+      const selectedFilesForChat = state.ideContext.selectedFilesForChat || []
+      console.log('selectedFilesForChat', selectedFilesForChat)
       let response = null
 
       if (!modelName) {
@@ -301,6 +322,7 @@ export const sendMessage = createAsyncThunk(
             provider: serverProvider,
             repeatNum: repeatNum,
             attachmentsBase64,
+            selectedFiles: selectedFilesForChat,
             think,
           }),
           signal: controller.signal,
@@ -327,6 +349,7 @@ export const sendMessage = createAsyncThunk(
             systemPrompt: systemPrompt,
             provider: serverProvider,
             attachmentsBase64,
+            selectedFiles: selectedFilesForChat,
             think,
           }),
           signal: controller.signal,

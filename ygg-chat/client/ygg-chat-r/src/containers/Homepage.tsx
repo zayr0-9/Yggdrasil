@@ -20,6 +20,7 @@ import EditProject from './EditProject'
 const Homepage: React.FC = () => {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
+  // const { requestContext } = useIdeContext()
 
   const allProjects = useAppSelector<Project[]>(selectAllProjects)
   const loading = useAppSelector(selectProjectsLoading)
@@ -69,6 +70,8 @@ const Homepage: React.FC = () => {
     dispatch(chatSliceActions.stateReset())
     dispatch(fetchProjects())
     dispatch(chatSliceActions.heimdallDataLoaded({ treeData: null }))
+
+    // Context is now requested automatically on WebSocket connection
   }, [dispatch])
 
   // Close dropdown when clicking outside
@@ -123,26 +126,26 @@ const Homepage: React.FC = () => {
   }
 
   return (
-    <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900'>
-      <div className='py-4 max-w-screen-2xl mx-auto'>
-        <div className='flex items-center justify-between py-4'>
-          <div className='flex items-center gap-3'>
+    <div className='bg-zinc-50 min-h-screen dark:bg-yBlack-500'>
+      <div className='py-4 max-w-[1640px] mx-auto'>
+        <div className='flex items-center justify-baseline px-2 py-4'>
+          <div className='flex items-center flex-wrap gap-3'>
             <img src='/img/logo-d.svg' alt='Yggdrasil Logo' className='w-22 h-22 dark:hidden' />
             <img src='/img/logo-l.svg' alt='Yggdrasil Logo' className='w-22 h-22 hidden dark:block' />
             <h1 className='text-5xl font-bold px-2 dark:text-neutral-100'>Yggdrasil</h1>
           </div>
+        </div>
+      </div>
+      <div className='py-6 px-6 max-w-7xl mx-auto'>
+        <div className='mb-4 flex items-center justify-between'>
+          <h2 className='text-3xl py-4 font-bold dark:text-neutral-100'>Projects</h2>
           <Button variant='primary' size='smaller' onClick={() => navigate('/settings')} rounded='full'>
             <i className='bx bx-cog text-3xl p-1' aria-hidden='true'></i>
           </Button>
         </div>
-      </div>
-      <div className='py-6 px-6 max-w-7xl mx-auto'>
-        <div className='mb-4'>
-          <h2 className='text-3xl py-4 font-bold dark:text-neutral-100'>Projects</h2>
-        </div>
 
         {/* New Project Button + Sort Controls + Search */}
-        <div className='mb-6 flex items-center gap-3'>
+        <div className='mb-6 flex flex-wrap items-center gap-3'>
           <Button variant='primary' size='large' onClick={handleCreateProject} className='shrink-0'>
             New Project
           </Button>
@@ -173,12 +176,12 @@ const Homepage: React.FC = () => {
         {loading && <p>Loading...</p>}
         {/* {error && <p className='text-red-500'>{error}</p>} */}
 
-        <div className='flex gap-4 items-start'>
-          <ul className='space-y-2 rounded flex-1'>
+        <div className='flex gap-4 flex-wrap items-start'>
+          <ul className='space-y-2 rounded flex-3'>
             {projects.map(project => (
               <li
                 key={project.id}
-                className='p-4 mb-4 bg-indigo-50 rounded-lg cursor-pointer border-1 border-indigo-100 dark:border-zinc-500 dark:bg-zinc-700 hover:bg-indigo-100 dark:hover:bg-zinc-600'
+                className='p-4 mb-4 bg-indigo-50 rounded-lg cursor-pointer  border-indigo-100 dark:border-neutral-600 dark:bg-secondary-700 hover:bg-indigo-100 dark:hover:border-neutral-500 dark:hover:bg-secondary-800'
                 onClick={() => handleSelectProject(project)}
               >
                 <div className='flex place-items-start justify-between'>
@@ -218,7 +221,7 @@ const Homepage: React.FC = () => {
                   </div>
                 </div>
                 {project.created_at && (
-                  <div className='text-xs text-neutral-600 dark:text-neutral-400 mt-2'>
+                  <div className='text-xs text-neutral-600 dark:text-neutral-300 mt-2'>
                     Created: {new Date(project.created_at).toLocaleString()}
                   </div>
                 )}
@@ -228,7 +231,7 @@ const Homepage: React.FC = () => {
               <p className='dark:text-neutral-300'>No projects yet. Create your first project to get started!</p>
             )}
           </ul>
-          <div className='relative w-128'>
+          <div className='relative w-128 flex-2'>
             <TextField
               placeholder='Search messages...'
               value={searchQuery}
@@ -250,10 +253,10 @@ const Homepage: React.FC = () => {
                     {searchResults.map(res => (
                       <li
                         key={`${res.conversationId}-${res.messageId}`}
-                        className='p-3 hover:bg-indigo-100 dark:bg-neutral-700 dark:hover:bg-neutral-500 cursor-pointer text-sm dark:text-neutral-200'
+                        className='p-3 hover:bg-indigo-100 dark:bg-secondary-700 dark:hover:bg-secondary-800 cursor-pointer text-sm dark:text-neutral-200'
                         onClick={() => handleResultClick(res.conversationId, res.messageId)}
                       >
-                        <div className='font-semibold text-indigo-600 dark:text-indigo-400'>
+                        <div className='font-semibold text-indigo-600 dark:text-yBrown-50'>
                           Conv {res.conversationId}
                         </div>
                         <div className='mt-1 text-neutral-800 dark:text-neutral-100 whitespace-pre-wrap break-words max-h-48 overflow-hidden'>

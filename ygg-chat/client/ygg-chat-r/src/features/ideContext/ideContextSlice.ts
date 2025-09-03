@@ -1,15 +1,18 @@
 // features/ideContext/ideContextSlice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import { FileInfo, IdeContext, SelectionInfo, WorkspaceInfo } from './ideContextTypes'
+import { FileInfo, IdeContext, SelectionInfo, WorkspaceInfo, SelectedFileContent } from './ideContextTypes'
+import { chatSliceActions } from '../chats/chatSlice'
 
 // Initial state
 export const ideContextInitialState: IdeContext = {
   isConnected: false,
+  extensionConnected: false,
   lastUpdated: '',
   workspace: null,
   openFiles: [],
   activeFile: null,
   allFiles: [],
+  selectedFilesForChat: [],
   currentSelection: null,
   recentActivity: [],
 }
@@ -21,6 +24,11 @@ const ideContextSlice = createSlice({
     // Connection management
     setConnectionStatus: (state, action: PayloadAction<boolean>) => {
       state.isConnected = action.payload
+      state.lastUpdated = new Date().toISOString()
+    },
+
+    setExtensionStatus: (state, action: PayloadAction<boolean>) => {
+      state.extensionConnected = action.payload
       state.lastUpdated = new Date().toISOString()
     },
 
@@ -95,6 +103,35 @@ const ideContextSlice = createSlice({
       state.lastUpdated = new Date().toISOString()
     },
 
+    addSelectedFileForChat: (state, action: PayloadAction<SelectedFileContent>) => {
+      const existingIndex = state.selectedFilesForChat.findIndex(f => f.path === action.payload.path)
+
+      if (existingIndex === -1) {
+        state.selectedFilesForChat.push(action.payload)
+      } else {
+        state.selectedFilesForChat[existingIndex] = action.payload
+      }
+
+      // Ensure no duplicates by path (keep the most recent entry)
+      const seen = new Set<string>()
+      state.selectedFilesForChat = state.selectedFilesForChat
+        .slice()
+        .reverse()
+        .filter(f => {
+          if (seen.has(f.path)) return false
+          seen.add(f.path)
+          return true
+        })
+        .reverse()
+
+      state.lastUpdated = new Date().toISOString()
+    },
+
+    removeSelectedFileForChat: (state, action: PayloadAction<string>) => {
+      state.selectedFilesForChat = state.selectedFilesForChat.filter(f => f.path !== action.payload)
+      state.lastUpdated = new Date().toISOString()
+    },
+
     addFile: (state, action: PayloadAction<string>) => {
       if (!state.allFiles.includes(action.payload)) {
         state.allFiles.push(action.payload)
@@ -148,16 +185,25 @@ const ideContextSlice = createSlice({
       return { ...ideContextInitialState }
     },
   },
+  extraReducers: builder => {
+    builder.addCase(chatSliceActions.sendingCompleted, state => {
+      state.selectedFilesForChat = []
+      state.lastUpdated = new Date().toISOString()
+    })
+  },
 })
 
 export const {
   setConnectionStatus,
+  setExtensionStatus,
   updateWorkspace,
   setOpenFiles,
   addOpenFile,
   removeOpenFile,
   setActiveFile,
   setAllFiles,
+  addSelectedFileForChat,
+  removeSelectedFileForChat,
   addFile,
   removeFile,
   setCurrentSelection,
@@ -166,3 +212,4 @@ export const {
 } = ideContextSlice.actions
 
 export default ideContextSlice.reducer
+

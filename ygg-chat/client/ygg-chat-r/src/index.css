@@ -147,3 +147,34 @@ body.ygg-no-select * {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+@theme {
+  --color-yPink-50: #a67899;
+  --color-yPink-100: #976288;
+  --color-yPink-200: #a64d79;
+  --color-yPink-300: #853e61;
+  --color-yPink-400: #6a1e55;
+  --color-yPink-500: #5f1b4d;
+  --color-yPink-600: #551844;
+  --color-yPink-700: #4a153b;
+  --color-yPink-800: #401233;
+  --color-yPink-900: #350f2b;
+  --color-secondary-50: #55414a;
+  --color-secondary-100: #887a80;
+  --color-secondary-200: #55414a;
+  --color-secondary-300: #77676e;
+  --color-secondary-400: #66545c;
+  --color-secondary-500: #55414a;
+  --color-secondary-600: #44343b;
+  --color-secondary-700: #362a2f;
+  --color-secondary-800: #302429;
+  --color-secondary-900: #1b1518;
+  --color-yPurple-50: #dfdbe1;
+  --color-yPurple-400: #5e4d6a;
+  --color-yPurple-500: #4c3959;
+  --color-yBrown-50: #b6a9a2;
+  --color-yBrown-400: #6c5345;
+  --color-yBrown-500: #5c4030;
+  --color-yBlack-100: #4c394c;
+  --color-yBlack-500: #1a1a1d;
+}

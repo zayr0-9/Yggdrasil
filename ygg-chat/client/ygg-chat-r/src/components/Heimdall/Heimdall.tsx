@@ -1066,7 +1066,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               strokeWidth='1' // Border thickness
               className={`cursor-pointer hover:opacity-90 transition-opacity duration-200 ${
                 compactMode && focusedNodeId === node.id ? 'animate-pulse' : ''
-              } ${node.sender === 'user' ? 'dark:fill-sky-900' : 'dark:fill-lime-900'} dark:stroke-slate-700`}
+              } ${node.sender === 'user' ? 'dark:fill-yPurple-500' : 'dark:fill-yBrown-500'} dark:stroke-slate-700`}
               style={{
                 filter:
                   compactMode && focusedNodeId === node.id ? 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.5))' : 'none',
@@ -1114,9 +1114,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 cy={y + circleRadius}
                 r={circleRadius + 8}
                 fill='none'
-                stroke='rgba(16, 185, 129, 0.9)'
+                // stroke='rgba(16, 185, 129, 0.9)'
                 strokeWidth='3'
-                className='animate-pulse-slow'
+                className='animate-pulse-slow stroke-rose-300 dark:stroke-slate-100'
               />
             )}
             {/* Selection highlight for compact mode */}
@@ -1138,7 +1138,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               r={circleRadius}
               fill={node.sender === 'user' ? '#64748b' : '#1e293b'}
               className={`cursor-pointer transition-transform duration-150 ${
-                node.sender === 'user' ? 'fill-yellow-100 dark:fill-lime-900' : 'fill-indigo-300 dark:fill-sky-900'
+                node.sender === 'user'
+                  ? 'fill-yellow-100 dark:fill-yPurple-500'
+                  : 'fill-indigo-300 dark:fill-yBrown-500'
               }`}
               style={{
                 transform: selectedNode?.id === node.id ? 'scale(1.1)' : 'scale(1)',
@@ -1307,11 +1309,11 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         )}
         <div className='bg-amber-50 dark:bg-neutral-700 text-stone-800 dark:text-stone-200 px-3 py-2 rounded-lg text-xs space-y-1'>
           <div className='flex items-center gap-2'>
-            <div className='w-3 h-3 bg-yellow-50 dark:bg-lime-900 rounded border-1 border-stone-400'></div>
+            <div className='w-3 h-3 bg-amber-50 dark:bg-yPurple-500 rounded border-1 border-stone-400'></div>
             <span>User messages</span>
           </div>
           <div className='flex items-center gap-2'>
-            <div className='w-3 h-3 bg-sky-50 dark:bg-sky-900 rounded border-1 border-stone-400'></div>
+            <div className='w-3 h-3 bg-indigo-50 dark:bg-yBrown-500 rounded border-1 border-stone-400'></div>
             <span>Assistant messages</span>
           </div>
         </div>

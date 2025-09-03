@@ -14,6 +14,71 @@ export interface User {
   created_at: string
 }
 
+export class FileContentService {
+  /**
+   * Create a file content record with file name and paths
+   */
+  static create(params: {
+    fileName: string
+    absolutePath: string
+    relativePath: string
+    fileContent?: string | null
+    sizeBytes?: number | null
+    messageId?: number | null
+  }): FileContent {
+    const { fileName, absolutePath, relativePath, fileContent = null, sizeBytes = null, messageId = null } = params
+
+    // Check if file already exists by absolute path
+    const existing = statements.getFileContentByPath.get(absolutePath) as FileContent | undefined
+    if (existing) {
+      // Link to message if provided
+      if (messageId) {
+        statements.linkFileContentToMessage.run(messageId, existing.id)
+        return { ...existing, message_id: messageId }
+      }
+      return existing
+    }
+
+    const result = statements.createFileContent.run(fileName, absolutePath, relativePath, fileContent, sizeBytes)
+    const created = statements.getFileContentById.get(result.lastInsertRowid) as FileContent
+    
+    // Create link if messageId provided
+    if (messageId) {
+      statements.linkFileContentToMessage.run(messageId, created.id)
+      return { ...created, message_id: messageId }
+    }
+    return created
+  }
+
+  static getByMessage(messageId: number): FileContent[] {
+    return statements.getFileContentsByMessage.all(messageId) as FileContent[]
+  }
+
+  static linkToMessage(fileContentId: number, messageId: number): FileContent | undefined {
+    statements.linkFileContentToMessage.run(messageId, fileContentId)
+    const base = statements.getFileContentById.get(fileContentId) as FileContent | undefined
+    return base ? { ...base, message_id: messageId } : undefined
+  }
+
+  static findByPath(absolutePath: string): FileContent | undefined {
+    return statements.getFileContentByPath.get(absolutePath) as FileContent | undefined
+  }
+
+  static getById(id: number): FileContent | undefined {
+    return statements.getFileContentById.get(id) as FileContent | undefined
+  }
+
+  static unlinkFromMessage(messageId: number, fileContentId: number): number {
+    const res = statements.unlinkFileContentFromMessage.run(messageId, fileContentId)
+    return res.changes ?? 0
+  }
+
+  static deleteByMessage(messageId: number): number {
+    const res = statements.deleteFileContentLinksByMessage.run(messageId)
+    return res.changes ?? 0
+  }
+}
+
 export class AttachmentService {
   /**
    * Create an attachment record. For local files, prefer providing filePath and optional url (if served).
@@ -145,6 +210,18 @@ export interface Attachment {
   height?: number | null
   size_bytes?: number | null
   sha256?: string | null
+  created_at: string
+}
+
+// File content associated to messages
+export interface FileContent {
+  id: number
+  message_id?: number | null
+  file_name: string
+  absolute_path: string
+  relative_path: string
+  file_content?: string | null
+  size_bytes?: number | null
   created_at: string
 }
 
@@ -324,6 +401,12 @@ export class MessageService {
           : r.attachments_count != null
             ? Number(r.attachments_count)
             : undefined,
+      file_content_count:
+        typeof r.file_content_count === 'number'
+          ? r.file_content_count
+          : r.file_content_count != null
+            ? Number(r.file_content_count)
+            : undefined,
     })) as Message[]
   }
 
@@ -388,6 +471,25 @@ export class MessageService {
   static unlinkAttachment(messageId: number, attachmentId: number): Attachment[] {
     statements.unlinkAttachmentFromMessage.run(messageId, attachmentId)
     return statements.getAttachmentsByMessage.all(messageId) as Attachment[]
+  }
+
+  // File Content helpers
+  static getFileContents(messageId: number): FileContent[] {
+    return statements.getFileContentsByMessage.all(messageId) as FileContent[]
+  }
+
+  static linkFileContents(messageId: number, fileContentIds: number[]): FileContent[] {
+    if (!fileContentIds || fileContentIds.length === 0)
+      return statements.getFileContentsByMessage.all(messageId) as FileContent[]
+    for (const id of fileContentIds) {
+      statements.linkFileContentToMessage.run(messageId, id)
+    }
+    return statements.getFileContentsByMessage.all(messageId) as FileContent[]
+  }
+
+  static unlinkFileContent(messageId: number, fileContentId: number): FileContent[] {
+    statements.unlinkFileContentFromMessage.run(messageId, fileContentId)
+    return statements.getFileContentsByMessage.all(messageId) as FileContent[]
   }
 
   // Full Text Search methods

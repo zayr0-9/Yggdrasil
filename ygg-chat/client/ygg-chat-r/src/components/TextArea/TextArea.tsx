@@ -2,6 +2,8 @@ import React, { useEffect, useId, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { selectFocusedChatMessageId } from '../../features/chats/chatSelectors'
 import { chatSliceActions } from '../../features/chats/chatSlice'
+import { selectMentionableFiles } from '../../features/ideContext/ideContextSelectors'
+import { useIdeContext } from '../../hooks/useIdeContext'
 import type { RootState } from '../../store/store'
 
 type textAreaState = 'default' | 'error' | 'disabled'
@@ -44,18 +46,107 @@ export const TextArea: React.FC<TextAreaProps> = ({
   const dispatch = useDispatch()
   const focusedMessageId = useSelector(selectFocusedChatMessageId)
   const imageDrafts = useSelector((s: RootState) => s.chat.composition.imageDrafts)
+  const mentionableFiles = useSelector(selectMentionableFiles)
+  // Local copy of mentionable files to prevent re-selecting the same file locally
+  const [localMentionableFiles, setLocalMentionableFiles] = useState(mentionableFiles)
+  // Merge in new files from the selector while preserving local removals
+  useEffect(() => {
+    setLocalMentionableFiles(prev => {
+      if (prev.length === 0 && mentionableFiles.length > 0) return mentionableFiles
+      const prevPaths = new Set(prev.map(f => f.path))
+      const additions = mentionableFiles.filter(f => !prevPaths.has(f.path))
+      return additions.length > 0 ? [...prev, ...additions] : prev
+    })
+  }, [mentionableFiles])
+  const { requestFileContent } = useIdeContext()
   const id = useId()
   const errorId = `${id}-error`
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [dragOver, setDragOver] = useState(false)
+  const listRef = useRef<HTMLDivElement>(null)
+  const [showFileList, setShowFileList] = useState(false)
+  const [selectedFileIndex, setSelectedFileIndex] = useState(0)
+  const [filteredFiles, setFilteredFiles] = useState<Array<{ path: string; name: string; mention: string }>>([])
+  const [dropdownDirection, setDropdownDirection] = useState<'up' | 'down'>('up')
+  const [dropdownMaxHeight, setDropdownMaxHeight] = useState<number | undefined>(undefined)
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (state !== 'disabled') {
-      onChange?.(e.target.value)
+      const newValue = e.target.value
+      onChange?.(newValue)
+
+      // Check if last character is '@' to show file list
+      const lastChar = newValue.slice(-1)
+      console.log(lastChar)
+      if (lastChar === '@') {
+        setFilteredFiles(localMentionableFiles)
+        setSelectedFileIndex(0)
+        setShowFileList(true)
+      } else if (showFileList && newValue.endsWith(' ')) {
+        // Hide list when space is typed after @
+        setShowFileList(false)
+      } else if (showFileList) {
+        // Filter files based on text after @
+        const atIndex = newValue.lastIndexOf('@')
+        if (atIndex !== -1) {
+          const searchTerm = newValue.slice(atIndex + 1).toLowerCase()
+          const filtered = localMentionableFiles.filter(
+            file => file.name.toLowerCase().includes(searchTerm) || file.path.toLowerCase().includes(searchTerm)
+          )
+          setFilteredFiles(filtered)
+          setSelectedFileIndex(0)
+          if (filtered.length === 0) {
+            setShowFileList(false)
+          }
+        } else {
+          setShowFileList(false)
+        }
+      }
+    }
+  }
+
+  const scrollToSelectedItem = (index: number) => {
+    if (listRef.current) {
+      const listElement = listRef.current
+      const selectedElement = listElement.children[index] as HTMLElement
+      if (selectedElement) {
+        selectedElement.scrollIntoView({
+          block: 'nearest',
+          behavior: 'smooth',
+        })
+      }
     }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showFileList && filteredFiles.length > 0) {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          setSelectedFileIndex(prev => {
+            const newIndex = prev < filteredFiles.length - 1 ? prev + 1 : 0
+            setTimeout(() => scrollToSelectedItem(newIndex), 0)
+            return newIndex
+          })
+          return
+        case 'ArrowUp':
+          e.preventDefault()
+          setSelectedFileIndex(prev => {
+            const newIndex = prev > 0 ? prev - 1 : filteredFiles.length - 1
+            setTimeout(() => scrollToSelectedItem(newIndex), 0)
+            return newIndex
+          })
+          return
+        case 'Enter':
+          e.preventDefault()
+          handleFileSelection(filteredFiles[selectedFileIndex])
+          return
+        case 'Escape':
+          e.preventDefault()
+          setShowFileList(false)
+          return
+      }
+    }
     onKeyDown?.(e)
   }
 
@@ -117,6 +208,38 @@ export const TextArea: React.FC<TextAreaProps> = ({
       .catch(err => console.error('Failed to read dropped images', err))
   }
 
+  const handleFileSelection = async (file: { path: string; name: string; mention: string }) => {
+    try {
+      await requestFileContent(file.path)
+      // Remove the selected file from local mentionable list and current filtered list
+      setLocalMentionableFiles(prev => prev.filter(f => f.path !== file.path))
+      setFilteredFiles(prev => prev.filter(f => f.path !== file.path))
+
+      // Replace the @ mention with just the filename
+      if (textareaRef.current) {
+        const currentValue = textareaRef.current.value
+        const atIndex = currentValue.lastIndexOf('@')
+        if (atIndex !== -1) {
+          const beforeAt = currentValue.slice(0, atIndex)
+          const newValue = beforeAt + `@${file.name} `
+          onChange?.(newValue)
+
+          // Focus back to textarea and position cursor after the mention
+          setTimeout(() => {
+            if (textareaRef.current) {
+              textareaRef.current.focus()
+              textareaRef.current.setSelectionRange(newValue.length, newValue.length)
+            }
+          }, 0)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to request file content:', error)
+    } finally {
+      setShowFileList(false)
+    }
+  }
+
   // Auto-resize functionality
   const adjustHeight = () => {
     const textarea = textareaRef.current
@@ -160,11 +283,64 @@ export const TextArea: React.FC<TextAreaProps> = ({
     }
   }, [autoFocus])
 
+  // Handle clicking outside to close file list
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showFileList &&
+        listRef.current &&
+        textareaRef.current &&
+        !listRef.current.contains(event.target as Node) &&
+        !textareaRef.current.contains(event.target as Node)
+      ) {
+        setShowFileList(false)
+      }
+    }
+
+    if (showFileList) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showFileList])
+
+  // Compute dropdown placement and size (up or down) based on viewport space
+  useEffect(() => {
+    if (!showFileList) return
+
+    const updatePlacement = () => {
+      const ta = textareaRef.current
+      if (!ta) return
+      const rect = ta.getBoundingClientRect()
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight
+      const padding = 8 // px gap from textarea
+      const desiredMax = 240 // ~max-h-60 (15rem)
+
+      const spaceBelow = Math.max(0, viewportHeight - rect.bottom - padding)
+      const spaceAbove = Math.max(0, rect.top - padding)
+
+      if (spaceBelow >= spaceAbove) {
+        setDropdownDirection('down')
+        setDropdownMaxHeight(Math.max(0, Math.min(desiredMax, spaceBelow)))
+      } else {
+        setDropdownDirection('up')
+        setDropdownMaxHeight(Math.max(0, Math.min(desiredMax, spaceAbove)))
+      }
+    }
+
+    updatePlacement()
+    window.addEventListener('resize', updatePlacement)
+    window.addEventListener('scroll', updatePlacement, true)
+    return () => {
+      window.removeEventListener('resize', updatePlacement)
+      window.removeEventListener('scroll', updatePlacement, true)
+    }
+  }, [showFileList])
+
   const baseStyles = `${width} px-4 py-3 rounded-xl transition-all duration-200 overflow-hidden bg-neutral-50 dark:bg-neutral-900`
   const labelClasses = state === 'disabled' ? 'opacity-40' : ''
 
   const stateStyles = {
-    default: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-gray-400 border-gray-600 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50`,
+    default: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-gray-400 border-gray-600 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 dark:focus:ring-2 dark:focus:ring-secondary-600`,
     error: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-gray-400 border-red-500 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500 focus:ring-opacity-50`,
     disabled: `${baseStyles} bg-gray-900 text-stone-800 dark:text-stone-200 border-gray-700 placeholder-gray-600 cursor-not-allowed`,
   }
@@ -205,6 +381,34 @@ export const TextArea: React.FC<TextAreaProps> = ({
         {showCharCount && maxLength && (
           <div className='absolute bottom-2 right-3 text-xs text-stone-800 dark:text-stone-200'>
             {value.length}/{maxLength}
+          </div>
+        )}
+
+        {/* Floating file list */}
+        {showFileList && filteredFiles.length > 0 && (
+          <div
+            ref={listRef}
+            className='absolute z-50 mb-1 w-80 max-h-60 overflow-y-auto bg-gray-800 border border-gray-600 rounded-lg shadow-lg'
+            style={{
+              bottom: dropdownDirection === 'up' ? '100%' : undefined,
+              top: dropdownDirection === 'down' ? '100%' : undefined,
+              left: 0,
+              maxHeight: dropdownMaxHeight ? `${dropdownMaxHeight}px` : undefined,
+            }}
+          >
+            {filteredFiles.map((file, index) => (
+              <div
+                key={file.path}
+                className={`px-3 py-2 cursor-pointer text-sm border-b border-gray-700 last:border-b-0 ${
+                  index === selectedFileIndex ? 'bg-blue-600 text-white' : 'text-stone-200 hover:bg-gray-700'
+                }`}
+                onClick={() => handleFileSelection(file)}
+                onMouseEnter={() => setSelectedFileIndex(index)}
+              >
+                <div className='font-medium truncate'>{file.name}</div>
+                <div className='text-xs text-stone-400 truncate'>{file.path}</div>
+              </div>
+            ))}
           </div>
         )}
       </div>
