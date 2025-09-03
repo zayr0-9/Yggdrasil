@@ -872,6 +872,11 @@ function Chat() {
                 className=''
               />
             )}
+            {streamState.active && (
+              <div className=' pb-4 px-3 text-stone-800 dark:text-stone-200 flex justify-end'>
+                <i className='bx bx-loader-alt text-2xl animate-spin' style={{ animationDuration: '1s' }}></i>
+              </div>
+            )}
             {/* Bottom sentinel for robust scrolling */}
             <div ref={bottomRef} data-bottom-sentinel='true' className='h-px' />
           </div>
@@ -965,7 +970,7 @@ function Chat() {
 
               {/* <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-1'>Model Selection:</h3> */}
               <div className='flex items-center gap-3 mb-3 justify-end w-full flex-wrap'>
-                {streamState.active && (
+                {/* {streamState.active && (
                   <Button
                     variant='secondary'
                     onClick={handleStopGeneration}
@@ -974,7 +979,7 @@ function Chat() {
                   >
                     Stop
                   </Button>
-                )}
+                )} */}
                 <Button
                   variant='secondary'
                   className='rounded-full'
@@ -1016,7 +1021,29 @@ function Chat() {
                     )}
                   </Button>
                 )}
-                <Button
+                {!currentConversationId ? (
+                  'Creating...'
+                ) : sendingState.streaming ? (
+                  <Button
+                    variant='secondary'
+                    onClick={handleStopGeneration}
+                    className='ml-2'
+                    disabled={!streamState.streamingMessageId}
+                  >
+                    Stop
+                  </Button>
+                ) : sendingState.sending ? (
+                  'Sending...'
+                ) : (
+                  <Button
+                    variant={canSendLocal && currentConversationId ? 'primary' : 'secondary'}
+                    disabled={!canSendLocal || !currentConversationId}
+                    onClick={() => handleSend(multiReplyCount)}
+                  >
+                    Send
+                  </Button>
+                )}
+                {/* <Button
                   variant={canSendLocal && currentConversationId ? 'primary' : 'secondary'}
                   disabled={!canSendLocal || !currentConversationId}
                   onClick={() => handleSend(multiReplyCount)}
@@ -1028,7 +1055,7 @@ function Chat() {
                       : sendingState.sending
                         ? 'Sending...'
                         : 'Send'}
-                </Button>
+                </Button> */}
               </div>
             </div>
           </div>
