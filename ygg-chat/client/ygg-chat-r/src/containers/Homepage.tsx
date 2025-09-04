@@ -330,10 +330,10 @@ const Homepage: React.FC = () => {
                         className='p-3 hover:bg-indigo-100 dark:bg-secondary-700 dark:hover:bg-secondary-800 cursor-pointer text-sm dark:text-neutral-200'
                         onClick={() => handleResultClick(res.conversationId, res.messageId)}
                       >
-                        <div className='font-semibold text-indigo-600 dark:text-yBrown-50'>
+                        <div className='font-semibold text-base text-indigo-600 dark:text-yBrown-50'>
                           Conv {res.conversationId}
                         </div>
-                        <div className='mt-1 text-neutral-800 dark:text-neutral-100 whitespace-pre-wrap break-words max-h-48 overflow-hidden'>
+                        <div className='mt-1 pl-2 text-neutral-800 dark:text-neutral-100 whitespace-pre-wrap break-words max-h-48 overflow-hidden'>
                           {res.content}
                         </div>
                       </li>

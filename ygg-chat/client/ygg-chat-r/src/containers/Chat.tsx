@@ -690,6 +690,7 @@ function Chat() {
       if (currentConversationId) {
         // Replace any @file mentions with actual file contents before branching
         const processed = replaceFileMentionsWithContent(newContent)
+        console.log('processed', processed)
         dispatch(
           editMessageWithBranching({
             conversationId: currentConversationId,

@@ -7,9 +7,10 @@
 @theme {
   --font-sans: 'DM Sans', Inter, system-ui, sans-serif;
 }
-/* Highlight.js theme for rehype-highlight (dark) */
-@import 'highlight.js/styles/atom-one-light.css' (prefers-color-scheme: light);
-@import 'highlight.js/styles/atom-one-dark.css' (prefers-color-scheme: dark);
+/* Highlight.js base theme for rehype-highlight
+   We import the light theme unconditionally, then provide .dark-scoped overrides below.
+   This ensures manual dark mode (toggling the `.dark` class) also switches syntax colors. */
+@import 'highlight.js/styles/atom-one-light.css';
 
 @layer base {
   html {
@@ -87,6 +88,63 @@
 /* Global safety (minimal): let pre control visuals */
 pre > code {
   background: transparent;
+}
+
+/* Dark-mode highlight.js token overrides (approx. Atom One Dark) */
+/* These only apply when the root has `.dark` class, enabling manual dark toggle compatibility */
+.dark .hljs {
+  color: #abb2bf; /* base text */
+}
+.dark .hljs-comment,
+.dark .hljs-quote {
+  color: #5c6370; /* muted */
+  font-style: italic;
+}
+.dark .hljs-keyword,
+.dark .hljs-operator {
+  color: #c678dd;
+}
+.dark .hljs-variable,
+.dark .hljs-template-variable,
+.dark .hljs-attr,
+.dark .hljs-symbol,
+.dark .hljs-builtin-name,
+.dark .hljs-link,
+.dark .hljs-selector-id,
+.dark .hljs-selector-class {
+  color: #e06c75;
+}
+.dark .hljs-number,
+.dark .hljs-literal,
+.dark .hljs-type,
+.dark .hljs-built_in,
+.dark .hljs-bullet {
+  color: #d19a66;
+}
+.dark .hljs-string,
+.dark .hljs-doctag,
+.dark .hljs-addition {
+  color: #98c379;
+}
+.dark .hljs-title,
+.dark .hljs-section,
+.dark .hljs-name,
+.dark .hljs-selector-tag,
+.dark .hljs-tag .hljs-attribute {
+  color: #61afef;
+}
+.dark .hljs-meta,
+.dark .hljs-subst {
+  color: #56b6c2;
+}
+.dark .hljs-deletion {
+  color: #e06c75;
+}
+.dark .hljs-emphasis {
+  font-style: italic;
+}
+.dark .hljs-strong {
+  font-weight: 700;
 }
 
 /* Disable text selection globally while panning/drag-selecting in Heimdall */

@@ -267,7 +267,7 @@ export const sendMessage = createAsyncThunk(
       const { messages: currentMessages } = state.chat.conversation
       const currentPathIds = state.chat.conversation.currentPath
       const currentPathMessages = currentPathIds.map(id => currentMessages.find(m => m.id === id))
-      // console.log('currentPathMessages', currentPathMessages)
+      const isFirstMessage = (currentMessages?.length || 0) === 0
       const selectedName = state.chat.models.selected?.name || state.chat.models.default?.name
       const modelName = input.modelOverride || selectedName
       // Map UI provider to server provider id
@@ -285,26 +285,12 @@ export const sendMessage = createAsyncThunk(
 
       // Get selected files for chat from IDE context
       const selectedFilesForChat = state.ideContext.selectedFilesForChat || []
-      console.log('selectedFilesForChat', selectedFilesForChat)
       let response = null
 
       if (!modelName) {
         throw new Error('No model selected')
       }
-      // console.log('last currentMessage - ', currentMessages?.at(-1)?.id)
 
-      console.log(
-        'finalMessage sent to the server ---------------------- ',
-        currentPathMessages.map(m => ({
-          id: m.id,
-          conversation_id: m.conversation_id,
-          parent_id: m.parent_id,
-          children_ids: m.children_ids,
-          role: m.role,
-          content: m.content,
-          created_at: m.created_at,
-        }))
-      )
       if (repeatNum > 1) {
         response = await createStreamingRequest(`/conversations/${conversationId}/messages/repeat`, {
           method: 'POST',
@@ -361,14 +347,14 @@ export const sendMessage = createAsyncThunk(
         throw new Error(`HTTP ${response.status}: ${errorText || 'Failed to send message'}`)
       }
 
-      console.log(response)
-
       const reader = response.body?.getReader()
       if (!reader) throw new Error('No stream reader available')
 
       const decoder = new TextDecoder()
       let messageId: number | null = null
       let userMessage: any = null
+      // Guard to ensure we only try to update the title once per send
+      let titleUpdated = false
 
       try {
         while (true) {
@@ -400,6 +386,16 @@ export const sendMessage = createAsyncThunk(
                       artifacts: drafts.map(d => d.dataUrl),
                     })
                   )
+                }
+                // Auto-update conversation title with first 50 characters of the first user message
+                if (isFirstMessage && !titleUpdated) {
+                  const contentForTitle = (chunk.message?.content || '').trim().replace(/\s+/g, ' ')
+                  const baseTitle = contentForTitle.slice(0, 50)
+                  const title = baseTitle ? `${baseTitle}...` : ''
+                  if (title) {
+                    ;(dispatch as any)(updateConversationTitle({ id: conversationId, title }))
+                    titleUpdated = true
+                  }
                 }
               }
 
@@ -583,6 +579,7 @@ export const editMessageWithBranching = createAsyncThunk(
       if (!modelName) {
         throw new Error('No model selected')
       }
+      const selectedFilesForChat = state.ideContext.selectedFilesForChat || []
 
       // Create new user message as a branch
       const response = await createStreamingRequest(`/conversations/${conversationId}/messages`, {
@@ -605,6 +602,7 @@ export const editMessageWithBranching = createAsyncThunk(
           systemPrompt: systemPrompt,
           provider: serverProvider,
           attachmentsBase64,
+          selectedFiles: selectedFilesForChat,
           think,
         }),
         signal: controller.signal,
