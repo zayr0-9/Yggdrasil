@@ -114,17 +114,17 @@ const Settings: React.FC = () => {
 
   return (
     <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900'>
-      <div className='p-6 max-w-4xl mx-auto'>
+      <div className='p-6 max-w-5xl mx-auto'>
         {/* Header */}
-        <div className='flex items-center justify-between mb-6'>
+        <div className='flex items-center justify-between mb-12'>
           <h1 className='text-2xl font-bold dark:text-neutral-100'>Environment Variables</h1>
-          <Button variant='secondary' onClick={() => navigate('/')}>
-            Back to Home
+          <Button variant='secondary' onClick={() => navigate('/')} className='group'>
+            <p className='transition-transform duration-100 group-active:scale-95'>Back to Home</p>
           </Button>
         </div>
 
         {/* Description */}
-        <div className='mb-6 p-4 rounded-lg border border-blue-200 dark:border-sky-800'>
+        <div className='mb- p-4 rounded-lg border border-blue-200 dark:border-sky-800'>
           <p className='text-sm text-blue-800 dark:text-blue-200'>
             Configure environment variables for your application. Changes require a server restart to take effect.
           </p>
@@ -144,11 +144,11 @@ const Settings: React.FC = () => {
         )}
 
         {/* Environment Variables List */}
-        <div className='space-y-4 mb-6'>
+        <div className='space-y-4 mb-6 mt-6'>
           {envVars.map((envVar, index) => (
             <div
               key={index}
-              className='flex gap-4 items-start p-4 bg-white dark:bg-zinc-800 rounded-lg border border-gray-200 dark:border-zinc-700'
+              className='flex gap-4 mb-8 items-start p-4 bg-white dark:bg-zinc-800 rounded-lg border border-gray-200 dark:border-zinc-700'
             >
               <div className='flex-1'>
                 <TextField
@@ -166,9 +166,9 @@ const Settings: React.FC = () => {
                   onChange={value => handleValueChange(index, value)}
                 />
               </div>
-              <div className='pt-6'>
-                <Button variant='danger' size='small' onClick={() => handleRemoveVariable(index)}>
-                  <i className='bx bx-trash text-lg'></i>
+              <div className='pt-7'>
+                <Button variant='danger' size='small' onClick={() => handleRemoveVariable(index)} className='group'>
+                  <i className='bx bx-trash text-lg group-active:scale-95'></i>
                 </Button>
               </div>
             </div>
@@ -183,17 +183,21 @@ const Settings: React.FC = () => {
 
         {/* Action Buttons */}
         <div className='flex gap-4 justify-end'>
-          <Button variant='primary' onClick={handleAddVariable}>
-            Add Variable
+          <Button variant='primary' size='large' onClick={handleAddVariable} className='group'>
+            <p className='transition-transform duration-100 group-active:scale-95'>Add Variable</p>
           </Button>
-          <Button variant='primary' onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving...' : 'Save Changes'}
+          <Button variant='primary' onClick={handleSave} disabled={saving} className='group'>
+            {saving ? (
+              'Saving...'
+            ) : (
+              <p className='transition-transform duration-100 group-active:scale-95'>Save Changes</p>
+            )}
           </Button>
         </div>
 
         {/* Warning */}
-        <div className='mt-8 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800'>
-          <p className='text-sm text-yellow-800 dark:text-yellow-200'>
+        <div className='mt-18 p-4 bg-yellow-50 dark:bg-secondary-600 rounded-lg border border-yellow-200 dark:border-secondary-800'>
+          <p className='text-sm text-yellow-800 dark:text-neutral-200'>
             <strong>Warning:</strong> Be careful when editing environment variables. Invalid values may cause the
             application to malfunction. Always backup your .env file before making changes.
           </p>

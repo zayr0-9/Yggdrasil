@@ -91,7 +91,6 @@ export const Select: React.FC<SelectProps> = ({
 
   // Compute dropdown placement and size
   useEffect(() => {
-    if (!open) return
     const compute = () => {
       const btn = btnRef.current
       if (!btn || typeof window === 'undefined') return
@@ -106,7 +105,9 @@ export const Select: React.FC<SelectProps> = ({
       const maxH = Math.max(160, Math.min(360, available))
       setListMaxHeight(Number.isFinite(maxH) ? maxH : 280)
     }
+    // Always compute once on mount and whenever `open` changes
     compute()
+    if (!open) return
     window.addEventListener('resize', compute)
     window.addEventListener('scroll', compute, true) // capture scrolls from ancestors
     return () => {

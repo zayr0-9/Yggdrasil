@@ -1,4 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300..700&display=swap');
+/* Ensure dark variant is available globally and early */
+@custom-variant dark (&:where(.dark, .dark *));
 @import 'tailwindcss';
 @plugin "@tailwindcss/typography";
 /* Override Tailwind v4 default font stack */
@@ -169,7 +171,10 @@ body.ygg-no-select * {
   --color-secondary-700: #362a2f;
   --color-secondary-800: #302429;
   --color-secondary-900: #1b1518;
-  --color-yPurple-50: #dfdbe1;
+  --color-yPurple-50: #e4cad7;
+  --color-yPurple-100: #c182a1;
+  --color-yPurple-200: #c182a1;
+  --color-yPurple-300: #a64d79;
   --color-yPurple-400: #5e4d6a;
   --color-yPurple-500: #4c3959;
   --color-yBrown-50: #b6a9a2;

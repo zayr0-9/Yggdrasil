@@ -93,7 +93,7 @@ const EditProject: React.FC<EditProjectProps> = ({ isOpen, onClose, editingProje
               onClick={onClose}
               className='text-neutral-900 dark:text-neutral-200 hover:text-gray-600 dark:hover:text-gray-300'
             >
-              <i className='bx bx-x text-2xl'></i>
+              <i className='bx bx-x text-2xl active:scale-95'></i>
             </button>
           </div>
 
@@ -132,11 +132,18 @@ const EditProject: React.FC<EditProjectProps> = ({ isOpen, onClose, editingProje
               />
             </div>
             <div className='flex gap-2 justify-end pt-4'>
-              <Button variant='primary' size='medium' onClick={isEditing ? handleUpdateProject : handleCreateProject}>
-                {isEditing ? 'Update Project' : 'Create Project'}
+              <Button
+                variant='primary'
+                size='medium'
+                className='group'
+                onClick={isEditing ? handleUpdateProject : handleCreateProject}
+              >
+                <p className='transition-transform duration-100 group-active:scale-95'>
+                  {isEditing ? 'Update Project' : 'Create Project'}
+                </p>
               </Button>
-              <Button variant='secondary' size='medium' onClick={handleCancel}>
-                Cancel
+              <Button variant='secondary' size='medium' className='group' onClick={handleCancel}>
+                <p className='transition-transform duration-100 group-active:scale-95'>Cancel</p>
               </Button>
             </div>
           </div>

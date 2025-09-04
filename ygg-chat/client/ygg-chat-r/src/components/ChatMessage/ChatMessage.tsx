@@ -71,7 +71,7 @@ const MessageActions: React.FC<MessageActionsProps> = ({
         <>
           <button
             onClick={editMode === 'branch' ? onSaveBranch : onSave}
-            className='p-1.5 rounded-md text-gray-400 hover:text-green-400 hover:bg-gray-700 transition-colors duration-150'
+            className='p-1.5 rounded-md text-gray-400 hover:text-green-400 hover:bg-neutral-700 transition-colors duration-150 active:scale-90'
             title={editMode === 'branch' ? 'Create branch' : 'Save changes'}
           >
             {editMode === 'branch' ? (
@@ -86,7 +86,7 @@ const MessageActions: React.FC<MessageActionsProps> = ({
           </button>
           <button
             onClick={onCancel}
-            className='p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-gray-700 transition-colors duration-150'
+            className='p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-gray-700 transition-colors duration-150 active:scale-90'
             title='Cancel editing'
           >
             <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -100,8 +100,8 @@ const MessageActions: React.FC<MessageActionsProps> = ({
             onClick={onCopy}
             className={`p-1.5 rounded-md transition-colors duration-150 ${
               copied
-                ? 'text-green-500 hover:text-green-500 hover:bg-neutral-300'
-                : 'text-gray-400 hover:text-blue-400 hover:bg-neutral-300'
+                ? 'text-green-500 hover:text-green-500 hover:bg-neutral-300 dark:hover:bg-neutral-700'
+                : 'text-gray-400 hover:text-blue-400 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-transform duration-100 active:scale-90'
             }`}
             title={copied ? 'Copied' : 'Copy message'}
           >
@@ -123,7 +123,7 @@ const MessageActions: React.FC<MessageActionsProps> = ({
           {onEdit && (
             <button
               onClick={onEdit}
-              className='p-1.5 rounded-md text-gray-400 hover:text-yellow-400 hover:bg-neutral-300 transition-colors duration-150'
+              className='p-1.5 rounded-md text-gray-400 hover:text-yellow-400 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors duration-150 active:scale-90'
               title='Edit message'
             >
               <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -139,7 +139,7 @@ const MessageActions: React.FC<MessageActionsProps> = ({
           {onBranch && (
             <button
               onClick={onBranch}
-              className='p-1.5 rounded-md text-gray-400 hover:text-green-400 hover:bg-neutral-300 transition-colors duration-150'
+              className='p-1.5 rounded-md text-gray-400 hover:text-green-400 hover:bg-neutral-800 dark:hover:bg-neutral-700 transition-colors duration-150 active:scale-90'
               title='Branch message'
             >
               <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -155,7 +155,7 @@ const MessageActions: React.FC<MessageActionsProps> = ({
           {onResend && (
             <button
               onClick={onResend}
-              className='p-1.5 rounded-md text-gray-400 hover:text-indigo-400 hover:bg-neutral-300 transition-colors duration-150'
+              className='p-1.5 rounded-md text-gray-400 hover:text-indigo-400 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors duration-150'
               title='Resend message'
             >
               <svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' viewBox='0 0 24 24'>
@@ -166,7 +166,7 @@ const MessageActions: React.FC<MessageActionsProps> = ({
           {onDelete && (
             <button
               onClick={onDelete}
-              className='p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-neutral-300 transition-colors duration-150'
+              className='p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors duration-150 active:scale-90'
               title='Delete message'
             >
               <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -412,7 +412,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
           <div className='flex items-center gap-2'>
             <span className={`text-sm font-semibold ${styles.role}`}>{styles.roleText}</span>
             {timestamp && formatTimestamp(timestamp) && (
-              <span className='text-xs text-gray-500'>{formatTimestamp(timestamp)}</span>
+              <span className='text-xs text-neutral-400 pt-0.5'>{formatTimestamp(timestamp)}</span>
             )}
           </div>
 

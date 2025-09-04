@@ -1,4 +1,6 @@
 // src/components/TextField.tsx
+import 'boxicons'
+import 'boxicons/css/boxicons.min.css'
 import React, { useState } from 'react'
 
 interface TextFieldProps {
@@ -14,6 +16,8 @@ interface TextFieldProps {
   required?: boolean
   size?: 'small' | 'medium' | 'large'
   className?: string
+  showSearchIcon?: boolean
+  onSearchClick?: () => void
 }
 
 export const TextField: React.FC<TextFieldProps> = ({
@@ -29,6 +33,8 @@ export const TextField: React.FC<TextFieldProps> = ({
   required = false,
   size = 'medium',
   className = '',
+  showSearchIcon = false,
+  onSearchClick,
 }) => {
   // We'll use internal state if no value/onChange is provided (uncontrolled component)
   const [internalValue, setInternalValue] = useState('')
@@ -71,11 +77,12 @@ export const TextField: React.FC<TextFieldProps> = ({
     ${sizeStyles[size]}
     ${stateStyles}
     ${disabledStyles}
+    ${showSearchIcon ? 'pr-10' : ''}
     ${className}
   `.trim()
 
   // Label styles with required indicator
-  const labelStyles = 'block text-sm font-medium text-gray-700 mb-1'
+  const labelStyles = 'block text-base font-medium text-gray-700 dark:text-gray-300 mb-2'
 
   return (
     <div className='w-full'>
@@ -87,17 +94,30 @@ export const TextField: React.FC<TextFieldProps> = ({
         </label>
       )}
 
-      {/* Input field */}
-      <input
-        type={type}
-        value={inputValue}
-        onChange={handleChange}
-        onKeyDown={onKeyDown}
-        placeholder={placeholder}
-        disabled={disabled}
-        required={required}
-        className={inputClasses}
-      />
+      {/* Input field with optional end adornment */}
+      <div className='relative'>
+        <input
+          type={type}
+          value={inputValue}
+          onChange={handleChange}
+          onKeyDown={onKeyDown}
+          placeholder={placeholder}
+          disabled={disabled}
+          required={required}
+          className={inputClasses}
+        />
+        {showSearchIcon && (
+          <button
+            type='button'
+            onClick={onSearchClick}
+            disabled={disabled}
+            aria-label='Search'
+            className='absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-300 dark:hover:text-neutral-100 focus:outline-none'
+          >
+            <i className='bx bx-search text-xl' aria-hidden='true'></i>
+          </button>
+        )}
+      </div>
 
       {/* Helper text or error message */}
       {error && <p className='mt-1 text-sm text-red-600'>{error}</p>}

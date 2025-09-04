@@ -1,5 +1,5 @@
 @import 'tailwindcss';
-
+@custom-variant dark (&:where(.dark, .dark *));
 /* Reset any conflicting styles */
 #root {
   width: 100%;

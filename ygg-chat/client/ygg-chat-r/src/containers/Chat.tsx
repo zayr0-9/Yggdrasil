@@ -1,7 +1,7 @@
 import 'boxicons' // Types
 import 'boxicons/css/boxicons.min.css'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Button, ChatMessage, Heimdall, InputTextArea, Select, SettingsPane, TextField } from '../components'
 import {
   abortStreaming,
@@ -53,6 +53,7 @@ import { getParentPath } from '../utils/path'
 function Chat() {
   const dispatch = useAppDispatch()
   const { ideContext } = useIdeContext()
+  const navigate = useNavigate()
 
   // Local state for input to completely avoid Redux dispatches during typing
   const [localInput, setLocalInput] = useState('')
@@ -264,6 +265,9 @@ function Chat() {
   const [isResizing, setIsResizing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [think, setThink] = useState<boolean>(false)
+  // One-time spin flags for icon buttons
+  const [spinSettings, setSpinSettings] = useState(false)
+  const [spinRefresh, setSpinRefresh] = useState(false)
   // Session-level delete confirmation preference and modal state
   const [confirmDel, setconfirmDel] = useState<boolean>(true)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
@@ -346,7 +350,7 @@ function Chat() {
   }, [conversationMessages, dispatch])
 
   // Auto-scroll to bottom when messages update, with refined behavior:
-  // - While streaming: only pin if the user hasn't overridden AND either near bottom or no explicit path
+  // - While streaming: keep pinned unless user scrolled away. If user returns near bottom, re-enable pinning.
   // - After streaming completes: only auto-scroll when there is no explicit selection path
   useEffect(() => {
     const container = messagesContainerRef.current
@@ -603,6 +607,24 @@ function Chat() {
     return hasValidInput && isNotSending && hasModel
   }, [localInput, sendingState.sending, streamState.active, selectedModel])
 
+  // Helper: scroll to bottom immediately using the sentinel or container fallback
+  const scrollToBottomNow = useCallback((behavior: ScrollBehavior = 'auto') => {
+    const sentinel = bottomRef.current
+    const container = messagesContainerRef.current
+    if (sentinel && typeof sentinel.scrollIntoView === 'function') {
+      sentinel.scrollIntoView({ block: 'end', inline: 'nearest', behavior })
+      return
+    }
+    if (container) {
+      if (container.scrollHeight > container.clientHeight) {
+        container.scrollTo({ top: container.scrollHeight, behavior })
+      } else if (typeof window !== 'undefined') {
+        const doc = document.scrollingElement || document.documentElement
+        window.scrollTo({ top: doc.scrollHeight, behavior })
+      }
+    }
+  }, [])
+
   const handleSend = useCallback(
     (value: number) => {
       // Process file mentions with actual content before sending
@@ -623,6 +645,8 @@ function Chat() {
         console.log('input to send', inputToSend)
         // Clear local input immediately after sending
         setLocalInput('')
+        // Immediately scroll to bottom so the user sees the outgoing message/stream start
+        scrollToBottomNow('auto')
 
         // Dispatch a single sendMessage with repeatNum set to value.
         dispatch(
@@ -638,7 +662,7 @@ function Chat() {
         console.error('📤 No conversation ID available')
       }
     },
-    [canSendLocal, currentConversationId, selectedPath, think, dispatch, localInput, replaceFileMentionsWithContent]
+    [canSendLocal, currentConversationId, selectedPath, think, dispatch, localInput, replaceFileMentionsWithContent, scrollToBottomNow]
   )
 
   const handleStopGeneration = useCallback(() => {
@@ -819,7 +843,7 @@ function Chat() {
   // incorrect parent linking that could break currentPath after branching.
 
   return (
-    <div ref={containerRef} className='flex h-screen overflow-hidden bg-gray-900 bg-neutral-50 dark:bg-neutral-900'>
+    <div ref={containerRef} className='flex h-screen overflow-hidden bg-neutral-50 dark:bg-neutral-900'>
       <div
         className='relative flex flex-col flex-none min-w-[280px] h-screen overflow-hidden'
         style={{ width: `${leftWidthPct}%` }}
@@ -828,15 +852,20 @@ function Chat() {
           {titleInput} {currentConversationId}
         </h1> */}
         {/* <h1 className='text-lg font-bold text-stone-800 dark:text-stone-200'>Title</h1> */}
-        <div className='ide-status text-neutral-900 dark:text-neutral-200'>
-          IDE: {ideContext?.extensionConnected ? 'Extension Connected' : 'Extension Disconnected'}
-          {workspace?.name && ` - ${workspace.name}`}
-        </div>
 
-        {activeFile && <div className='active-file'>📁 {activeFile.name}</div>}
+        {/* {activeFile && <div className='active-file'>📁 {activeFile.name}</div>} */}
         {/* Conversation Title Editor */}
         {currentConversationId && (
           <div className='flex items-center gap-2 mb-2 mt-2 px-2'>
+            <Button
+              variant='secondary'
+              size='medium'
+              className='transition-transform duration-100 active:scale-95'
+              aria-label='Conversations'
+              onClick={() => navigate('/conversationPage')}
+            >
+              <i className='bx bx-chat text-2xl' aria-hidden='true'></i>
+            </Button>
             <TextField
               value={titleInput}
               onChange={val => {
@@ -849,7 +878,7 @@ function Chat() {
         )}
 
         {/* Messages Display */}
-        <div className='relative ml-2 flex flex-col thin-scrollbar bg-gray-800 rounded-lg bg-neutral-50 dark:bg-neutral-900 flex-1 min-h-0'>
+        <div className='relative ml-2 flex flex-col thin-scrollbar rounded-lg bg-neutral-50 dark:bg-neutral-900 flex-1 min-h-0'>
           <div
             ref={messagesContainerRef}
             className='px-2 dark:border-neutral-700 border-b border-stone-200 rounded-lg py-4 overflow-y-auto overscroll-y-contain touch-pan-y p-3 bg-neutral-50 dark:bg-neutral-900 flex-1 min-h-0'
@@ -970,6 +999,14 @@ function Chat() {
 
               {/* <h3 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-1'>Model Selection:</h3> */}
               <div className='flex items-center gap-3 mb-3 justify-end w-full flex-wrap'>
+                <div
+                  className='ide-status text-neutral-900 max-w-2/12 dark:text-neutral-200 break-words line-clamp-2 text-right'
+                  title={workspace?.name ? `Workspace: ${workspace.name} connected` : ''}
+                >
+                  {ideContext?.extensionConnected ? '' : ''}
+                  {workspace?.name && `${workspace.name}`}
+                </div>
+
                 {/* {streamState.active && (
                   <Button
                     variant='secondary'
@@ -984,9 +1021,16 @@ function Chat() {
                   variant='secondary'
                   className='rounded-full'
                   size='medium'
-                  onClick={() => setSettingsOpen(true)}
+                  onClick={() => {
+                    setSpinSettings(true)
+                    setSettingsOpen(true)
+                  }}
                 >
-                  <i className='bx bx-cog text-xl' aria-hidden='true'></i>
+                  <i
+                    className={`bx bx-cog text-xl ${spinSettings ? 'animate-[spin_0.6s_linear_1]' : ''}`}
+                    aria-hidden='true'
+                    onAnimationEnd={() => setSpinSettings(false)}
+                  ></i>
                 </Button>
 
                 {/* <span className='text-stone-800 dark:text-stone-200 text-sm'>Available: {providers.providers.length}</span> */}
@@ -996,7 +1040,7 @@ function Chat() {
                   options={providers.providers.map(p => p.name)}
                   placeholder='Select a provider...'
                   disabled={providers.providers.length === 0}
-                  className='max-w-md'
+                  className='max-w-md transition-transform duration-60 active:scale-97'
                   searchBarVisible={true}
                 />
                 {/* <span className='text-stone-800 dark:text-stone-200 text-sm'>{models.length} models</span> */}
@@ -1006,11 +1050,23 @@ function Chat() {
                   options={models.map(m => m.name)}
                   placeholder='Select a model...'
                   disabled={models.length === 0}
-                  className='w-full max-w-xs'
+                  className='w-full max-w-xs transition-transform duration-60 active:scale-99'
                   searchBarVisible={true}
                 />
-                <Button variant='secondary' className='rounded-full' size='medium' onClick={handleRefreshModels}>
-                  <i className='bx bx-refresh text-xl' aria-hidden='true'></i>
+                <Button
+                  variant='secondary'
+                  className='rounded-full'
+                  size='medium'
+                  onClick={() => {
+                    setSpinRefresh(true)
+                    handleRefreshModels()
+                  }}
+                >
+                  <i
+                    className={`bx bx-refresh text-xl ${spinRefresh ? 'animate-[spin_0.6s_linear_1]' : ''}`}
+                    aria-hidden='true'
+                    onAnimationEnd={() => setSpinRefresh(false)}
+                  ></i>
                 </Button>
                 {selectedModel?.thinking && (
                   <Button variant='secondary' className='rounded-full' size='medium' onClick={() => setThink(t => !t)}>
@@ -1024,23 +1080,19 @@ function Chat() {
                 {!currentConversationId ? (
                   'Creating...'
                 ) : sendingState.streaming ? (
-                  <Button
-                    variant='secondary'
-                    onClick={handleStopGeneration}
-                    className='ml-2'
-                    disabled={!streamState.streamingMessageId}
-                  >
-                    Stop
+                  <Button variant='secondary' onClick={handleStopGeneration} disabled={!streamState.streamingMessageId}>
+                    <i className='bx bx-stop-circle text-xl' aria-hidden='true'></i>
                   </Button>
                 ) : sendingState.sending ? (
                   'Sending...'
                 ) : (
                   <Button
                     variant={canSendLocal && currentConversationId ? 'primary' : 'secondary'}
+                    size='medium'
                     disabled={!canSendLocal || !currentConversationId}
                     onClick={() => handleSend(multiReplyCount)}
                   >
-                    Send
+                    <i className='bx bx-send text-xl' aria-hidden='true'></i>
                   </Button>
                 )}
                 {/* <Button
@@ -1064,7 +1116,7 @@ function Chat() {
 
       {/* SEPARATOR */}
       <div
-        className='w-2 bg-neutral-300 dark:bg-neutral-700 hover:bg-neutral-400 cursor-col-resize select-none'
+        className='w-2 bg-neutral-300 dark:bg-secondary-700 hover:bg-secondary-500 cursor-col-resize select-none'
         role='separator'
         aria-orientation='vertical'
         onMouseDown={() => setIsResizing(true)}
@@ -1102,12 +1154,12 @@ function Chat() {
               Don't ask again this session
             </label>
             <div className='flex justify-end gap-2'>
-              <Button variant='secondary' onClick={closeDeleteModal}>
+              <Button variant='secondary' onClick={closeDeleteModal} className='active:scale-90'>
                 Cancel
               </Button>
               <Button
                 variant='primary'
-                className='bg-red-600 hover:bg-red-700 border-red-700 text-white'
+                className='bg-red-600 hover:bg-red-700 border-red-700 text-white active:scale-90'
                 onClick={confirmDeleteModal}
               >
                 Delete

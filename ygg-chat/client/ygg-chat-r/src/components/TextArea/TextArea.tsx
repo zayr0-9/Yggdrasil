@@ -77,7 +77,6 @@ export const TextArea: React.FC<TextAreaProps> = ({
 
       // Check if last character is '@' to show file list
       const lastChar = newValue.slice(-1)
-      console.log(lastChar)
       if (lastChar === '@') {
         setFilteredFiles(localMentionableFiles)
         setSelectedFileIndex(0)

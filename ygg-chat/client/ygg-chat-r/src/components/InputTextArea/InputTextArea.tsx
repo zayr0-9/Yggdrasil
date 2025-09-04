@@ -2,7 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { selectFocusedChatMessageId } from '../../features/chats/chatSelectors'
 import { chatSliceActions } from '../../features/chats/chatSlice'
-import { selectMentionableFiles } from '../../features/ideContext/ideContextSelectors'
+import { selectMentionableFiles, selectSelectedFilesForChat } from '../../features/ideContext/ideContextSelectors'
 import { useIdeContext } from '../../hooks/useIdeContext'
 import type { RootState } from '../../store/store'
 
@@ -52,17 +52,17 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
   const imageDrafts = useSelector((s: RootState) => s.chat.composition.imageDrafts)
   const editingBranch = useSelector((s: RootState) => s.chat.composition.editingBranch)
   const mentionableFiles = useSelector(selectMentionableFiles)
+  const selectedFilesForChat = useSelector(selectSelectedFilesForChat)
   // Local copy of mentionable files to prevent re-selecting the same file locally
   const [localMentionableFiles, setLocalMentionableFiles] = useState(mentionableFiles)
   // Merge in new files from the selector while preserving local removals
   useEffect(() => {
-    setLocalMentionableFiles(prev => {
-      if (prev.length === 0 && mentionableFiles.length > 0) return mentionableFiles
-      const prevPaths = new Set(prev.map(f => f.path))
-      const additions = mentionableFiles.filter(f => !prevPaths.has(f.path))
-      return additions.length > 0 ? [...prev, ...additions] : prev
-    })
-  }, [mentionableFiles])
+    // Drive the visible mentionable files from Redux state:
+    // exclude files that are currently selected (ideContext.selectedFilesForChat),
+    // and add them back automatically when they are removed from that list.
+    const selectedPaths = new Set(selectedFilesForChat.map(f => f.path))
+    setLocalMentionableFiles(mentionableFiles.filter(f => !selectedPaths.has(f.path)))
+  }, [mentionableFiles, selectedFilesForChat])
   const { requestFileContent } = useIdeContext()
   const id = useId()
   const errorId = `${id}-error`
@@ -212,12 +212,57 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
       .catch(err => console.error('Failed to read dropped images', err))
   }
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (state === 'disabled') return
+
+    const items = Array.from(e.clipboardData?.items || [])
+    const imageItems = items.filter(item => item.type.startsWith('image/'))
+
+    if (imageItems.length === 0) return
+
+    e.preventDefault()
+
+    Promise.all(
+      imageItems.map(async (item, index) => {
+        const file = item.getAsFile()
+        if (!file) return null
+
+        return {
+          dataUrl: await fileToDataUrl(file),
+          name: `pasted-image-${Date.now()}-${index}.${file.type.split('/')[1]}`,
+          type: file.type,
+          size: file.size,
+        }
+      })
+    )
+      .then(results => {
+        const drafts = results.filter(Boolean) as Array<{
+          dataUrl: string
+          name: string
+          type: string
+          size: number
+        }>
+
+        if (drafts.length > 0) {
+          dispatch(chatSliceActions.imageDraftsAppended(drafts))
+          if (focusedMessageId != null) {
+            dispatch(
+              chatSliceActions.messageArtifactsAppended({
+                messageId: focusedMessageId,
+                artifacts: drafts.map(d => d.dataUrl),
+              })
+            )
+          }
+        }
+      })
+      .catch(err => console.error('Failed to read pasted images', err))
+  }
+
   const handleFileSelection = async (file: { path: string; name: string; mention: string }) => {
     try {
       await requestFileContent(file.path)
-      // Remove the selected file from local mentionable list and current filtered list
-      setLocalMentionableFiles(prev => prev.filter(f => f.path !== file.path))
-      setFilteredFiles(prev => prev.filter(f => f.path !== file.path))
+      // Do not mutate local lists here; rely on ideContext.selectedFilesForChat
+      // to exclude selected files (handled by the effect above).
 
       // Replace the @ mention with just the filename
       if (textareaRef.current) {
@@ -324,6 +369,24 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
     }
   }, [showFileList])
 
+  // Keep the floating list in sync if the available files change due to selection additions/removals
+  useEffect(() => {
+    if (!showFileList) return
+    const currentValue = textareaRef.current?.value || ''
+    const atIndex = currentValue.lastIndexOf('@')
+    if (atIndex !== -1) {
+      const searchTerm = currentValue.slice(atIndex + 1).toLowerCase()
+      const filtered = localMentionableFiles.filter(
+        file => file.name.toLowerCase().includes(searchTerm) || file.path.toLowerCase().includes(searchTerm)
+      )
+      setFilteredFiles(filtered)
+      setSelectedFileIndex(0)
+      if (filtered.length === 0) setShowFileList(false)
+    } else {
+      setShowFileList(false)
+    }
+  }, [localMentionableFiles, showFileList])
+
   // const replaceFileMentionsWithContent = useCallback(
   //   (message: string): string => {
   //     if (!message || typeof message !== 'string') {
@@ -395,6 +458,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
+          onPaste={handlePaste}
           disabled={state === 'disabled'}
           // maxLength={maxLength}
           className={`${stateStyles[state]} thin-scrollbar ${dragOver ? 'border-blue-500 ring-2 ring-blue-500' : ''} ${className}`}

@@ -43,7 +43,12 @@ const ConversationPage: React.FC = () => {
   const [showEditProjectModal, setShowEditProjectModal] = useState(false)
   const [sortBy, setSortBy] = useState<'updated' | 'created' | 'name'>('updated')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-
+  const handleSearchClick = () => {
+    if (searchQuery.trim()) {
+      dispatch(searchActions.performSearch(searchQuery))
+      setDropdownOpen(true)
+    }
+  }
   // Sorting function for conversations
   const sortConversations = (
     convs: Conversation[],
@@ -158,11 +163,14 @@ const ConversationPage: React.FC = () => {
 
   return (
     <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900'>
-      <div className='px-2 pt-2 max-w-7xl mx-auto'>
-        <div className='flex items-center justify-between mb-4'>
+      <div className='px-2 pt-10 max-w-[1440px] mx-auto'>
+        <div className='flex items-center justify-between mb-8'>
           <div className='flex items-center gap-2 pt-2 mb-2'>
-            <Button variant='secondary' size='medium' onClick={() => navigate('/')}>
-              <i className='bx bx-home text-2xl' aria-hidden='true'></i>
+            <Button variant='secondary' size='medium' onClick={() => navigate('/')} className='group'>
+              <i
+                className='bx bx-home text-2xl transition-transform duration-100 group-active:scale-90 pointer-events-none'
+                aria-hidden='true'
+              ></i>
             </Button>
             <h1 className='text-5xl py-4 px-2 font-bold dark:text-neutral-100'>
               {selectedProject ? `${selectedProject.name}` : 'Conversations'}
@@ -178,17 +186,21 @@ const ConversationPage: React.FC = () => {
                 {selectedProject.context}
               </p>
             )} */}
-
-          <Button variant='primary' size='medium' onClick={handleEditProject}>
-            Project Settings
-          </Button>
         </div>
       </div>
       <div className='p-6 max-w-7xl mx-auto'>
+        <div className='mb-4 flex items-center justify-between'>
+          <h2 className='text-3xl py-4 font-bold dark:text-neutral-100'>Projects</h2>
+          <div className='flex items-center gap-2 pt-2'>
+            <Button variant='primary' size='medium' onClick={handleEditProject} className='group'>
+              <p className='transition-transform duration-100 group-active:scale-95'>Project Settings</p>
+            </Button>
+          </div>
+        </div>
         {/* New Conversation + Sort Controls + Search inline row */}
         <div className='mb-6 flex items-center gap-3'>
-          <Button variant='primary' size='large' onClick={handleNewConversation}>
-            New Conversation
+          <Button variant='primary' size='large' onClick={handleNewConversation} className='group'>
+            <p className='transition-transform duration-100 group-active:scale-95'>New Conversation</p>
           </Button>
 
           <div className='flex items-center gap-2'>
@@ -201,15 +213,18 @@ const ConversationPage: React.FC = () => {
                 { value: 'created', label: 'Created' },
                 { value: 'name', label: 'Name' },
               ]}
-              className='w-32'
+              className='w-32 transition-transform duration-70 active:scale-95'
             />
             <Button
               variant='secondary'
-              size='smaller'
+              size='medium'
               onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              className='shrink-0'
+              className='shrink-0 group'
             >
-              <i className={`bx ${sortOrder === 'asc' ? 'bx-sort-up' : 'bx-sort-down'} text-lg`} aria-hidden='true'></i>
+              <i
+                className={`bx ${sortOrder === 'asc' ? 'bx-sort-up' : 'bx-sort-down'} text-lg transition-transform duration-100 group-active:scale-90 pointer-events-none`}
+                aria-hidden='true'
+              ></i>
             </Button>
           </div>
         </div>
@@ -221,11 +236,13 @@ const ConversationPage: React.FC = () => {
             {conversations.map(conv => (
               <li
                 key={conv.id}
-                className='p-3 mb-4 bg-indigo-50 rounded-lg cursor-pointer dark:bg-secondary-700 hover:bg-indigo-100 dark:hover:bg-secondary-800'
+                className='p-3 mb-4 bg-indigo-50 rounded-lg cursor-pointer dark:bg-secondary-700 hover:bg-indigo-100 dark:hover:bg-secondary-800 group'
                 onClick={() => handleSelect(conv)}
               >
                 <div className='flex items-center justify-between'>
-                  <span className='font-semibold dark:text-neutral-100'>{conv.title || `Conversation ${conv.id}`}</span>
+                  <span className='font-semibold dark:text-neutral-100 transition-transform duration-100 group-active:scale-99'>
+                    {conv.title || `Conversation ${conv.id}`}
+                  </span>
                   <Button
                     variant='secondary'
                     size='smaller'
@@ -240,7 +257,7 @@ const ConversationPage: React.FC = () => {
                   </Button>
                 </div>
                 {conv.created_at && (
-                  <div className='text-xs text-neutral-900 dark:text-neutral-100'>
+                  <div className='text-xs text-neutral-900 dark:text-neutral-100 transition-transform duration-100 group-active:scale-99'>
                     {new Date(conv.created_at).toLocaleString()}
                   </div>
                 )}
@@ -254,6 +271,8 @@ const ConversationPage: React.FC = () => {
               value={searchQuery}
               onChange={handleSearchChange}
               onKeyDown={handleSearchKeyDown as any}
+              showSearchIcon
+              onSearchClick={handleSearchClick}
             />
 
             {/* Dropdown */}

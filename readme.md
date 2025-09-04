@@ -1,7 +1,7 @@
 # Yggdrasil
 
-Yggdrasil is a custom LLM front end built using react and node.js
-I started this project as I was frustrated with every other LLM chat front end having basically the same UI.
+Yggdrasil is a custom LLM front end/ database etc
+I started this project as I was frustrated with every LLM chat front end having basically the same UI.
 
 Humans don't think linearly like in a chat, we go off tangents, we have side conversations, we have different thoughts and ideas while working on one overarching goal. Yggdrasil aims to actualise this by allowing the user to branch their conversation and navigate through it.
 
@@ -156,3 +156,5 @@ Base path: `http://localhost:3001/api`
 - **Mobile**: potential React Native/Expo client.
 
 ## License
+
+This project is licensed under the Business Source License 1.1. See [license.md](license.md) for details.

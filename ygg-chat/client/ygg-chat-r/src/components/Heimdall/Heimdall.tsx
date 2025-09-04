@@ -508,9 +508,18 @@ export const Heimdall: React.FC<HeimdallProps> = ({
 
       // Handle zoom centered at the cursor position
       const svgEl = svgRef.current
+      // Normalize delta to pixels across browsers/devices
+      const LINE_HEIGHT = 16
+      const PAGE_HEIGHT = 800
+      const normalizeDeltaPx = (dy: number, mode: number, pageH: number): number => {
+        if (mode === 1) return dy * LINE_HEIGHT // lines -> px
+        if (mode === 2) return dy * pageH // pages -> px
+        return dy // already in px
+      }
       if (!svgEl) {
-        const deltaFallback = e.deltaY > 0 ? 0.9 : 1.1
-        setZoom(prev => Math.max(0.1, Math.min(3, prev * deltaFallback)))
+        const deltaYPx = normalizeDeltaPx(e.deltaY, e.deltaMode, PAGE_HEIGHT)
+        const scale = Math.exp(-deltaYPx * 0.001) // smooth, device-independent
+        setZoom(prev => Math.max(0.1, Math.min(3, prev * scale)))
         return
       }
 
@@ -519,8 +528,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       const cursorY = e.clientY - rect.top
 
       const currentZoom = zoomRef.current
-      const delta = e.deltaY > 0 ? 0.9 : 1.1
-      const newZoom = Math.max(0.1, Math.min(3, currentZoom * delta))
+      // Normalize deltaY using actual pixel-equivalent distance, then map via exponential scale
+      const deltaYPx = normalizeDeltaPx(e.deltaY, e.deltaMode, rect.height)
+      const scale = Math.exp(-deltaYPx * 0.001) // smaller factor => less sensitive
+      const newZoom = Math.max(0.1, Math.min(3, currentZoom * scale))
 
       // No change
       if (newZoom === currentZoom) return
@@ -1039,7 +1050,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 fill='none'
                 stroke='currentColor'
                 strokeWidth='3'
-                className='animate-pulse-slow stroke-rose-300 dark:stroke-slate-100'
+                className='animate-pulse-slow stroke-rose-300 dark:stroke-yPurple-50 transition-colors duration-300 '
               />
             )}
             {/* Selection highlight */}
@@ -1092,7 +1103,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
             />
             <foreignObject width={nodeWidth} height={nodeHeight} style={{ pointerEvents: 'none', userSelect: 'none' }}>
               <div className='p-3 text-stone-800 dark:text-stone-200 text-sm h-full flex items-center'>
-                <p className='line-clamp-3'>{node.message}</p>
+                <p className='line-clamp-3 '>{node.message}</p>
               </div>
             </foreignObject>
           </motion.g>
@@ -1269,21 +1280,21 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       <div className='absolute top-4 left-4 z-10 flex gap-2'>
         <button
           onClick={zoomIn}
-          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-amber-100 dark:hover:bg-neutral-500 dark:bg-neutral-700 transition-colors'
+          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-amber-100 dark:hover:bg-neutral-500 dark:bg-neutral-700 transition-colors active:scale-90'
           title='Zoom In'
         >
           <ZoomIn size={20} />
         </button>
         <button
           onClick={zoomOut}
-          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-amber-100 dark:hover:bg-neutral-500 dark:bg-neutral-700 transition-colors'
+          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-amber-100 dark:hover:bg-neutral-500 dark:bg-neutral-700 transition-colors active:scale-90'
           title='Zoom Out'
         >
           <ZoomOut size={20} />
         </button>
         <button
           onClick={resetView}
-          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-amber-100 dark:hover:bg-neutral-500 dark:bg-neutral-700 transition-colors'
+          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-amber-100 dark:hover:bg-neutral-500 dark:bg-neutral-700 transition-colors active:scale-90'
           title='Reset View'
         >
           <RotateCcw size={20} />
@@ -1292,7 +1303,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
           onClick={() => {
             dispatch(chatSliceActions.heimdallCompactModeToggled())
           }}
-          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-amber-100 dark:hover:bg-neutral-500 dark:bg-neutral-700 transition-colors'
+          className='p-2 bg-amber-50 text-stone-800 dark:text-stone-200 rounded-lg hover:bg-amber-100 dark:hover:bg-neutral-500 dark:bg-neutral-700 transition-colors active:scale-90'
           title='Toggle Compact Mode'
         >
           {compactMode ? 'Compact' : 'Full'}

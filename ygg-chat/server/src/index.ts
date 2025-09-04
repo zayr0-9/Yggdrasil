@@ -42,7 +42,6 @@ wss.on('connection', (ws, request) => {
   ws.on('message', data => {
     try {
       const message = JSON.parse(data.toString())
-      console.log(`📨 Message from ${client.type}:`, message.type)
 
       // Relay messages from extension to all frontend clients
       if (client.type === 'extension') {
@@ -51,13 +50,7 @@ wss.on('connection', (ws, request) => {
           // Normalize requestId to be present at the top-level if available in data
           requestId: message.requestId ?? message.data?.requestId,
         }
-        console.log(
-          `🔄 index.ts --- Relaying ${message.type} from extension to frontend clients`,
-          {
-            requestIdTopLevel: outgoing.requestId,
-            requestIdInData: message.data?.requestId,
-          }
-        )
+
         clients.forEach(c => {
           if (c.type === 'frontend' && c.ws.readyState === c.ws.OPEN) {
             c.ws.send(JSON.stringify(outgoing))
@@ -71,9 +64,6 @@ wss.on('connection', (ws, request) => {
           const extensionClients = Array.from(clients).filter(
             c => c.type === 'extension' && c.ws.readyState === c.ws.OPEN
           )
-          console.log(`📤 Forwarding context request to ${extensionClients.length} extensions`, {
-            requestId: message.requestId,
-          })
 
           clients.forEach(c => {
             if (c.type === 'extension' && c.ws.readyState === c.ws.OPEN) {
@@ -104,14 +94,9 @@ wss.on('connection', (ws, request) => {
             )
           }
         } else if (message.type === 'request_file_content') {
-          console.log(`📤 Forwarding file request to extensions`, {
-            requestId: message.requestId,
-            path: message.data.path,
-          })
           const extensionClients = Array.from(clients).filter(
             c => c.type === 'extension' && c.ws.readyState === c.ws.OPEN
           )
-          console.log(`🔌 Found ${extensionClients.length} connected extensions`)
 
           clients.forEach(c => {
             if (c.type === 'extension' && c.ws.readyState === c.ws.OPEN) {
