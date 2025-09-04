@@ -103,12 +103,6 @@ export const fetchModels = createAsyncThunk(
         default: state.chat.models.default || state.chat.models.available[0],
       }
     }
-    /* 
-    Redux operates on a principle called "unidirectional data flow,"  
-    You cannot directly modify the Redux store state instead, you must send actions 
-    through the dispatch function, which then forwards them to the 
-    appropriate reducers.
-    */
 
     dispatch(chatSliceActions.modelsLoadingStarted())
 
@@ -172,9 +166,14 @@ export const fetchOpenAIModels = createAsyncThunk(
     dispatch(chatSliceActions.modelsLoadingStarted())
 
     try {
-      const payload = await apiCall<ModelsResponse>('/models/openai')
-      dispatch(chatSliceActions.modelsLoaded(payload))
-      return payload
+      const response = await apiCall<{ models: string[]; default: string }>('/models/openai')
+      // Convert string arrays to Model objects (same as in fetchModels)
+      const convertedResponse: ModelsResponse = {
+        models: response.models.map(stringToModel),
+        default: stringToModel(response.default),
+      }
+      dispatch(chatSliceActions.modelsLoaded(convertedResponse))
+      return convertedResponse
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch OpenAI models'
       dispatch(chatSliceActions.modelsError(message))
