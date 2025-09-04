@@ -1,7 +1,5 @@
 ![Banner](docs/assets/images/banner2.png)
 
-# Yggdrasil
-
 **The first AI interface designed for parallel workflows with branches.**
 
 While existing interfaces support editing messages and branching from them, Yggdrasil elevates this concept to its core philosophy. Built for humans first, AI second.
@@ -19,13 +17,14 @@ Yggdrasil embraces this natural thinking pattern by encouraging you to branch of
 ## Tree Navigation with Heimdall
 
 As tangents lead to additional questions and even more branches, Yggdrasil incorporates **Heimdall**—a sophisticated tree navigation system that visualizes and manages your entire conversation structure.
-<video src="docs/assets/videos/heimdall.mp4" controls playsinline muted loop width="800"></video>
+
+https://github.com/user-attachments/assets/92b94a36-7381-4b0e-a03c-6a1fae131189
 
 ### Core Principles
 
 **Every Edit is a Branch**
 
-<video src="docs/assets/videos/branching.mp4" controls playsinline muted loop width="800"></video>
+https://github.com/user-attachments/assets/84d755ea-6776-4e9d-bf08-f10490e2a965
 
 - Preserves an accurate log of every message sent and received
 - No conversation history is ever lost
@@ -39,7 +38,7 @@ As tangents lead to additional questions and even more branches, Yggdrasil incor
 
 **Comprehensive Search**
 
-<video src="docs/assets/videos/search.mp4" controls playsinline muted loop width="800"></video>
+<video width="330" height="300" src="https://github.com/user-attachments/assets/28e665dc-c122-46e9-afbc-67709565a19d"></video>
 
 - Search throughout your entire user database and chat history
 - Find and navigate any conversation or insight instantly
@@ -73,9 +72,12 @@ The companion VS Code extension provides seamless workspace integration:
 - Insert file contents into chat using the `@` symbol
 - Bridge the gap between coding and AI assistance
 
-![extension-1](docs/assets/images/extension-1.png)
-![extension-2](docs/assets/images/extension-2.png)
-<video src="docs/assets/videos/output_chip.mp4" controls playsinline muted loop width="800"></video>
+<p align="start">
+  <img src="docs/assets/images/extension-1.png" alt="Extension 1" width="460">
+  <img src="docs/assets/images/extension-2.png" alt="Extension 2" width="460">
+</p>
+
+https://github.com/user-attachments/assets/a3020b22-6148-4389-9bc8-54942c6e7eb2
 
 ## The Vision Behind Yggdrasil
 
@@ -167,7 +169,7 @@ npm run dev
 
 Server base URL: `http://localhost:3001/api`
 
-####Open your browser to `http://localhost:5173` to access the chat UI.
+#### Open your browser to `http://localhost:5173` to access the chat UI.
 
 ## Usage
 
