@@ -15,13 +15,11 @@ import {
 } from '../features/projects'
 import { searchActions, selectSearchLoading, selectSearchQuery, selectSearchResults } from '../features/search'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
-import { useIdeContext } from '../hooks/useIdeContext'
 import EditProject from './EditProject'
 
 const Homepage: React.FC = () => {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
-  const { requestContext } = useIdeContext()
 
   const allProjects = useAppSelector<Project[]>(selectAllProjects)
   const loading = useAppSelector(selectProjectsLoading)
