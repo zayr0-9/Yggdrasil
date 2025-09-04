@@ -198,4 +198,4 @@ Server base URL: `http://localhost:3001/api`
 
 ## License
 
-This project is licensed under the Business Source License 1.1. See [license.md](license.md) for details.
+This project is licensed under the Yggdrasil License 2.0. See [license.md](license.md) for details.
