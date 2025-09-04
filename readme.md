@@ -136,7 +136,7 @@ Yggdrasil/
 #### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/zayr0-9/Yggdrasil.git
 cd Yggdrasil/ygg-chat
 ```
 
@@ -148,7 +148,7 @@ to update and run, use update_start_yggdrasil.bat
 #### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/zayr0-9/Yggdrasil.git
 cd Yggdrasil/ygg-chat
 ```
 
