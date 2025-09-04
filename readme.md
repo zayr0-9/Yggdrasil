@@ -102,9 +102,11 @@ This creates cleaner, more focused learning experiences.
 
 Our back-and-forth conversations with AI systems generate valuable data that's currently being wasted. Yggdrasil's mission is to help users better visualize and manage this conversation data, transforming ephemeral chat into persistent, navigable knowledge structures.
 
----
+## Future
 
-_Yggdrasil: Where human thinking patterns meet AI capability through intelligent conversation trees._
+Yggdrasil seeks to continue development into a planning and orchestration tool for AI workflows.
+
+---
 
 ## Prerequisites
 
@@ -128,6 +130,13 @@ Yggdrasil/
 ## Getting Started
 
 ### automatic install:
+
+#### 1. Clone the repository
+
+```bash
+git clone <your-repo-url>
+cd Yggdrasil/ygg-chat
+```
 
 to install and start run start_yggdrasil.bat
 to update and run, use update_start_yggdrasil.bat
@@ -182,7 +191,7 @@ Server base URL: `http://localhost:3001/api`
 - **Export**: export conversations/trees with attachments.
 - **Attachments**: more attachment types.
 - **Fuzzy search**
--
+- **RAG**
 - **Mobile**: potential React Native/Expo client.
 
 ## License
