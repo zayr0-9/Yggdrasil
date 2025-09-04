@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/84d755ea-6776-4e9d-bf08-f10490e2a965
 
 **Comprehensive Search**
 
-<video width="330" height="300" src="https://github.com/user-attachments/assets/28e665dc-c122-46e9-afbc-67709565a19d"></video>
+https://github.com/user-attachments/assets/28e665dc-c122-46e9-afbc-67709565a19d
 
 - Search throughout your entire user database and chat history
 - Find and navigate any conversation or insight instantly

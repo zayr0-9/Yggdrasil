@@ -19,11 +19,12 @@ export async function generateResponse(
 
   const imageAtts = (attachments || []).filter(a => a.filePath)
   if (imageAtts.length > 0) {
-    // Convert ALL messages to structured content parts to satisfy AI SDK validator
-    formattedMessages = formattedMessages.map((m: any) => ({
-      role: m.role,
-      content: [{ type: 'text', text: String(m.content || '') }],
-    }))
+    // Convert user/assistant to structured content parts; keep system as plain string per AI SDK rules
+    formattedMessages = formattedMessages.map((m: any) =>
+      m.role === 'system'
+        ? { role: m.role, content: String(m.content || '') }
+        : { role: m.role, content: [{ type: 'text', text: String(m.content || '') }] }
+    )
 
     // Find last user message index
     let lastUserIdx = -1

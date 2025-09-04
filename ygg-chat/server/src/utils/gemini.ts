@@ -19,11 +19,12 @@ export async function generateResponse(
 
   const imageAtts = (attachments || []).filter(a => a.filePath)
   if (imageAtts.length > 0) {
-    // Convert ALL messages to structured content parts to satisfy AI SDK validator
-    formattedMessages = formattedMessages.map((m: any) => ({
-      role: m.role,
-      content: [{ type: 'text', text: String(m.content || '') }],
-    }))
+    // Convert user/assistant to structured parts; keep system as plain string per AI SDK requirements
+    formattedMessages = formattedMessages.map((m: any) =>
+      m.role === 'system'
+        ? { role: m.role, content: String(m.content || '') }
+        : { role: m.role, content: [{ type: 'text', text: String(m.content || '') }] }
+    )
 
     // Find last user message index
     let lastUserIdx = -1
@@ -62,8 +63,8 @@ export async function generateResponse(
         }
         const buf = fs.readFileSync(abs)
         const mediaType = att.mimeType || 'image/jpeg'
-        // Use AI SDK image part shape for Google provider
-        parts.push({ type: 'image', image: buf, mediaType })
+        // Use unified file part; AI SDK will translate to provider-specific format
+        parts.push({ type: 'file', data: buf, mediaType })
       } catch {
         // Ignore failed attachment read
       }
