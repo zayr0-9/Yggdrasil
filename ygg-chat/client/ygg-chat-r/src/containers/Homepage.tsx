@@ -15,12 +15,13 @@ import {
 } from '../features/projects'
 import { searchActions, selectSearchLoading, selectSearchQuery, selectSearchResults } from '../features/search'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
+import { useIdeContext } from '../hooks/useIdeContext'
 import EditProject from './EditProject'
 
 const Homepage: React.FC = () => {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
-  // const { requestContext } = useIdeContext()
+  const { requestContext } = useIdeContext()
 
   const allProjects = useAppSelector<Project[]>(selectAllProjects)
   const loading = useAppSelector(selectProjectsLoading)
@@ -79,20 +80,13 @@ const Homepage: React.FC = () => {
     // Context is now requested automatically on WebSocket connection
   }, [dispatch])
 
-  // Apply theme to document and respect system preference when selected
+  // Apply theme immediately when user toggles preference; global manager in main.tsx
+  // handles system theme changes and cross-page updates.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const apply = () => {
-      const isDark = themeMode === 'dark' || (themeMode === 'system' && media.matches)
-      document.documentElement.classList.toggle('dark', isDark)
-    }
-    apply()
-
-    if (themeMode === 'system') {
-      media.addEventListener?.('change', apply)
-      return () => media.removeEventListener?.('change', apply)
-    }
+    const isDark = themeMode === 'dark' || (themeMode === 'system' && media.matches)
+    document.documentElement.classList.toggle('dark', isDark)
   }, [themeMode])
 
   // Persist preference: remove key for system, set explicit for light/dark

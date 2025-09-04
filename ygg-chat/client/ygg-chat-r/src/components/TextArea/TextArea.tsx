@@ -387,7 +387,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
         {showFileList && filteredFiles.length > 0 && (
           <div
             ref={listRef}
-            className='absolute z-50 mb-1 w-80 max-h-60 overflow-y-auto bg-gray-800 border border-gray-600 rounded-lg shadow-lg'
+            className='absolute z-50 mb-1 w-80 max-h-60 overflow-y-auto dark:bg-secondary-600 bg-slate-50 border border-gray-600 rounded-lg shadow-lg thin-scrollbar'
             style={{
               bottom: dropdownDirection === 'up' ? '100%' : undefined,
               top: dropdownDirection === 'down' ? '100%' : undefined,
@@ -399,7 +399,9 @@ export const TextArea: React.FC<TextAreaProps> = ({
               <div
                 key={file.path}
                 className={`px-3 py-2 cursor-pointer text-sm border-b border-gray-700 last:border-b-0 ${
-                  index === selectedFileIndex ? 'bg-blue-600 text-white' : 'text-stone-200 hover:bg-gray-700'
+                  index === selectedFileIndex
+                    ? 'bg-slate-200 dark:bg-secondary-800 text-stone-800 dark:text-stone-200'
+                    : 'text-stone-800 dark:text-stone-200'
                 }`}
                 onClick={() => handleFileSelection(file)}
                 onMouseEnter={() => setSelectedFileIndex(index)}

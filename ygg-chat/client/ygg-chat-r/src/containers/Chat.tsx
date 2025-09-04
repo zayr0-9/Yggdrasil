@@ -42,11 +42,7 @@ import {
   systemPromptSet,
 } from '../features/conversations'
 import { removeSelectedFileForChat, updateIdeContext } from '../features/ideContext'
-import {
-  selectActiveFile,
-  selectSelectedFilesForChat,
-  selectWorkspace,
-} from '../features/ideContext/ideContextSelectors'
+import { selectSelectedFilesForChat, selectWorkspace } from '../features/ideContext/ideContextSelectors'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
 import { useIdeContext } from '../hooks/useIdeContext'
 import { getParentPath } from '../utils/path'
@@ -75,7 +71,7 @@ function Chat() {
   // const ideContext = useAppSelector(selectIdeContext)
   const workspace = useAppSelector(selectWorkspace)
   // const isIdeConnected = useAppSelector(selectIsIdeConnected)
-  const activeFile = useAppSelector(selectActiveFile)
+  // const activeFile = useAppSelector(selectActiveFile)
   const selectedFilesForChat = useAppSelector(selectSelectedFilesForChat)
 
   // File chip expanded modal state
@@ -662,7 +658,16 @@ function Chat() {
         console.error('📤 No conversation ID available')
       }
     },
-    [canSendLocal, currentConversationId, selectedPath, think, dispatch, localInput, replaceFileMentionsWithContent, scrollToBottomNow]
+    [
+      canSendLocal,
+      currentConversationId,
+      selectedPath,
+      think,
+      dispatch,
+      localInput,
+      replaceFileMentionsWithContent,
+      scrollToBottomNow,
+    ]
   )
 
   const handleStopGeneration = useCallback(() => {
