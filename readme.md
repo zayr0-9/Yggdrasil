@@ -108,6 +108,10 @@ Our back-and-forth conversations with AI systems generate valuable data that's c
 
 Yggdrasil seeks to continue development into a planning and orchestration tool for AI workflows.
 
+## Current Status
+
+Yggdrasil is currently in beta and actively being developed. If you encounter any bug or have a feature request, please open an issue on GitHub.
+
 ---
 
 ## Prerequisites
