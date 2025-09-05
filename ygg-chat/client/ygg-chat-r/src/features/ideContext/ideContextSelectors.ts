@@ -19,7 +19,7 @@ export const selectAllFiles = (state: RootState) => state.ideContext.allFiles
 export const selectMentionableFiles = createSelector([selectAllFiles], allFiles =>
   allFiles.map(path => ({
     path,
-    name: path.split('/').pop() || path,
+    name: path.split(/[\\/]/).pop() || path,
     mention: `@${path}`,
   }))
 )
