@@ -77,6 +77,8 @@ The companion VS Code extension provides seamless workspace integration:
   <img src="docs/assets/images/extension-2.png" alt="Extension 2" width="460">
 </p>
 
+Get the extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=YggdrasilAI97.yggdrasil-extension).
+
 https://github.com/user-attachments/assets/a3020b22-6148-4389-9bc8-54942c6e7eb2
 
 ## The Vision Behind Yggdrasil
