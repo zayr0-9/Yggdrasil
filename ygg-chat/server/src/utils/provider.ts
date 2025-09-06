@@ -4,8 +4,9 @@ import { generateResponse as anthropicGenerate } from './anthropic'
 import { generateResponse as geminiGenerate } from './gemini'
 import { generateResponse as ollamaGenerate } from './ollama'
 import { generateResponse as openaiGenerate } from './openai'
+import { generateResponse as openrouterGenerate } from './openrouter'
 
-export type ProviderType = 'ollama' | 'gemini' | 'anthropic' | 'openai'
+export type ProviderType = 'ollama' | 'gemini' | 'anthropic' | 'openai' | 'openrouter'
 
 function getProviderModel(provider: ProviderType, model?: string): string {
   switch (provider) {
@@ -17,6 +18,8 @@ function getProviderModel(provider: ProviderType, model?: string): string {
       return model || 'claude-3-5-sonnet-latest' // Respect client-selected Anthropic model, default to Claude 3.5 Sonnet
     case 'openai':
       return model || 'gpt-4o' // Respect client-selected OpenAI model, default to gpt-4o
+    case 'openrouter':
+      return model || 'openrouter/auto' // Respect client-selected OpenRouter model, default to auto selection
     default:
       throw new Error(`Unknown provider: ${provider}`)
   }
@@ -121,6 +124,11 @@ export async function generateResponse(
     }
     case 'openai':
       return openaiGenerate(aiSdkForOpenAI, onChunk, providerModel)
+    case 'openrouter': {
+      // Forward attachments for OpenRouter (AI SDK OpenAI adapter will translate file parts)
+      const orAttachments = (attachments || []).map(a => ({ mimeType: a.mimeType, filePath: a.filePath }))
+      return openrouterGenerate(aiSdkForOpenAI, onChunk, providerModel, orAttachments, abortSignal, think)
+    }
     default:
       throw new Error(`Unknown provider: ${provider}`)
   }
