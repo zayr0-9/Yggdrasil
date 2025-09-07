@@ -42,6 +42,14 @@ function formatEnvFile(envVars: Record<string, string>): string {
     .join('\n') + '\n'
 }
 
+// Default API keys that should always be present
+const DEFAULT_API_KEYS = {
+  GOOGLE_GENERATIVE_AI_API_KEY: '',
+  ANTHROPIC_API_KEY: '',
+  OPENAI_API_KEY: '',
+  OPENROUTER_API_KEY: ''
+}
+
 // GET /api/settings/env - Read current .env file
 router.get(
   '/env',
@@ -50,12 +58,15 @@ router.get(
       if (!fs.existsSync(ENV_PATH)) {
         // Create empty .env file if it doesn't exist
         fs.writeFileSync(ENV_PATH, '')
-        return res.json({})
+        return res.json(DEFAULT_API_KEYS)
       }
       
       const content = fs.readFileSync(ENV_PATH, 'utf-8')
       const envVars = parseEnvFile(content)
-      res.json(envVars)
+      
+      // Ensure default API keys are always present
+      const result = { ...DEFAULT_API_KEYS, ...envVars }
+      res.json(result)
     } catch (error) {
       console.error('Error reading .env file:', error)
       res.status(500).json({ error: 'Failed to read .env file' })
@@ -83,7 +94,10 @@ router.put(
         }
       }
       
-      const content = formatEnvFile(envVars)
+      // Ensure default API keys are always included
+      const finalEnvVars = { ...DEFAULT_API_KEYS, ...envVars }
+      
+      const content = formatEnvFile(finalEnvVars)
       fs.writeFileSync(ENV_PATH, content)
       
       res.json({ success: true, message: 'Environment variables updated successfully' })
