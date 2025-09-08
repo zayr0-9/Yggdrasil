@@ -149,9 +149,9 @@ const ConversationPage: React.FC = () => {
       <div className='px-2 pt-10 max-w-[1440px] mx-auto'>
         <div className='flex items-center justify-between mb-8'>
           <div className='flex items-center gap-2 pt-2 mb-2'>
-            <Button variant='secondary' size='medium' onClick={() => navigate('/')} className='group'>
+            <Button variant='secondary' rounded='full' size='circle' onClick={() => navigate('/')} className='group'>
               <i
-                className='bx bx-home text-2xl transition-transform duration-100 group-active:scale-90 pointer-events-none'
+                className='bx bx-home text-3xl pb-0.5 transition-transform duration-100 group-active:scale-90 pointer-events-none'
                 aria-hidden='true'
               ></i>
             </Button>

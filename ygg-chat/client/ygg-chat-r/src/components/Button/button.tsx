@@ -8,7 +8,7 @@ type ButtonProps = Omit<
   className?: string
   children: React.ReactNode
   variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'outline2'
-  size?: 'smaller' | 'small' | 'medium' | 'large'
+  size?: 'smaller' | 'small' | 'medium' | 'large' | 'circle'
   disabled?: boolean
   onClick?: () => void
   type?: 'button' | 'submit' | 'reset'
@@ -48,6 +48,7 @@ export const Button: React.FC<ButtonProps> = ({
     small: 'px-3 py-1.5 text-sm',
     medium: 'px-3 py-2 text-base',
     large: 'px-4 py-3 text-lg',
+    circle: 'px-3 py-3 text-lg',
   }
 
   // Disabled styles override other styles when button is disabled

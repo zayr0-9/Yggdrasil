@@ -608,9 +608,27 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     if (!container) return
 
     const handleWheel = (e: globalThis.WheelEvent) => {
-      // Prevent default scrolling behavior
-      e.preventDefault()
-      e.stopPropagation()
+      // If the wheel event originates inside an element that should allow native scrolling
+      // (e.g., the search dropdown list), do NOT hijack it for zooming.
+      const cont = containerRef.current
+      if (cont) {
+        let el = e.target as Node | null
+        while (el && el !== cont) {
+          if (el instanceof HTMLElement && el.dataset?.heimdallWheelExempt === 'true') {
+            // Let the inner element handle its own scrolling
+            return
+          }
+          el = (el as HTMLElement).parentElement
+        }
+      }
+
+      // Prevent default scrolling behavior and handle zoom instead
+      try {
+        e.preventDefault()
+      } catch {}
+      try {
+        e.stopPropagation()
+      } catch {}
 
       // Handle zoom centered at the cursor position
       const svgEl = svgRef.current
@@ -1430,7 +1448,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
             className='bg-amber-50 dark:bg-neutral-700'
           />
           {searchOpen && searchQuery.trim() && (
-            <div className='absolute right-0 mt-1 w-full max-h-72 overflow-auto rounded-md shadow-lg border border-stone-200 bg-white dark:bg-neutral-800 dark:border-neutral-700 z-20'>
+            <div
+              className='absolute right-0 mt-1 w-full max-h-72 overflow-auto rounded-md shadow-lg border border-stone-200 bg-white dark:bg-neutral-900 dark:border-secondary-500 z-20 thin-scrollbar'
+              data-heimdall-wheel-exempt='true'
+            >
               {filteredResults.length === 0 ? (
                 <div className='px-3 py-2 text-sm text-neutral-500 dark:text-neutral-300'>No matches</div>
               ) : (
@@ -1454,7 +1475,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                             setSearchQuery('')
                           }}
                           onMouseEnter={() => setSearchHoverIndex(idx)}
-                          className={`w-full text-left px-3 py-2 hover:bg-stone-100 dark:hover:bg-neutral-700 ${
+                          className={`w-full text-left px-3 py-2 hover:bg-stone-100 dark:hover:bg-secondary-800 ${
                             idx === searchHoverIndex ? 'bg-stone-100 dark:bg-neutral-700' : ''
                           }`}
                         >
