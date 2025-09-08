@@ -336,6 +336,17 @@ router.get(
   })
 )
 
+// Get recent user conversations (limit via ?limit=number, default 10)
+router.get(
+  '/users/:userId/conversations/recent',
+  asyncHandler(async (req, res) => {
+    const userId = parseInt(req.params.userId)
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10
+    const conversations = ConversationService.getRecentByUser(userId, limit)
+    res.json(conversations)
+  })
+)
+
 //get conversation by projectID
 router.get(
   '/conversations/project/:projectId',

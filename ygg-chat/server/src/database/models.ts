@@ -327,6 +327,11 @@ export class ConversationService {
     return statements.getConversationsByUser.all(userId) as Conversation[]
   }
 
+  static getRecentByUser(userId: number, limit: number): Conversation[] {
+    const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10))
+    return statements.getRecentConversationsByUser.all(userId, safeLimit) as Conversation[]
+  }
+
   static getByProjectId(id: number): Conversation[] {
     return statements.getConversationByProjectId.all(id) as Conversation[]
   }

@@ -7,6 +7,11 @@ export const selectAllConversations = createSelector([selectConvState], state =>
 export const selectConvLoading = createSelector([selectConvState], state => state.loading)
 export const selectConvError = createSelector([selectConvState], state => state.error)
 
+// Recent conversations selectors
+export const selectRecentConversations = createSelector([selectConvState], state => state.recent.items)
+export const selectRecentLoading = createSelector([selectConvState], state => state.recent.loading)
+export const selectRecentError = createSelector([selectConvState], state => state.recent.error)
+
 // Selector to get a conversation by id
 export const makeSelectConversationById = (id: number) =>
   createSelector([selectAllConversations], conversations => conversations.find(c => c.id === id))

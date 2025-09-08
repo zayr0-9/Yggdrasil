@@ -1,6 +1,13 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { updateConversationTitle } from '../chats'
-import { createConversation, deleteConversation, fetchConversations, fetchConversationsByProjectId, updateConversation } from './conversationActions'
+import {
+  createConversation,
+  deleteConversation,
+  fetchConversations,
+  fetchConversationsByProjectId,
+  fetchRecentConversations,
+  updateConversation,
+} from './conversationActions'
 import { Conversation, ConversationsState } from './conversationTypes'
 
 const initialState: ConversationsState = {
@@ -10,6 +17,11 @@ const initialState: ConversationsState = {
   activeConversationId: null,
   systemPrompt: null,
   convContext: null,
+  recent: {
+    items: [],
+    loading: false,
+    error: null,
+  },
 }
 
 const conversationSlice = createSlice({
@@ -60,6 +72,19 @@ const conversationSlice = createSlice({
       .addCase(fetchConversationsByProjectId.rejected, (state, action) => {
         state.loading = false
         state.error = action.payload as string
+      })
+      // fetch recent
+      .addCase(fetchRecentConversations.pending, state => {
+        state.recent.loading = true
+        state.recent.error = null
+      })
+      .addCase(fetchRecentConversations.fulfilled, (state, action: PayloadAction<Conversation[]>) => {
+        state.recent.loading = false
+        state.recent.items = action.payload
+      })
+      .addCase(fetchRecentConversations.rejected, (state, action) => {
+        state.recent.loading = false
+        state.recent.error = action.payload as string
       })
       // create conversation
       .addCase(createConversation.pending, state => {

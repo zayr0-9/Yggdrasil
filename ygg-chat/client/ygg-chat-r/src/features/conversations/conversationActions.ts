@@ -32,6 +32,25 @@ export const fetchConversations = createAsyncThunk<Conversation[], void, { state
   }
 )
 
+// Fetch recent conversations for current user with limit
+export const fetchRecentConversations = createAsyncThunk<Conversation[], { limit?: number }, { state: RootState }>(
+  'conversations/fetchRecent',
+  async ({ limit = 10 } = {}, { getState, rejectWithValue }) => {
+    try {
+      const state = getState()
+      let userId = state.users.currentUser?.id
+      if (!userId) {
+        const user = await api.post<{ id: number }>('/users', { username: 'homepage-user' })
+        userId = user.id
+      }
+      const query = new URLSearchParams({ limit: String(limit) }).toString()
+      return await api.get<Conversation[]>(`/users/${userId}/conversations/recent?${query}`)
+    } catch (err) {
+      return rejectWithValue(err instanceof Error ? err.message : 'Failed to fetch recent conversations')
+    }
+  }
+)
+
 // Fetch conversations by project ID
 export const fetchConversationsByProjectId = createAsyncThunk<Conversation[], number, { state: RootState }>(
   'conversations/fetchByProjectId',

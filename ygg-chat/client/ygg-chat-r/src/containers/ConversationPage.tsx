@@ -26,6 +26,7 @@ import {
 } from '../features/search'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
 import EditProject from './EditProject'
+import SideBar from './sideBar'
 
 const ConversationPage: React.FC = () => {
   const dispatch = useAppDispatch()
@@ -146,6 +147,8 @@ const ConversationPage: React.FC = () => {
 
   return (
     <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900'>
+      {/* Recent conversations sidebar - fixed and above all content */}
+      <SideBar limit={8} className='fixed left-2 top-89 z-50' />
       <div className='px-2 pt-10 max-w-[1440px] mx-auto'>
         <div className='flex items-center justify-between mb-8'>
           <div className='flex items-center gap-2 pt-2 mb-2'>

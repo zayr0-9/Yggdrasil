@@ -269,6 +269,10 @@ export function initializeStatements() {
       'INSERT INTO conversations (user_id, title, model_name, project_id) VALUES (?, ?, ?, ?)'
     ),
     getConversationsByUser: db.prepare('SELECT * FROM conversations WHERE user_id = ? ORDER BY updated_at DESC'),
+    // Get recent conversations for a user limited by count
+    getRecentConversationsByUser: db.prepare(
+      'SELECT * FROM conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?'
+    ),
     getConversationById: db.prepare('SELECT * FROM conversations WHERE id = ?'),
     getConversationSystemPrompt: db.prepare('SELECT system_prompt FROM conversations WHERE id = ?'),
     updateConversationTitle: db.prepare(
