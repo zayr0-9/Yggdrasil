@@ -54,7 +54,6 @@ export function useIdeContext(): UseIdeContextReturn {
       // Debounce context requests to prevent spam
       const now = Date.now()
       if (now - lastContextRequestTs < 1000) {
-        console.log('🚫 Context request debounced')
         return
       }
 
@@ -62,10 +61,6 @@ export function useIdeContext(): UseIdeContextReturn {
       // Generate unique requestId even if multiple calls in the same ms
       requestSeq = (requestSeq + 1) % 1000
       const requestId = now * 1000 + requestSeq
-      console.log('➡️ Sending request_context (requestContext)', {
-        requestId,
-        wsReadyState: globalWebSocket.readyState,
-      })
       globalWebSocket.send(
         JSON.stringify({
           type: 'request_context',
@@ -76,7 +71,6 @@ export function useIdeContext(): UseIdeContextReturn {
 
       // Set timeout to mark extension as disconnected if no response
       const timeoutId = setTimeout(() => {
-        console.log('⚠️ No context response received for requestId', requestId, '- extension may be disconnected')
         dispatch(setExtensionStatus(false))
         contextRequestTimeoutsGlobal.delete(requestId)
       }, 10000)
@@ -142,14 +136,12 @@ export function useIdeContext(): UseIdeContextReturn {
   const connect = () => {
     // Prevent multiple simultaneous connection attempts
     if (isConnecting || (globalWebSocket && globalWebSocket.readyState === WebSocket.CONNECTING)) {
-      console.log('🔌 Connection already in progress, skipping')
       return
     }
 
     try {
       isConnecting = true
       const websocketUrl = 'ws://localhost:3001/ide-context?type=frontend&id=ygg-chat'
-      console.log('🔌 Attempting to connect to IDE Context:', websocketUrl)
       globalWebSocket = new WebSocket(websocketUrl)
 
       // Add a connection timeout
@@ -165,10 +157,8 @@ export function useIdeContext(): UseIdeContextReturn {
         isConnecting = false
         updateConnectionStatus(true)
         connectionAttempts = 0
-        console.log('✅ IDE Context WebSocket connected successfully')
 
         // Auto-request context on new connection to sync state
-        console.log('✅ IDE Context WebSocket ready - requesting context to sync state')
 
         // Delay the context request slightly to ensure connection is stable
         setTimeout(() => {
@@ -180,8 +170,6 @@ export function useIdeContext(): UseIdeContextReturn {
       globalWebSocket.onmessage = event => {
         try {
           const message = JSON.parse(event.data)
-
-          console.log('📥 Received message from extension:', message.type, { hasData: !!message.data })
 
           if (!globalDispatch) {
             console.warn('⚠️ globalDispatch not available, skipping message processing')
@@ -200,20 +188,13 @@ export function useIdeContext(): UseIdeContextReturn {
                 const tid = contextRequestTimeoutsGlobal.get(responseRequestId)!
                 clearTimeout(tid)
                 contextRequestTimeoutsGlobal.delete(responseRequestId)
-                console.log('✅ Context response received - cleared timeout for requestId', responseRequestId)
               } else if (contextRequestTimeoutsGlobal.size > 0) {
-                console.log(
-                  '✅ Context response received - clearing',
-                  contextRequestTimeoutsGlobal.size,
-                  'pending timeout(s) (no requestId echoed)'
-                )
                 contextRequestTimeoutsGlobal.forEach(tid => clearTimeout(tid))
                 contextRequestTimeoutsGlobal.clear()
               }
 
               // Check if this is a real extension response or empty server response
               const projectState = message.data
-              console.log('projectState ----------------------', projectState)
               const isRealExtensionResponse = Boolean(
                 projectState &&
                   (projectState.workspace ||
@@ -222,14 +203,6 @@ export function useIdeContext(): UseIdeContextReturn {
               )
 
               globalDispatch(setExtensionStatus(isRealExtensionResponse))
-
-              console.log('📊 Processing project state:', {
-                isRealExtensionResponse,
-                hasWorkspace: !!projectState.workspace,
-                openFilesCount: projectState.openFiles?.length || 0,
-                allFilesCount: projectState.allFiles?.length || 0,
-                hasActiveFile: !!projectState.activeFile,
-              })
 
               if (projectState.workspace) {
                 globalDispatch(
@@ -356,11 +329,7 @@ export function useIdeContext(): UseIdeContextReturn {
       globalWebSocket.onclose = event => {
         clearTimeout(connectionTimeout)
         isConnecting = false
-        console.log('🔌 IDE Context WebSocket closed:', {
-          code: event.code,
-          reason: event.reason,
-          wasClean: event.wasClean,
-        })
+
         updateConnectionStatus(false)
         // Clear any outstanding context timeouts on close
         if (contextRequestTimeoutsGlobal.size > 0) {
@@ -371,9 +340,6 @@ export function useIdeContext(): UseIdeContextReturn {
         // Only attempt to reconnect if this wasn't an intentional close
         if (connectionAttempts < maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(2, connectionAttempts), 30000)
-          console.log(
-            `🔄 Attempting to reconnect in ${delay}ms (attempt ${connectionAttempts + 1}/${maxReconnectAttempts})`
-          )
           reconnectTimeout.current = setTimeout(() => {
             connectionAttempts++
             connect()
@@ -407,7 +373,6 @@ export function useIdeContext(): UseIdeContextReturn {
       connect()
     } else if (globalWebSocket.readyState === WebSocket.OPEN) {
       // Connection already exists - request context to sync state after refresh
-      console.log('✅ IDE Context WebSocket already connected - requesting context to sync state')
 
       // Delay the context request slightly to ensure component is mounted
       setTimeout(() => {

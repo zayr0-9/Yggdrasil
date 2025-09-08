@@ -695,7 +695,7 @@ function Chat() {
           editMessageWithBranching({
             conversationId: currentConversationId,
             originalMessageId: parseInt(id),
-            newContent: processed,
+            newContent: newContent,
             modelOverride: selectedModel?.name,
             think: think,
           })
