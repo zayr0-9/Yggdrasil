@@ -5,6 +5,7 @@ export interface BaseMessage {
   role: 'user' | 'assistant'
   thinking_block?: string
   content: string
+  content_plain_text: string
   parent_id?: number | null
   children_ids: number[]
   created_at: string // ISO timestamp, consistent naming

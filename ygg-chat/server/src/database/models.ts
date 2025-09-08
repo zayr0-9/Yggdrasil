@@ -1,11 +1,25 @@
 import { BaseMessage, Project } from '../../../shared/types'
-import { statements } from './db'
+import { statements, db } from './db'
+import { stripMarkdownToText } from '../utils/markdownStripper'
 
 // Utility function to sanitize FTS queries
 function sanitizeFTSQuery(query: string): string {
   // Remove or escape problematic characters for FTS5
   // Wrap the entire query in double quotes to treat it as a phrase search
   return `"${query.replace(/"/g, '""')}"`
+}
+
+// Lazy getter for prepared statement to set plain_text_content, since tables are created at runtime
+let _setPlainTextStmt: import('better-sqlite3').Statement<[string, number]> | null = null
+function setPlainTextForMessage(text: string, id: number) {
+  try {
+    if (!_setPlainTextStmt) {
+      _setPlainTextStmt = db.prepare('UPDATE messages SET plain_text_content = ? WHERE id = ?')
+    }
+    _setPlainTextStmt.run(text, id)
+  } catch {
+    // ignore
+  }
 }
 
 export interface User {
@@ -376,6 +390,20 @@ export class MessageService {
       '[]',
       modelName
     )
+    // Fire-and-forget: compute and persist plain text content, triggers will update FTS
+    try {
+      const insertedId = Number(result.lastInsertRowid)
+      stripMarkdownToText(content)
+        .then(text => {
+          setPlainTextForMessage(text, insertedId)
+        })
+        .catch(() => {
+          // Fallback to raw content if stripping fails
+          setPlainTextForMessage(content, insertedId)
+        })
+    } catch {
+      // ignore background plain text update errors
+    }
     statements.updateConversationTimestamp.run(conversationId)
     return statements.getMessageById.get(result.lastInsertRowid) as Message
   }
@@ -446,6 +474,18 @@ export class MessageService {
 
   static update(id: number, content: string, thinking_block: string | null = null): Message | undefined {
     statements.updateMessage.run(content, thinking_block, id)
+    // Fire-and-forget: update plain text content
+    try {
+      stripMarkdownToText(content)
+        .then(text => {
+          setPlainTextForMessage(text, id)
+        })
+        .catch(() => {
+          setPlainTextForMessage(content, id)
+        })
+    } catch {
+      // ignore background plain text update errors
+    }
     return statements.getMessageById.get(id) as Message | undefined
   }
 

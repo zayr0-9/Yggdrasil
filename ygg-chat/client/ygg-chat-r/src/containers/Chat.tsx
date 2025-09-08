@@ -151,44 +151,11 @@ function Chat() {
   // rAF id to coalesce frequent scroll requests during streaming
   const scrollRafRef = useRef<number | null>(null)
 
-  // Measure input area (controls + textarea) height so messages list can avoid being overlapped
-  const inputAreaRef = useRef<HTMLDivElement>(null)
-  const [inputAreaHeight, setInputAreaHeight] = useState<number>(0)
+  // Previously measured input area height; no longer needed since layout doesn't overlap.
   // Track if we already applied the URL hash-based path to avoid overriding user branch switches
   const hashAppliedRef = useRef<number | null>(null)
 
-  // Debounced input area height update to prevent excessive scroll recalculations
-  const inputHeightTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-  useEffect(() => {
-    const el = inputAreaRef.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-
-    const debouncedSetHeight = (height: number) => {
-      if (inputHeightTimeoutRef.current) {
-        clearTimeout(inputHeightTimeoutRef.current)
-      }
-      inputHeightTimeoutRef.current = setTimeout(() => {
-        setInputAreaHeight(height)
-      }, 50) // 50ms debounce
-    }
-
-    const observer = new ResizeObserver(entries => {
-      for (const entry of entries) {
-        debouncedSetHeight(entry.contentRect.height)
-      }
-    })
-    observer.observe(el)
-    // Initialize immediately (no debounce needed on mount)
-    setInputAreaHeight(el.getBoundingClientRect().height)
-
-    return () => {
-      observer.disconnect()
-      if (inputHeightTimeoutRef.current) {
-        clearTimeout(inputHeightTimeoutRef.current)
-      }
-    }
-  }, [])
+  // (removed) input area height measurement and debounce
 
   // Lock page scroll while chat is mounted
   useEffect(() => {
@@ -205,11 +172,9 @@ function Chat() {
   // Consider the user to be "at the bottom" if within this many pixels
   const NEAR_BOTTOM_PX = 48
   const isNearBottom = (el: HTMLElement, threshold = NEAR_BOTTOM_PX) => {
-    // Account for the absolute-positioned input area occupying visual space at the bottom.
-    // The messages container uses paddingBottom equal to inputAreaHeight; treat being within
-    // that padding as "near bottom" so user pinning behaves intuitively.
+    // Distance remaining to bottom within the scroll container
     const remaining = el.scrollHeight - el.scrollTop - el.clientHeight
-    return remaining <= threshold + inputAreaHeight
+    return remaining <= threshold
   }
 
   // Heimdall state from Redux
@@ -345,49 +310,41 @@ function Chat() {
     }
   }, [conversationMessages, dispatch])
 
+  // Coalesced scroll-to-bottom using double rAF to wait for DOM/layout to settle
+  const scheduleScrollToBottom = useCallback((behavior: ScrollBehavior) => {
+    const container = messagesContainerRef.current
+    if (!container) return
+    const doScroll = () => {
+      const c = messagesContainerRef.current
+      if (!c) return
+      c.scrollTo({ top: c.scrollHeight, behavior })
+    }
+    if (typeof window !== 'undefined' && 'requestAnimationFrame' in window) {
+      if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current)
+      scrollRafRef.current = requestAnimationFrame(() => requestAnimationFrame(doScroll))
+    } else {
+      doScroll()
+    }
+  }, [])
+
   // Auto-scroll to bottom when messages update, with refined behavior:
   // - While streaming: keep pinned unless user scrolled away. If user returns near bottom, re-enable pinning.
   // - After streaming completes: only auto-scroll when there is no explicit selection path
   useEffect(() => {
     const container = messagesContainerRef.current
     if (!container) return
-    const scrollToBottom = (behavior: ScrollBehavior) => {
-      const sentinel = bottomRef.current
-      // Prefer sentinel-based scroll to handle both container and window scroll contexts
-      if (sentinel && typeof sentinel.scrollIntoView === 'function') {
-        // Use rAF to avoid spamming during streaming updates
-        const doScroll = () => {
-          sentinel.scrollIntoView({ block: 'end', inline: 'nearest', behavior })
-        }
-        if (typeof window !== 'undefined' && 'requestAnimationFrame' in window) {
-          if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current)
-          scrollRafRef.current = requestAnimationFrame(doScroll)
-        } else {
-          doScroll()
-        }
-        return
-      }
-
-      // Fallback to direct container/window scroll
-      if (container.scrollHeight > container.clientHeight) {
-        container.scrollTo({ top: container.scrollHeight, behavior })
-      } else if (typeof window !== 'undefined') {
-        const doc = document.scrollingElement || document.documentElement
-        window.scrollTo({ top: doc.scrollHeight, behavior })
-      }
-    }
 
     // During streaming, keep pinned unless the user opted out by scrolling away.
     // If they scroll back near bottom, re-enable pinning and scroll.
     if (streamState.active) {
       if (!userScrolledDuringStreamRef.current) {
-        // Smooth scroll during streaming for a better UX; rAF above coalesces frequent updates
-        scrollToBottom('smooth')
+        // Use instant scroll during streaming to avoid smooth-scroll queuing/jitter
+        scheduleScrollToBottom('auto')
       } else {
         const nearBottom = isNearBottom(container, NEAR_BOTTOM_PX)
         if (nearBottom) {
           userScrolledDuringStreamRef.current = false
-          scrollToBottom('smooth')
+          scheduleScrollToBottom('auto')
         }
       }
       return
@@ -397,7 +354,7 @@ function Chat() {
     const noExplicitPath = !selectedPath || selectedPath.length === 0
     if (noExplicitPath) {
       // Smooth scroll when not streaming
-      scrollToBottom('smooth')
+      scheduleScrollToBottom('smooth')
     }
   }, [
     displayMessages,
@@ -406,7 +363,7 @@ function Chat() {
     streamState.active,
     streamState.finished,
     selectedPath,
-    inputAreaHeight,
+    scheduleScrollToBottom,
   ])
 
   // Cleanup any pending rAF on unmount
@@ -432,12 +389,16 @@ function Chat() {
     return () => {
       el.removeEventListener('scroll', onScroll)
     }
-  }, [streamState.active, inputAreaHeight])
+  }, [streamState.active])
 
   // Reset the user scroll override when the stream finishes
   useEffect(() => {
     if (streamState.finished) {
       userScrolledDuringStreamRef.current = false
+      if (scrollRafRef.current != null) {
+        cancelAnimationFrame(scrollRafRef.current)
+        scrollRafRef.current = null
+      }
     }
   }, [streamState.finished])
 
@@ -481,6 +442,11 @@ function Chat() {
     // Skip if no focus or a user-initiated selection will handle scrolling
     if (focusedChatMessageId == null) return
     if (selectionScrollCauseRef.current === 'user') return
+
+    // If focus changed programmatically during streaming, temporarily disable bottom pinning
+    if (streamState.active) {
+      userScrolledDuringStreamRef.current = true
+    }
 
     const tryScroll = (attempt = 0) => {
       const container = messagesContainerRef.current
@@ -660,19 +626,14 @@ function Chat() {
 
   // Helper: scroll to bottom immediately using the sentinel or container fallback
   const scrollToBottomNow = useCallback((behavior: ScrollBehavior = 'auto') => {
-    const sentinel = bottomRef.current
     const container = messagesContainerRef.current
-    if (sentinel && typeof sentinel.scrollIntoView === 'function') {
-      sentinel.scrollIntoView({ block: 'end', inline: 'nearest', behavior })
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior })
       return
     }
-    if (container) {
-      if (container.scrollHeight > container.clientHeight) {
-        container.scrollTo({ top: container.scrollHeight, behavior })
-      } else if (typeof window !== 'undefined') {
-        const doc = document.scrollingElement || document.documentElement
-        window.scrollTo({ top: doc.scrollHeight, behavior })
-      }
+    const sentinel = bottomRef.current
+    if (sentinel && typeof sentinel.scrollIntoView === 'function') {
+      sentinel.scrollIntoView({ block: 'end', inline: 'nearest', behavior })
     }
   }, [])
 
@@ -943,6 +904,7 @@ function Chat() {
           <div
             ref={messagesContainerRef}
             className='px-2 dark:border-neutral-700 border-b border-stone-200 rounded-lg py-4 overflow-y-auto overscroll-y-contain touch-pan-y p-3 bg-neutral-50 dark:bg-neutral-900 flex-1 min-h-0'
+            style={{ ['overflowAnchor' as any]: 'none' }}
           >
             {displayMessages.length === 0 ? (
               <p className='text-stone-800 dark:text-stone-200'>No messages yet...</p>
@@ -972,7 +934,7 @@ function Chat() {
           </div>
         </div>
         {/* Input area: controls row + textarea (regular flex child to avoid overlap) */}
-        <div ref={inputAreaRef} className='ml-2 flex-none shrink-0'>
+        <div className='ml-2 flex-none shrink-0'>
           {/* Controls row (above) */}
 
           {/* Textarea (bottom, grows upward because wrapper is bottom-pinned) */}

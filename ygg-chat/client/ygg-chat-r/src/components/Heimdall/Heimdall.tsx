@@ -7,6 +7,7 @@ import { deleteSelectedNodes, fetchConversationMessages, fetchMessageTree } from
 import { chatSliceActions } from '../../features/chats/chatSlice'
 import { buildBranchPathForMessage } from '../../features/chats/pathUtils'
 import type { RootState } from '../../store/store'
+import stripMarkdownToText from '../../utils/markdownStripper'
 import { TextField } from '../TextField/TextField'
 
 // Type definitions
@@ -96,6 +97,24 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   // Focused message id from global state and flat messages for search
   const focusedChatMessageId = useSelector((state: RootState) => state.chat.conversation.focusedChatMessageId)
   const flatMessages = useSelector((state: RootState) => state.chat.conversation.messages)
+  // Maintain a plain-text processed copy of messages for client-side search
+  const [plainMessages, setPlainMessages] = useState<any[]>([])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = (await stripMarkdownToText(flatMessages as any)) as any
+        if (!cancelled) {
+          setPlainMessages(Array.isArray(res) ? (res as any[]) : (flatMessages as any[]))
+        }
+      } catch {
+        if (!cancelled) setPlainMessages(flatMessages as any[])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [flatMessages])
   // Search UI state
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [searchOpen, setSearchOpen] = useState<boolean>(false)
@@ -104,12 +123,15 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     const q = (searchQuery || '').trim().toLowerCase()
     if (!q) return [] as { id: number; content: string }[]
     // Filter by content; show up to 12 results
-    const res = flatMessages
-      .filter(m => typeof m?.content === 'string' && m.content.toLowerCase().includes(q))
+    const res = (plainMessages as any[])
+      .filter(m => {
+        const plain = (m?.content_plain_text || m?.plain_text_content || m?.content || '').toLowerCase()
+        return typeof plain === 'string' && plain.includes(q)
+      })
       .slice(0, 12)
       .map(m => ({ id: m.id, content: m.content }))
     return res
-  }, [searchQuery, flatMessages])
+  }, [searchQuery, plainMessages])
   const lastCenteredIdRef = useRef<string | null>(null)
   // Only center when focus comes from the search bar, not other sources
   const searchFocusPendingRef = useRef<boolean>(false)

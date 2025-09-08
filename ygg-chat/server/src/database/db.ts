@@ -63,6 +63,7 @@ export function initializeDatabase() {
       children_ids TEXT DEFAULT '[]',
       role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
       content TEXT NOT NULL,
+      plain_text_content TEXT,
       thinking_block TEXT,
       model_name TEXT DEFAULT 'unknown',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -188,17 +189,22 @@ export function initializeDatabase() {
   `)
 
   // Triggers to keep FTS table in sync with messages table
+  // Drop old triggers (if any) to ensure updated logic is applied
   db.exec(`
+    DROP TRIGGER IF EXISTS messages_ai;
+    DROP TRIGGER IF EXISTS messages_au;
+    DROP TRIGGER IF EXISTS messages_ad;
+
     -- Insert trigger
     CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
       INSERT INTO messages_fts(content, conversation_id, message_id) 
-      VALUES (new.content, new.conversation_id, new.id);
+      VALUES (COALESCE(new.plain_text_content, new.content), new.conversation_id, new.id);
     END;
 
     -- Update trigger  
     CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
       UPDATE messages_fts 
-      SET content = new.content 
+      SET content = COALESCE(new.plain_text_content, new.content) 
       WHERE message_id = new.id;
     END;
 
@@ -211,6 +217,13 @@ export function initializeDatabase() {
   // Add migration for project_id column if it doesn't exist
   try {
     db.exec(`ALTER TABLE conversations ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE`)
+  } catch (error) {
+    // Column already exists, ignore the error
+  }
+
+  // Add migration for plain_text_content on messages if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE messages ADD COLUMN plain_text_content TEXT`)
   } catch (error) {
     // Column already exists, ignore the error
   }
@@ -280,6 +293,7 @@ export function initializeStatements() {
     getMessageById: db.prepare(`
       SELECT 
         m.*,
+        m.plain_text_content AS content_plain_text,
         (
           SELECT COUNT(1) 
           FROM message_attachment_links mal 
@@ -297,6 +311,7 @@ export function initializeStatements() {
     getMessagesByConversation: db.prepare(`
       SELECT 
         m.*, 
+        m.plain_text_content AS content_plain_text,
         EXISTS(
           SELECT 1 
           FROM message_attachment_links mal 
@@ -316,9 +331,7 @@ export function initializeStatements() {
     updateMessage: db.prepare('UPDATE messages SET content = ?, thinking_block = ? WHERE id = ?'),
     deleteMessage: db.prepare('DELETE FROM messages WHERE id = ?'),
     // Batch delete messages by an array of IDs (pass JSON array string as the parameter)
-    deleteMessagesByIds: db.prepare(
-      'DELETE FROM messages WHERE id IN (SELECT value FROM json_each(?))'
-    ),
+    deleteMessagesByIds: db.prepare('DELETE FROM messages WHERE id IN (SELECT value FROM json_each(?))'),
 
     // Messages - Optimized branch operations using children_ids
 
@@ -327,7 +340,7 @@ export function initializeStatements() {
 
     // Full Text Search operations
     searchMessages: db.prepare(`
-      SELECT m.*, highlight(messages_fts, 0, '<mark>', '</mark>') as highlighted
+      SELECT m.*, m.plain_text_content AS content_plain_text, highlight(messages_fts, 0, '<mark>', '</mark>') as highlighted
       FROM messages m
       JOIN messages_fts ON m.id = messages_fts.message_id
       WHERE messages_fts MATCH ? AND m.conversation_id = ?
@@ -335,7 +348,7 @@ export function initializeStatements() {
     `),
 
     searchAllUserMessages: db.prepare(`
-      SELECT m.*, c.title as conversation_title, 
+      SELECT m.*, m.plain_text_content AS content_plain_text, c.title as conversation_title, 
              highlight(messages_fts, 0, '<mark>', '</mark>') as highlighted
       FROM messages m
       JOIN messages_fts ON m.id = messages_fts.message_id
@@ -347,7 +360,7 @@ export function initializeStatements() {
 
     //Search messages by project
     searchMessagesByProject: db.prepare(`
-      SELECT m.*, highlight(messages_fts, 0, '<mark>', '</mark>') as highlighted
+      SELECT m.*, m.plain_text_content AS content_plain_text, highlight(messages_fts, 0, '<mark>', '</mark>') as highlighted
       FROM messages m
       JOIN messages_fts ON m.id = messages_fts.message_id
       JOIN conversations c ON m.conversation_id = c.id
@@ -357,7 +370,7 @@ export function initializeStatements() {
 
     // Advanced FTS with snippets (shows context around matches)
     searchMessagesWithSnippet: db.prepare(`
-      SELECT m.*, 
+      SELECT m.*, m.plain_text_content AS content_plain_text, 
              snippet(messages_fts, 0, '<mark>', '</mark>', '...', 32) as snippet
       FROM messages m
       JOIN messages_fts ON m.id = messages_fts.message_id
@@ -367,7 +380,7 @@ export function initializeStatements() {
 
     // Search with pagination
     searchAllUserMessagesPaginated: db.prepare(`
-      SELECT m.*, c.title as conversation_title, 
+      SELECT m.*, m.plain_text_content AS content_plain_text, c.title as conversation_title, 
              highlight(messages_fts, 0, '<mark>', '</mark>') as highlighted
       FROM messages m
       JOIN messages_fts ON m.id = messages_fts.message_id
@@ -473,7 +486,7 @@ export function rebuildFTSIndex() {
   db.exec(`
     DELETE FROM messages_fts;
     INSERT INTO messages_fts(content, conversation_id, message_id)
-    SELECT content, conversation_id, id FROM messages;
+    SELECT COALESCE(plain_text_content, content), conversation_id, id FROM messages;
   `)
 }
 

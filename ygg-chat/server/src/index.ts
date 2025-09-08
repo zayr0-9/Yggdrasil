@@ -5,7 +5,8 @@ import fs from 'fs'
 import { createServer } from 'http'
 import path from 'path'
 import { WebSocket, WebSocketServer } from 'ws'
-import { initializeDatabase, initializeStatements } from './database/db'
+import { initializeDatabase, initializeStatements, db, rebuildFTSIndex } from './database/db'
+import { stripMarkdownToText } from './utils/markdownStripper'
 import chatRoutes from './routes/chat'
 import settingsRoutes from './routes/settings'
 
@@ -159,6 +160,52 @@ initializeStatements()
     console.log('🔌 WebSocket IDE Context on ws://localhost:3001/ide-context')
   })
 })()
+
+// Startup migration: ensure plain_text_content is populated and FTS index built from it
+async function migratePlainTextAndFTS() {
+  try {
+    // Verify column exists (initializeDatabase attempted to add it)
+    const hasColumn = db
+      .prepare("PRAGMA table_info(messages)")
+      .all()
+      .some((c: any) => String(c.name) === 'plain_text_content')
+
+    if (!hasColumn) {
+      // If for some reason column is missing (shouldn't happen), add it
+      try {
+        db.exec(`ALTER TABLE messages ADD COLUMN plain_text_content TEXT`)
+      } catch {}
+    }
+
+    // Select messages missing plain_text_content
+    const selectMissing = db.prepare('SELECT id, content FROM messages WHERE plain_text_content IS NULL')
+    const updateStmt = db.prepare('UPDATE messages SET plain_text_content = ? WHERE id = ?')
+    const rows = selectMissing.all() as { id: number; content: string }[]
+
+    if (rows.length > 0) {
+      console.log(`🔧 Migrating plain_text_content for ${rows.length} messages...`)
+      for (const row of rows) {
+        try {
+          const text = await stripMarkdownToText(row.content)
+          updateStmt.run(text, row.id)
+        } catch {
+          // Fallback: copy raw content
+          updateStmt.run(row.content ?? '', row.id)
+        }
+      }
+    }
+
+    // Always rebuild FTS to ensure it uses the latest plain_text_content
+    console.log('🔧 Rebuilding FTS index to use plain_text_content...')
+    rebuildFTSIndex()
+    console.log('✅ FTS rebuild complete.')
+  } catch (err) {
+    console.warn('⚠️ Startup migration failed:', err)
+  }
+}
+
+// Run migration in background after DB init
+void migratePlainTextAndFTS()
 
 app.get('/api/debug/routes', (req, res) => {
   const routes: any[] = []
