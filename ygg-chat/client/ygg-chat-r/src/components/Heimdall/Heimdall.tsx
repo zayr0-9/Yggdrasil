@@ -3,8 +3,8 @@ import { Move, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import type { JSX } from 'react'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
+import { deleteSelectedNodes, fetchConversationMessages, fetchMessageTree } from '../../features/chats/chatActions'
 import { chatSliceActions } from '../../features/chats/chatSlice'
-import { deleteSelectedNodes, fetchMessageTree, fetchConversationMessages } from '../../features/chats/chatActions'
 import type { RootState } from '../../store/store'
 
 // Type definitions
@@ -739,6 +739,14 @@ export const Heimdall: React.FC<HeimdallProps> = ({
 
     // Dispatch the nodesSelected action without branch filtering
     dispatch(chatSliceActions.nodesSelected(newSelectedNodes))
+
+    // Show context menu at the right-click position
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (rect && newSelectedNodes.length > 0) {
+      const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+      setContextMenuPos(pos)
+      setShowContextMenu(true)
+    }
   }
 
   // Delete selected nodes using their message IDs
@@ -749,19 +757,18 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         setShowContextMenu(false)
         return
       }
-      
+
       // Dispatch the delete action
       await (dispatch as any)(deleteSelectedNodes(ids)).unwrap()
-      
+
       // Clear selection after successful delete
       dispatch(chatSliceActions.nodesSelected([]))
-      
+
       // Refresh the message tree to reflect changes
       await (dispatch as any)(fetchMessageTree(conversationId))
-      
+
       // Also refresh conversation messages to keep them in sync
       await (dispatch as any)(fetchConversationMessages(conversationId))
-      
     } catch (error) {
       console.error('Failed to delete nodes:', error)
     } finally {
