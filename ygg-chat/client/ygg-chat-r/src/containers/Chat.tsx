@@ -381,13 +381,13 @@ function Chat() {
     // If they scroll back near bottom, re-enable pinning and scroll.
     if (streamState.active) {
       if (!userScrolledDuringStreamRef.current) {
-        // Instant scroll during streaming to prevent smooth animation fighting frequent updates
-        scrollToBottom('auto')
+        // Smooth scroll during streaming for a better UX; rAF above coalesces frequent updates
+        scrollToBottom('smooth')
       } else {
         const nearBottom = isNearBottom(container, NEAR_BOTTOM_PX)
         if (nearBottom) {
           userScrolledDuringStreamRef.current = false
-          scrollToBottom('auto')
+          scrollToBottom('smooth')
         }
       }
       return
