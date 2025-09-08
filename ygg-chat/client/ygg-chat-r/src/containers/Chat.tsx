@@ -150,6 +150,8 @@ function Chat() {
   const bottomRef = useRef<HTMLDivElement>(null)
   // rAF id to coalesce frequent scroll requests during streaming
   const scrollRafRef = useRef<number | null>(null)
+  // Remember the last focused message we already scrolled to (to avoid repeated jumps)
+  const lastFocusedScrollIdRef = useRef<number | null>(null)
 
   // Previously measured input area height; no longer needed since layout doesn't overlap.
   // Track if we already applied the URL hash-based path to avoid overriding user branch switches
@@ -416,6 +418,10 @@ function Chat() {
           const relativeTop = elRect.top - containerRect.top
           const targetTop = container.scrollTop + relativeTop
           container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
+          // Record that we've scrolled to this focused target to avoid later auto-scrolls fighting it
+          if (typeof targetId === 'number') {
+            lastFocusedScrollIdRef.current = targetId
+          }
           // After handling, reset so programmatic path changes (e.g., during send/stream) won't recenter
           selectionScrollCauseRef.current = null
           return
@@ -443,6 +449,9 @@ function Chat() {
     if (focusedChatMessageId == null) return
     if (selectionScrollCauseRef.current === 'user') return
 
+    // If we've already scrolled to this focused message, don't re-run on every list change
+    if (lastFocusedScrollIdRef.current === focusedChatMessageId) return
+
     // If focus changed programmatically during streaming, temporarily disable bottom pinning
     if (streamState.active) {
       userScrolledDuringStreamRef.current = true
@@ -458,6 +467,8 @@ function Chat() {
         const relativeTop = elRect.top - containerRect.top
         const targetTop = container.scrollTop + relativeTop
         container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
+        // Mark this focus as handled so we don't keep re-centering on subsequent renders
+        lastFocusedScrollIdRef.current = focusedChatMessageId
         return
       }
       // Retry briefly if the element is not yet present
@@ -514,6 +525,8 @@ function Chat() {
   // Reset the hash application guard when switching conversations
   useEffect(() => {
     hashAppliedRef.current = null
+    // Allow programmatic focus in the new conversation to scroll once
+    lastFocusedScrollIdRef.current = null
   }, [currentConversationId])
 
   // Clear selectedFilesForChat on route change
