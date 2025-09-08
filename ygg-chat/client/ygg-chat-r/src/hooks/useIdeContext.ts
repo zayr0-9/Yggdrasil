@@ -326,7 +326,7 @@ export function useIdeContext(): UseIdeContextReturn {
         }
       }
 
-      globalWebSocket.onclose = event => {
+      globalWebSocket.onclose = () => {
         clearTimeout(connectionTimeout)
         isConnecting = false
 

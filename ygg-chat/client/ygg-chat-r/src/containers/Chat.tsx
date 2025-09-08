@@ -449,11 +449,11 @@ function Chat() {
         const el = document.getElementById(`message-${targetId}`)
         const container = messagesContainerRef.current
         if (el && container) {
-          // Compute element position relative to container and center it within the scroll area
+          // Compute element position relative to container and align its top to the container's top
           const containerRect = container.getBoundingClientRect()
           const elRect = el.getBoundingClientRect()
           const relativeTop = elRect.top - containerRect.top
-          const targetTop = container.scrollTop + relativeTop - container.clientHeight / 2 + el.clientHeight / 2
+          const targetTop = container.scrollTop + relativeTop
           container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
         }
         // After handling, reset so programmatic path changes (e.g., during send/stream) won't recenter
@@ -491,13 +491,39 @@ function Chat() {
     if (hashAppliedRef.current === hashMessageId) return
 
     if (conversationMessages.length > 0) {
+      // Guard: only proceed if the target hash message exists
+      const idToMsg = new Map(conversationMessages.map(m => [m.id, m]))
+      if (!idToMsg.has(hashMessageId)) return
+
+      // 1) Base path: root -> ... -> target(hash)
       const path = getParentPath(conversationMessages, hashMessageId)
+
+      // 2) Extend path to leaf by following the first child repeatedly.
+      //    If multiple children exist, choose the child with the lowest numeric id (consistent with Heimdall).
+      let curId = path[path.length - 1]
+      while (true) {
+        const children = conversationMessages
+          .filter(m => m.parent_id === curId)
+          .sort((a, b) => a.id - b.id)
+        if (children.length === 0) break
+        const firstChild = children[0]
+        path.push(firstChild.id)
+        curId = firstChild.id
+      }
+
       dispatch(chatSliceActions.conversationPathSet(path))
+      // Keep Heimdall selection in sync (expects string IDs)
+      dispatch(chatSliceActions.selectedNodePathSet(path.map(id => String(id))))
       // Ensure the focused message id is set so scrolling targets the correct element
       dispatch(chatSliceActions.focusedChatMessageSet(hashMessageId))
       hashAppliedRef.current = hashMessageId
     }
   }, [hashMessageId, conversationMessages, dispatch])
+
+  // Reset the hash application guard when switching conversations
+  useEffect(() => {
+    hashAppliedRef.current = null
+  }, [currentConversationId])
 
   // Clear selectedFilesForChat on route change
   useEffect(() => {
@@ -521,6 +547,10 @@ function Chat() {
   // Auto-select latest branch when messages first load
   useEffect(() => {
     if (conversationMessages.length > 0 && (!selectedPath || selectedPath.length === 0)) {
+      // If URL has a hash message that exists, skip auto-selecting latest branch
+      if (hashMessageId && conversationMessages.some(m => m.id === hashMessageId)) {
+        return
+      }
       // latest message by timestamp
       const latest = [...conversationMessages].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -539,7 +569,7 @@ function Chat() {
         }
       }
     }
-  }, [conversationMessages, selectedPath, dispatch])
+  }, [conversationMessages, selectedPath, dispatch, hashMessageId])
 
   // Load models on mount
   useEffect(() => {

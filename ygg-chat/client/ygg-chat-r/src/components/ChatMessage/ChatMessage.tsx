@@ -326,14 +326,14 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
         case 'user':
           return {
             container:
-              'bg-gray-800 border-l-4 border-l-blue-500 dark:border-l-yPurple-400 bg-indigo-50 dark:bg-neutral-800',
+              'bg-gray-800 border-l-4 border-l-yellow-500 dark:border-l-yPurple-400 bg-yellow-50 dark:bg-neutral-800',
             role: 'text-indigo-800 dark:text-yPurple-50',
             roleText: 'User',
           }
         case 'assistant':
           return {
             container:
-              'bg-gray-850 border-l-4 border-l-yellow-500 dark:border-l-yBrown-400 bg-yellow-50 dark:bg-neutral-800',
+              'bg-gray-850 border-l-4 border-l-blue-500  dark:border-l-yBrown-400 bg-indigo-50  dark:bg-neutral-800',
             role: 'text-lime-800 dark:text-yBrown-50',
             roleText: 'Assistant',
           }

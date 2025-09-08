@@ -173,7 +173,7 @@ const ConversationPage: React.FC = () => {
       </div>
       <div className='p-6 max-w-7xl mx-auto'>
         <div className='mb-4 flex items-center justify-between'>
-          <h2 className='text-3xl py-4 font-bold dark:text-neutral-100'>Projects</h2>
+          <h2 className='text-3xl py-4 font-bold dark:text-neutral-100'>Conversations</h2>
           <div className='flex items-center gap-2 pt-2'>
             <Button variant='primary' size='medium' onClick={handleEditProject} className='group'>
               <p className='transition-transform duration-100 group-active:scale-95'>Project Settings</p>
