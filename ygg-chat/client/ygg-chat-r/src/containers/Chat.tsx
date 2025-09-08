@@ -45,7 +45,7 @@ import { removeSelectedFileForChat, updateIdeContext } from '../features/ideCont
 import { selectSelectedFilesForChat, selectWorkspace } from '../features/ideContext/ideContextSelectors'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
 import { useIdeContext } from '../hooks/useIdeContext'
-import { getParentPath } from '../utils/path'
+import { buildBranchPathForMessage } from '../features/chats/pathUtils'
 function Chat() {
   const dispatch = useAppDispatch()
   const { ideContext } = useIdeContext()
@@ -445,7 +445,7 @@ function Chat() {
   useEffect(() => {
     if (selectionScrollCauseRef.current === 'user' && selectedPath && selectedPath.length > 0) {
       const targetId = focusedChatMessageId
-      const tryScroll = () => {
+      const tryScroll = (attempt = 0) => {
         const el = document.getElementById(`message-${targetId}`)
         const container = messagesContainerRef.current
         if (el && container) {
@@ -455,19 +455,57 @@ function Chat() {
           const relativeTop = elRect.top - containerRect.top
           const targetTop = container.scrollTop + relativeTop
           container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
+          // After handling, reset so programmatic path changes (e.g., during send/stream) won't recenter
+          selectionScrollCauseRef.current = null
+          return
         }
-        // After handling, reset so programmatic path changes (e.g., during send/stream) won't recenter
-        selectionScrollCauseRef.current = null
+        // Retry briefly if the element is not yet present
+        if (attempt < 5) {
+          setTimeout(() => tryScroll(attempt + 1), 50)
+        } else {
+          selectionScrollCauseRef.current = null
+        }
       }
 
       // Defer until after DOM/layout has settled for this render
       if (typeof window !== 'undefined' && 'requestAnimationFrame' in window) {
-        requestAnimationFrame(() => requestAnimationFrame(tryScroll))
+        requestAnimationFrame(() => requestAnimationFrame(() => tryScroll()))
       } else {
-        setTimeout(tryScroll, 0)
+        setTimeout(() => tryScroll(), 0)
       }
     }
   }, [selectedPath, focusedChatMessageId])
+
+  // Scroll to the focused message when focus changes via hash/search (non user-click cases)
+  useEffect(() => {
+    // Skip if no focus or a user-initiated selection will handle scrolling
+    if (focusedChatMessageId == null) return
+    if (selectionScrollCauseRef.current === 'user') return
+
+    const tryScroll = (attempt = 0) => {
+      const container = messagesContainerRef.current
+      if (!container) return
+      const el = document.getElementById(`message-${focusedChatMessageId}`)
+      if (el) {
+        const containerRect = container.getBoundingClientRect()
+        const elRect = el.getBoundingClientRect()
+        const relativeTop = elRect.top - containerRect.top
+        const targetTop = container.scrollTop + relativeTop
+        container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
+        return
+      }
+      // Retry briefly if the element is not yet present
+      if (attempt < 5) {
+        setTimeout(() => tryScroll(attempt + 1), 50)
+      }
+    }
+
+    if (typeof window !== 'undefined' && 'requestAnimationFrame' in window) {
+      requestAnimationFrame(() => requestAnimationFrame(() => tryScroll()))
+    } else {
+      setTimeout(() => tryScroll(), 0)
+    }
+  }, [focusedChatMessageId, displayMessages])
 
   // If URL contains a #messageId fragment, capture it once
   const location = useLocation()
@@ -492,24 +530,11 @@ function Chat() {
 
     if (conversationMessages.length > 0) {
       // Guard: only proceed if the target hash message exists
-      const idToMsg = new Map(conversationMessages.map(m => [m.id, m]))
-      if (!idToMsg.has(hashMessageId)) return
+      const exists = conversationMessages.some(m => m.id === hashMessageId)
+      if (!exists) return
 
-      // 1) Base path: root -> ... -> target(hash)
-      const path = getParentPath(conversationMessages, hashMessageId)
-
-      // 2) Extend path to leaf by following the first child repeatedly.
-      //    If multiple children exist, choose the child with the lowest numeric id (consistent with Heimdall).
-      let curId = path[path.length - 1]
-      while (true) {
-        const children = conversationMessages
-          .filter(m => m.parent_id === curId)
-          .sort((a, b) => a.id - b.id)
-        if (children.length === 0) break
-        const firstChild = children[0]
-        path.push(firstChild.id)
-        curId = firstChild.id
-      }
+      const path = buildBranchPathForMessage(conversationMessages, hashMessageId)
+      if (!path.length) return
 
       dispatch(chatSliceActions.conversationPathSet(path))
       // Keep Heimdall selection in sync (expects string IDs)

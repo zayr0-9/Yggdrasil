@@ -310,6 +310,10 @@ export const chatSlice = createSlice({
 
     messagesLoaded: (state, action: PayloadAction<Message[]>) => {
       state.conversation.messages = action.payload
+      // If the conversation becomes empty, clear the currentPath to avoid stale selection
+      if (!state.conversation.messages || state.conversation.messages.length === 0) {
+        state.conversation.currentPath = []
+      }
     },
 
     // Branching support

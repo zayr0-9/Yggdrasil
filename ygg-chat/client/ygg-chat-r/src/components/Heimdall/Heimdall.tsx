@@ -5,7 +5,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { deleteSelectedNodes, fetchConversationMessages, fetchMessageTree } from '../../features/chats/chatActions'
 import { chatSliceActions } from '../../features/chats/chatSlice'
+import { buildBranchPathForMessage } from '../../features/chats/pathUtils'
 import type { RootState } from '../../store/store'
+import { TextField } from '../TextField/TextField'
 
 // Type definitions
 interface ChatNode {
@@ -54,6 +56,8 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const dispatch = useDispatch()
   const selectedNodes = useSelector((state: RootState) => state.chat.selectedNodes)
   const currentPathIds = useSelector((state: RootState) => state.chat.conversation.currentPath)
+  // Track total messages to detect a truly empty conversation
+  const messagesCount = useSelector((state: RootState) => state.chat.conversation.messages.length)
 
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -89,6 +93,26 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   // Refs for latest zoom and pan to avoid stale closures inside wheel listener
   const zoomRef = useRef<number>(zoom)
   const panRef = useRef<{ x: number; y: number }>(pan)
+  // Focused message id from global state and flat messages for search
+  const focusedChatMessageId = useSelector((state: RootState) => state.chat.conversation.focusedChatMessageId)
+  const flatMessages = useSelector((state: RootState) => state.chat.conversation.messages)
+  // Search UI state
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [searchOpen, setSearchOpen] = useState<boolean>(false)
+  const [searchHoverIndex, setSearchHoverIndex] = useState<number>(-1)
+  const filteredResults = useMemo(() => {
+    const q = (searchQuery || '').trim().toLowerCase()
+    if (!q) return [] as { id: number; content: string }[]
+    // Filter by content; show up to 12 results
+    const res = flatMessages
+      .filter(m => typeof m?.content === 'string' && m.content.toLowerCase().includes(q))
+      .slice(0, 12)
+      .map(m => ({ id: m.id, content: m.content }))
+    return res
+  }, [searchQuery, flatMessages])
+  const lastCenteredIdRef = useRef<string | null>(null)
+  // Only center when focus comes from the search bar, not other sources
+  const searchFocusPendingRef = useRef<boolean>(false)
   // Global text selection suppression while panning (originated in Heimdall)
   const addGlobalNoSelect = () => {
     try {
@@ -248,6 +272,21 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     if (chatData) lastDataRef.current = chatData
     // console.log('chatData 3', chatData)
   }, [chatData])
+
+  // When the conversation is truly empty (no messages) and we're not loading,
+  // clear the cached lastDataRef so the tree renders as empty instead of
+  // persisting the last non-null tree.
+  useEffect(() => {
+    if (!loading && messagesCount === 0 && chatData == null) {
+      lastDataRef.current = null
+      // Also reset layout/selection state so a future conversation starts fresh
+      seenNodeIdsRef.current.clear()
+      offsetRef.current = null
+      hasCenteredRef.current = false
+      setSelectedNode(null)
+      setFocusedNodeId(null)
+    }
+  }, [loading, messagesCount, chatData])
 
   useEffect(() => {
     if (chatData !== lastDataRef.current) {
@@ -453,6 +492,34 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const hasPositions = Object.keys(positions).length > 0
   const offsetX = hasPositions ? (offsetRef.current ? offsetRef.current.x : -bounds.minX + 50) : 0
   const offsetY = hasPositions ? (offsetRef.current ? offsetRef.current.y : -bounds.minY + 50) : 0
+
+  // Center the viewport on a specific node id (string) without altering zoom
+  const centerOnNode = (targetNodeId: string): void => {
+    const pos = positions[targetNodeId]
+    if (!pos) return
+    const s = zoomRef.current
+    const ox = offsetRef.current ? offsetRef.current.x : offsetX
+    const oy = offsetRef.current ? offsetRef.current.y : offsetY
+    // Measure container size to compute true center
+    const w = dimensions.width || containerRef.current?.offsetWidth || 0
+    const h = dimensions.height || containerRef.current?.offsetHeight || 0
+    const px = w / 2 - (pos.x + ox) * s - w / 2 // simplifies to -(pos.x + ox) * s
+    const py = h / 2 - (pos.y + oy) * s - 100 // account for top translate(+, 100)
+    setPan({ x: px, y: py })
+  }
+
+  // React to focusedChatMessageId changes by centering the corresponding node when present
+  useEffect(() => {
+    if (!focusedChatMessageId) return
+    const idStr = String(focusedChatMessageId)
+    if (!positions[idStr]) return
+    // Only auto-center if this focus was initiated by the search bar
+    if (!searchFocusPendingRef.current) return
+    if (lastCenteredIdRef.current === idStr) return
+    centerOnNode(idStr)
+    lastCenteredIdRef.current = idStr
+    searchFocusPendingRef.current = false
+  }, [focusedChatMessageId, positions, dimensions.width, dimensions.height, offsetX, offsetY])
 
   // Center the view on the root node once, after layout and container dimensions are ready
   useEffect(() => {
@@ -1286,7 +1353,104 @@ export const Heimdall: React.FC<HeimdallProps> = ({
           {compactMode ? 'Compact' : 'Full'}
         </button>
       </div>
-      <div className='absolute top-4 right-4 z-10 flex flex-col gap-2 items-end'>
+      <div className='absolute top-4 right-8 z-10 flex flex-col gap-2 items-end'>
+        {/* Search bar for messages in the current chat */}
+        <div className='w-[400px] relative mb-2'>
+          <TextField
+            placeholder='Search'
+            value={searchQuery}
+            onChange={val => {
+              setSearchQuery(val)
+              setSearchOpen(!!val.trim())
+              setSearchHoverIndex(-1)
+            }}
+            onKeyDown={e => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setSearchHoverIndex(prev => Math.min(prev + 1, Math.max(0, filteredResults.length - 1)))
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setSearchHoverIndex(prev => Math.max(-1, prev - 1))
+              } else if (e.key === 'Enter') {
+                // Enter selects the highlighted result or the first one
+                const item = filteredResults[searchHoverIndex >= 0 ? searchHoverIndex : 0]
+                if (item) {
+                  searchFocusPendingRef.current = true
+                  const path = buildBranchPathForMessage(flatMessages as any, item.id)
+                  if (path.length > 0) {
+                    dispatch(chatSliceActions.conversationPathSet(path))
+                    dispatch(chatSliceActions.selectedNodePathSet(path.map(id => String(id))))
+                  }
+                  dispatch(chatSliceActions.focusedChatMessageSet(item.id))
+                  setSearchOpen(false)
+                  setSearchQuery('')
+                }
+              } else if (e.key === 'Escape') {
+                setSearchOpen(false)
+              }
+            }}
+            size='small'
+            showSearchIcon
+            onSearchClick={() => {
+              if (filteredResults.length > 0) {
+                const item = filteredResults[0]
+                searchFocusPendingRef.current = true
+                const path = buildBranchPathForMessage(flatMessages as any, item.id)
+                if (path.length > 0) {
+                  dispatch(chatSliceActions.conversationPathSet(path))
+                  dispatch(chatSliceActions.selectedNodePathSet(path.map(id => String(id))))
+                }
+                dispatch(chatSliceActions.focusedChatMessageSet(item.id))
+                setSearchOpen(false)
+                setSearchQuery('')
+              }
+            }}
+            className='bg-amber-50 dark:bg-neutral-700'
+          />
+          {searchOpen && searchQuery.trim() && (
+            <div className='absolute right-0 mt-1 w-full max-h-72 overflow-auto rounded-md shadow-lg border border-stone-200 bg-white dark:bg-neutral-800 dark:border-neutral-700 z-20'>
+              {filteredResults.length === 0 ? (
+                <div className='px-3 py-2 text-sm text-neutral-500 dark:text-neutral-300'>No matches</div>
+              ) : (
+                <ul className='py-1 text-sm text-stone-800 dark:text-stone-100'>
+                  {filteredResults.map((item, idx) => {
+                    const content = (item.content || '').replace(/\s+/g, ' ').trim()
+                    const snippet = content.length > 160 ? content.slice(0, 160) + '…' : content
+                    return (
+                      <li key={item.id}>
+                        <button
+                          type='button'
+                          onClick={() => {
+                            searchFocusPendingRef.current = true
+                            const path = buildBranchPathForMessage(flatMessages as any, item.id)
+                            if (path.length > 0) {
+                              dispatch(chatSliceActions.conversationPathSet(path))
+                              dispatch(chatSliceActions.selectedNodePathSet(path.map(id => String(id))))
+                            }
+                            dispatch(chatSliceActions.focusedChatMessageSet(item.id))
+                            setSearchOpen(false)
+                            setSearchQuery('')
+                          }}
+                          onMouseEnter={() => setSearchHoverIndex(idx)}
+                          className={`w-full text-left px-3 py-2 hover:bg-stone-100 dark:hover:bg-neutral-700 ${
+                            idx === searchHoverIndex ? 'bg-stone-100 dark:bg-neutral-700' : ''
+                          }`}
+                        >
+                          <div className='flex items-start gap-2'>
+                            <span className='shrink-0 text-xs text-neutral-500 dark:text-neutral-400 mt-0.5'>
+                              #{item.id}
+                            </span>
+                            <span className='line-clamp-2'>{snippet || '(empty message)'}</span>
+                          </div>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
         <div className='bg-amber-50 dark:bg-neutral-700 text-stone-800 dark:text-stone-200 px-3 py-1 rounded-lg text-sm'>
           Zoom: {Math.round(zoom * 100)}%
         </div>
