@@ -4,6 +4,7 @@ import type { JSX } from 'react'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { chatSliceActions } from '../../features/chats/chatSlice'
+import { deleteSelectedNodes, fetchMessageTree, fetchConversationMessages } from '../../features/chats/chatActions'
 import type { RootState } from '../../store/store'
 
 // Type definitions
@@ -48,10 +49,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   loading = false,
   error = null,
   onNodeSelect,
+  conversationId,
 }) => {
   const dispatch = useDispatch()
   const selectedNodes = useSelector((state: RootState) => state.chat.selectedNodes)
-  const allMessages = useSelector((state: RootState) => state.chat.conversation.messages)
   const currentPathIds = useSelector((state: RootState) => state.chat.conversation.currentPath)
 
   const svgRef = useRef<SVGSVGElement>(null)
@@ -66,6 +67,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const [isSelecting, setIsSelecting] = useState<boolean>(false)
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [selectionEnd, setSelectionEnd] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  // Custom context menu after selection
+  const [showContextMenu, setShowContextMenu] = useState<boolean>(false)
+  const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null)
   // Keep a stable inner offset so the whole tree does not shift when nodes are added/removed
   const offsetRef = useRef<{ x: number; y: number } | null>(null)
   // Track which nodes have already been seen to avoid re-playing enter animations
@@ -80,6 +84,8 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const isDraggingRef = useRef<boolean>(false)
   const isSelectingRef = useRef<boolean>(false)
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  // Ref to record last mouse-up position for context menu anchoring
+  const lastMouseUpPosRef = useRef<{ x: number; y: number } | null>(null)
   // Refs for latest zoom and pan to avoid stale closures inside wheel listener
   const zoomRef = useRef<number>(zoom)
   const panRef = useRef<{ x: number; y: number }>(pan)
@@ -100,6 +106,8 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     try {
       e.preventDefault()
     } catch {}
+    // Hide any open custom context menu upon new interaction
+    setShowContextMenu(false)
     // Capture pointer so we continue to receive move/up events outside
     try {
       ;(e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId)
@@ -171,6 +179,15 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     try {
       ;(e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId)
     } catch {}
+    // If we were selecting, record mouse-up position to anchor the context menu
+    if (isSelectingRef.current) {
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (rect) {
+        const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+        lastMouseUpPosRef.current = pos
+        setContextMenuPos(pos)
+      }
+    }
     handleMouseUp()
   }
 
@@ -619,158 +636,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     return selectedNodeIds
   }
 
-  // Keep only one branch: choose the branch that contains the most selected nodes
-  const filterToDominantBranch = (ids: number[]): number[] => {
-    if (!ids || ids.length <= 1) return ids
-
-    // Prefer message-graph approach if we have flat messages available
-    const msgs = allMessages as any[] | undefined
-    if (Array.isArray(msgs) && msgs.length > 0) {
-      // Build parent and children maps
-      const parentMap = new Map<number, number | null>()
-      const childrenMap = new Map<number, number[]>()
-
-      const parseChildren = (val: unknown): number[] => {
-        if (Array.isArray(val)) {
-          return (val as unknown[]).map(x => Number(x)).filter(n => !isNaN(n))
-        }
-        if (typeof val === 'string') {
-          try {
-            const arr = JSON.parse(val)
-            if (Array.isArray(arr)) {
-              return arr.map((x: any) => Number(x)).filter((n: number) => !isNaN(n))
-            }
-          } catch {}
-        }
-        return []
-      }
-
-      for (const m of msgs) {
-        const id = Number((m as any).id)
-        const pRaw = (m as any).parent_id
-        const parent = pRaw === null || pRaw === undefined ? null : Number(pRaw)
-        parentMap.set(id, isNaN(parent as number) ? null : (parent as number))
-        const children = parseChildren((m as any).children_ids)
-        childrenMap.set(id, children)
-      }
-
-      const ascendToRoot = (id: number): number[] => {
-        const path: number[] = []
-        const seen = new Set<number>()
-        let cur: number | null = id
-        while (cur != null && !seen.has(cur)) {
-          seen.add(cur)
-          path.push(cur)
-          cur = parentMap.get(cur) ?? null
-        }
-        return path.reverse() // root -> id
-      }
-
-      const descendSingleChain = (from: number): number[] => {
-        const out: number[] = []
-        const seen = new Set<number>()
-        let cur = from
-        seen.add(cur)
-        while (true) {
-          const children = childrenMap.get(cur) || []
-          if (children.length !== 1) break
-          const next = Number(children[0])
-          if (seen.has(next)) break // guard against cycles
-          out.push(next)
-          seen.add(next)
-          cur = next
-        }
-        return out // nodes strictly after `from`
-      }
-
-      const groups = new Map<string, { ids: number[]; count: number; pathLen: number }>()
-      for (const idNum of [...ids].sort((a, b) => a - b)) {
-        // stable processing order
-        const rootPath = ascendToRoot(idNum)
-        const down = descendSingleChain(idNum)
-        const fullPath = rootPath.concat(down) // root -> ... -> idNum -> ... -> branch leaf
-        const key = fullPath.join('>')
-        const existing = groups.get(key)
-        if (existing) {
-          existing.ids.push(idNum)
-          existing.count += 1
-          existing.pathLen = Math.max(existing.pathLen, fullPath.length)
-        } else {
-          groups.set(key, { ids: [idNum], count: 1, pathLen: fullPath.length })
-        }
-      }
-
-      let bestKey = ''
-      let best: { ids: number[]; count: number; pathLen: number } | null = null
-      for (const [k, v] of groups) {
-        if (
-          !best ||
-          v.count > best.count ||
-          (v.count === best.count && v.pathLen > best.pathLen) ||
-          (v.count === best.count && v.pathLen === best.pathLen && k < bestKey)
-        ) {
-          bestKey = k
-          best = v
-        }
-      }
-      if (best) {
-        const pathSet = new Set(
-          bestKey
-            .split('>')
-            .map(n => Number(n))
-            .filter(n => !isNaN(n))
-        )
-        const extraAncestors = ids.filter(n => pathSet.has(n))
-        const merged = Array.from(new Set<number>([...best.ids, ...extraAncestors]))
-        return merged
-      }
-      return ids
-    }
-
-    // Fallback to tree-based grouping when flat messages are not available
-    const groups = new Map<string, { ids: number[]; count: number; pathLen: number }>()
-    for (const idNum of ids) {
-      const idStr = String(idNum)
-      let path = getPathWithDescendants(idStr)
-      if (!path || path.length === 0) {
-        const fallback = getPathToNode(idStr)
-        path = fallback || [idStr]
-      }
-      const key = path.join('>')
-      const existing = groups.get(key)
-      if (existing) {
-        existing.ids.push(idNum)
-        existing.count += 1
-      } else {
-        groups.set(key, { ids: [idNum], count: 1, pathLen: path.length })
-      }
-    }
-    let bestKey = ''
-    let best: { ids: number[]; count: number; pathLen: number } | null = null
-    for (const [k, v] of groups) {
-      if (
-        !best ||
-        v.count > best.count ||
-        (v.count === best.count && v.pathLen > best.pathLen) ||
-        (v.count === best.count && v.pathLen === best.pathLen && k < bestKey)
-      ) {
-        bestKey = k
-        best = v
-      }
-    }
-    if (best) {
-      const pathSet = new Set(
-        bestKey
-          .split('>')
-          .map(n => Number(n))
-          .filter(n => !isNaN(n))
-      )
-      const extraAncestors = ids.filter(n => pathSet.has(n))
-      const merged = Array.from(new Set<number>([...best.ids, ...extraAncestors]))
-      return merged
-    }
-    return ids
-  }
+  // Removed dominant-branch filtering to allow selecting nodes across multiple branches
 
   // (legacy mouse handlers removed in favor of pointer events)
 
@@ -778,11 +644,16 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     if (isSelecting) {
       // Calculate which nodes are within the selection rectangle
       const selectedNodeIds = getNodesInSelectionRectangle()
-      // Replace selection with filtered nodes from this drag
-      const filteredSelection = filterToDominantBranch(selectedNodeIds)
-      dispatch(chatSliceActions.nodesSelected(filteredSelection))
+      // Replace selection with nodes from this drag (no branch filtering)
+      dispatch(chatSliceActions.nodesSelected(selectedNodeIds))
       setIsSelecting(false)
       isSelectingRef.current = false
+      // If any nodes were selected, open custom context menu at last mouse-up position
+      if (selectedNodeIds.length > 0 && lastMouseUpPosRef.current) {
+        setShowContextMenu(true)
+      } else {
+        setShowContextMenu(false)
+      }
     }
     setIsDragging(false)
     isDraggingRef.current = false
@@ -866,10 +737,109 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       }
     }
 
-    // Dispatch the nodesSelected action (filtered to the dominant branch)
-    const filteredNodes = filterToDominantBranch(newSelectedNodes)
-    dispatch(chatSliceActions.nodesSelected(filteredNodes))
+    // Dispatch the nodesSelected action without branch filtering
+    dispatch(chatSliceActions.nodesSelected(newSelectedNodes))
   }
+
+  // Delete selected nodes using their message IDs
+  const handleDeleteNodes = async (): Promise<void> => {
+    try {
+      const ids = selectedNodes || []
+      if (ids.length === 0 || !conversationId) {
+        setShowContextMenu(false)
+        return
+      }
+      
+      // Dispatch the delete action
+      await (dispatch as any)(deleteSelectedNodes(ids)).unwrap()
+      
+      // Clear selection after successful delete
+      dispatch(chatSliceActions.nodesSelected([]))
+      
+      // Refresh the message tree to reflect changes
+      await (dispatch as any)(fetchMessageTree(conversationId))
+      
+      // Also refresh conversation messages to keep them in sync
+      await (dispatch as any)(fetchConversationMessages(conversationId))
+      
+    } catch (error) {
+      console.error('Failed to delete nodes:', error)
+    } finally {
+      setShowContextMenu(false)
+    }
+  }
+
+  // Copy messages along the union of root->selected-node paths
+  const handleCopySelectedPaths = async (): Promise<void> => {
+    try {
+      const ids = selectedNodes || []
+      if (!currentChatData || ids.length === 0) {
+        setShowContextMenu(false)
+        return
+      }
+      // Build id -> message map from the current tree
+      const messagesById = new Map<string, string>()
+      const visit = (node: ChatNode | null): void => {
+        if (!node) return
+        messagesById.set(node.id, node.message)
+        node.children?.forEach(visit)
+      }
+      visit(currentChatData)
+
+      // Collect only selected nodes' messages, preserving the selectedNodes order
+      const messages: string[] = []
+      const seen = new Set<string>()
+      for (const idNum of ids) {
+        const idStr = String(idNum)
+        if (seen.has(idStr)) continue
+        seen.add(idStr)
+        const msg = messagesById.get(idStr)
+        if (typeof msg === 'string') messages.push(msg)
+      }
+
+      const text = messages.join('\n\n')
+      if (text.trim().length > 0) {
+        try {
+          await navigator.clipboard.writeText(text)
+        } catch (err) {
+          // Fallback if clipboard API fails
+          const ta = document.createElement('textarea')
+          ta.value = text
+          ta.style.position = 'fixed'
+          ta.style.left = '-9999px'
+          document.body.appendChild(ta)
+          ta.focus()
+          ta.select()
+          try {
+            document.execCommand('copy')
+          } finally {
+            document.body.removeChild(ta)
+          }
+        }
+      }
+    } finally {
+      setShowContextMenu(false)
+      // Clear selection after copy
+      dispatch(chatSliceActions.nodesSelected([]))
+    }
+  }
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!showContextMenu) return
+    const onDown = () => {
+      setShowContextMenu(false)
+    }
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') setShowContextMenu(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [showContextMenu])
 
   const resetView = (): void => {
     // Compute bounds for fitting that ignore focusedNodeId so fit is consistent
@@ -1374,6 +1344,36 @@ export const Heimdall: React.FC<HeimdallProps> = ({
           />
         )}
       </svg>
+      {/* Custom context menu after selection */}
+      {showContextMenu && contextMenuPos && (
+        <div
+          className='absolute z-30 min-w-[140px] rounded-md shadow-lg border border-stone-200 bg-white dark:bg-neutral-800 dark:border-neutral-700'
+          style={{
+            left: Math.max(8, Math.min(contextMenuPos.x, Math.max(0, dimensions.width - 180))),
+            top: Math.max(8, Math.min(contextMenuPos.y, Math.max(0, dimensions.height - 140))),
+          }}
+          onMouseDown={e => e.stopPropagation()}
+        >
+          <ul className='py-1 text-sm text-stone-800 dark:text-stone-100'>
+            <li>
+              <button
+                className='w-full text-left px-3 py-2 hover:bg-stone-100 dark:hover:bg-neutral-700'
+                onClick={handleCopySelectedPaths}
+              >
+                Copy
+              </button>
+            </li>
+            <li>
+              <button
+                className='w-full text-left px-3 py-2 hover:bg-stone-100 dark:hover:bg-neutral-700 text-red-600 dark:text-red-400'
+                onClick={handleDeleteNodes}
+              >
+                Delete
+              </button>
+            </li>
+          </ul>
+        </div>
+      )}
       <div className='absolute bottom-4 left-4 flex flex-col gap-2'>
         <div className='dark:bg-gray-800 bg-amber-50 text-stone-800 dark:text-stone-200 px-3 py-2 rounded-lg text-xs space-y-1 dark:bg-neutral-800 w-fit'>
           <div>Messages: {stats.totalNodes}</div>

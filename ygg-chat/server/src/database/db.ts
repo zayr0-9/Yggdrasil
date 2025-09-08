@@ -315,6 +315,10 @@ export function initializeStatements() {
     deleteMessagesByConversation: db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
     updateMessage: db.prepare('UPDATE messages SET content = ?, thinking_block = ? WHERE id = ?'),
     deleteMessage: db.prepare('DELETE FROM messages WHERE id = ?'),
+    // Batch delete messages by an array of IDs (pass JSON array string as the parameter)
+    deleteMessagesByIds: db.prepare(
+      'DELETE FROM messages WHERE id IN (SELECT value FROM json_each(?))'
+    ),
 
     // Messages - Optimized branch operations using children_ids
 

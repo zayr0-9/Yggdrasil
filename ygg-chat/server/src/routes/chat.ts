@@ -1158,6 +1158,31 @@ router.delete(
   })
 )
 
+router.post(
+  '/messages/deleteMany',
+  asyncHandler(async (req, res) => {
+    const { ids } = req.body as { ids?: Array<number | string> }
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids (number[]) is required' })
+    }
+
+    const normalized = Array.from(
+      new Set(
+        ids
+          .map(n => Number(n))
+          .filter(n => Number.isFinite(n) && n > 0)
+      )
+    ) as number[]
+
+    if (normalized.length === 0) {
+      return res.status(400).json({ error: 'No valid ids provided' })
+    }
+
+    const deleted = MessageService.deleteMany(normalized)
+    res.json({ deleted })
+  })
+)
+
 // Delete conversation
 router.delete(
   '/conversations/:id',

@@ -920,6 +920,23 @@ export const initializeUserAndConversation = createAsyncThunk(
   }
 )
 
+// Delete multiple messages by their IDs
+export const deleteSelectedNodes = createAsyncThunk(
+  'chat/deleteSelectedNodes',
+  async (ids: number[], { rejectWithValue }) => {
+    try {
+      const response = await apiCall<{ deleted: number }>('/messages/deleteMany', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      })
+      return response
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete messages'
+      return rejectWithValue(message)
+    }
+  }
+)
+
 // Update a conversation title (Chat feature convenience)
 export const updateConversationTitle = createAsyncThunk<Conversation, { id: number; title: string }>(
   'chat/updateConversationTitle',

@@ -444,14 +444,20 @@ export class MessageService {
     statements.deleteMessagesByConversation.run(conversationId)
   }
 
-  static update(id: number, content: string): Message | undefined {
-    statements.updateMessage.run(content, id)
+  static update(id: number, content: string, thinking_block: string | null = null): Message | undefined {
+    statements.updateMessage.run(content, thinking_block, id)
     return statements.getMessageById.get(id) as Message | undefined
   }
 
   static delete(id: number): boolean {
     const result = statements.deleteMessage.run(id)
     return result.changes > 0
+  }
+
+  static deleteMany(ids: number[]): number {
+    if (!ids || ids.length === 0) return 0
+    const res = statements.deleteMessagesByIds.run(JSON.stringify(ids))
+    return res.changes ?? 0
   }
 
   // Attachments helpers
