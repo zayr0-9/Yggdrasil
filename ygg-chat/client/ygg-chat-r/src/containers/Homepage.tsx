@@ -1,9 +1,10 @@
 import 'boxicons'
 import 'boxicons/css/boxicons.min.css'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Project } from '../../../../shared/types'
-import { Button, TextField } from '../components'
+import { Button } from '../components'
+import SearchList from '../components/SearchList/SearchList'
 import { Select } from '../components/Select/Select'
 import { chatSliceActions } from '../features/chats'
 import {
@@ -30,8 +31,7 @@ const Homepage: React.FC = () => {
 
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
-  const [isDropdownOpen, setDropdownOpen] = useState(false)
-  const dropdownRef = useRef<HTMLUListElement | null>(null)
+  // Search dropdown is handled inside SearchList component
   const [sortBy, setSortBy] = useState<'updated' | 'created' | 'name'>('updated')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>(() => {
@@ -101,16 +101,7 @@ const Homepage: React.FC = () => {
     setThemeMode(prev => (prev === 'light' ? 'dark' : prev === 'dark' ? 'system' : 'light'))
   }
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false)
-      }
-    }
-    document.addEventListener('click', handler)
-    return () => document.removeEventListener('click', handler)
-  }, [])
+  // Dropdown open/close is managed internally by SearchList
 
   const handleSelectProject = (project: Project) => {
     navigate(`/conversationPage?projectId=${project.id}`)
@@ -135,28 +126,19 @@ const Homepage: React.FC = () => {
     setShowEditModal(true)
   }
 
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && searchQuery.trim()) {
-      dispatch(searchActions.performSearch(searchQuery))
-      setDropdownOpen(true)
-    }
-  }
-
   const handleSearchChange = (value: string) => {
     dispatch(searchActions.queryChanged(value))
   }
 
-  const handleSearchClick = () => {
+  const handleSearchSubmit = () => {
     if (searchQuery.trim()) {
       dispatch(searchActions.performSearch(searchQuery))
-      setDropdownOpen(true)
     }
   }
 
   const handleResultClick = (conversationId: number, messageId: string) => {
     dispatch(chatSliceActions.conversationSet(conversationId))
     navigate(`/chat/${conversationId}#${messageId}`)
-    setDropdownOpen(false)
   }
 
   return (
@@ -303,44 +285,17 @@ const Homepage: React.FC = () => {
               <p className='dark:text-neutral-300'>No projects yet. Create your first project to get started!</p>
             )}
           </ul>
-          <div className='relative w-128 flex-2'>
-            <TextField
-              placeholder='Search messages...'
+          <div className='w-128 flex-2'>
+            <SearchList
               value={searchQuery}
               onChange={handleSearchChange}
-              onKeyDown={handleSearchKeyDown as any}
-              showSearchIcon
-              onSearchClick={handleSearchClick}
+              onSubmit={handleSearchSubmit}
+              results={searchResults}
+              loading={searchLoading}
+              onResultClick={handleResultClick}
+              placeholder='Search messages...'
+              dropdownVariant='neutral'
             />
-
-            {/* Dropdown */}
-            {isDropdownOpen &&
-              (searchLoading ? (
-                <div className='absolute z-10 left-0 right-0 bg-indigo-50 p-4 text-sm'>Searching...</div>
-              ) : (
-                searchResults.length > 0 && (
-                  <ul
-                    ref={dropdownRef}
-                    className='absolute z-10 left-0 right-0 max-h-230 overflow-y-auto bg-slate-50 border border-indigo-100 dark:border-neutral-600 rounded shadow-lg dark:bg-neutral-700 thin-scrollbar'
-                    style={{ colorScheme: 'dark' }}
-                  >
-                    {searchResults.map(res => (
-                      <li
-                        key={`${res.conversationId}-${res.messageId}`}
-                        className='p-3 hover:bg-indigo-100 dark:bg-secondary-700 dark:hover:bg-secondary-800 cursor-pointer text-sm dark:text-neutral-200'
-                        onClick={() => handleResultClick(res.conversationId, res.messageId)}
-                      >
-                        <div className='font-semibold text-base text-indigo-600 dark:text-yBrown-50'>
-                          Conv {res.conversationId}
-                        </div>
-                        <div className='mt-1 pl-2 text-neutral-800 dark:text-neutral-100 whitespace-pre-wrap break-words max-h-48 overflow-hidden'>
-                          {res.content}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )
-              ))}
           </div>
         </div>
       </div>

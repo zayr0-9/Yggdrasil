@@ -1,8 +1,9 @@
 import 'boxicons'
 import 'boxicons/css/boxicons.min.css'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Button, TextField } from '../components'
+import { Button } from '../components'
+import SearchList from '../components/SearchList/SearchList'
 import { Select } from '../components/Select/Select'
 import { chatSliceActions } from '../features/chats'
 import {
@@ -43,12 +44,6 @@ const ConversationPage: React.FC = () => {
   const [showEditProjectModal, setShowEditProjectModal] = useState(false)
   const [sortBy, setSortBy] = useState<'updated' | 'created' | 'name'>('updated')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const handleSearchClick = () => {
-    if (searchQuery.trim()) {
-      dispatch(searchActions.performSearch(searchQuery))
-      setDropdownOpen(true)
-    }
-  }
   // Sorting function for conversations
   const sortConversations = (
     convs: Conversation[],
@@ -86,8 +81,7 @@ const ConversationPage: React.FC = () => {
   // Use conversations directly from Redux state (already filtered by project ID if applicable)
   const conversations = sortConversations(allConversations, sortBy, sortOrder === 'asc')
 
-  const [isDropdownOpen, setDropdownOpen] = useState(false)
-  const dropdownRef = useRef<HTMLUListElement | null>(null)
+  // Search dropdown is handled inside SearchList component
 
   useEffect(() => {
     dispatch(chatSliceActions.stateReset())
@@ -103,16 +97,7 @@ const ConversationPage: React.FC = () => {
     dispatch(chatSliceActions.heimdallDataLoaded({ treeData: null }))
   }, [dispatch, projectId])
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false)
-      }
-    }
-    document.addEventListener('click', handler)
-    return () => document.removeEventListener('click', handler)
-  }, [])
+  // Dropdown open/close is managed internally by SearchList
 
   const handleSelect = (conv: Conversation) => {
     dispatch(chatSliceActions.conversationSet(conv.id))
@@ -136,21 +121,19 @@ const ConversationPage: React.FC = () => {
     handleSelect(result)
   }
 
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && searchQuery.trim()) {
-      dispatch(searchActions.performProjectSearch({ query: searchQuery, projectId: selectedProject?.id }))
-      setDropdownOpen(true)
-    }
-  }
-
   const handleSearchChange = (value: string) => {
     dispatch(searchActions.queryChanged(value))
+  }
+
+  const handleSearchSubmit = () => {
+    if (searchQuery.trim()) {
+      dispatch(searchActions.performProjectSearch({ query: searchQuery, projectId: selectedProject?.id }))
+    }
   }
 
   const handleResultClick = (conversationId: number, messageId: string) => {
     dispatch(chatSliceActions.conversationSet(conversationId))
     navigate(`/chat/${conversationId}#${messageId}`)
-    setDropdownOpen(false)
   }
 
   const handleEditProject = () => {
@@ -265,44 +248,17 @@ const ConversationPage: React.FC = () => {
             ))}
             {conversations.length === 0 && !loading && <p className='dark:text-neutral-300'>No conversations yet.</p>}
           </ul>
-          <div className='relative flex-1'>
-            <TextField
-              placeholder='Search messages...'
+          <div className='flex-1'>
+            <SearchList
               value={searchQuery}
               onChange={handleSearchChange}
-              onKeyDown={handleSearchKeyDown as any}
-              showSearchIcon
-              onSearchClick={handleSearchClick}
+              onSubmit={handleSearchSubmit}
+              results={searchResults}
+              loading={searchLoading}
+              onResultClick={handleResultClick}
+              placeholder='Search messages...'
+              dropdownVariant='secondary'
             />
-
-            {/* Dropdown */}
-            {isDropdownOpen &&
-              (searchLoading ? (
-                <div className='absolute z-10 left-0 right-0 bg-indigo-50 p-4 text-sm'>Searching...</div>
-              ) : (
-                searchResults.length > 0 && (
-                  <ul
-                    ref={dropdownRef}
-                    className='absolute z-10 left-0 right-0 max-h-230 overflow-y-auto bg-slate-50 border border-indigo-100 dark:border-secondary-600 rounded shadow-lg dark:bg-neutral-700 thin-scrollbar'
-                    style={{ colorScheme: 'dark' }}
-                  >
-                    {searchResults.map(res => (
-                      <li
-                        key={`${res.conversationId}-${res.messageId}`}
-                        className='p-3 hover:bg-indigo-100 dark:bg-secondary-700 dark:hover:bg-secondary-800 cursor-pointer text-sm dark:text-neutral-200'
-                        onClick={() => handleResultClick(res.conversationId, res.messageId)}
-                      >
-                        <div className='font-semibold text-base text-indigo-600 dark:text-yBrown-50'>
-                          Conv {res.conversationId}
-                        </div>
-                        <div className='mt-1 pl-2 text-neutral-800 dark:text-neutral-200 whitespace-pre-wrap break-words max-h-48 overflow-hidden'>
-                          {res.content}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )
-              ))}
           </div>
         </div>
       </div>
