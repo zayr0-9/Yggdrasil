@@ -146,122 +146,126 @@ const ConversationPage: React.FC = () => {
   }
 
   return (
-    <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900'>
+    <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900 flex flex-col'>
       {/* Recent conversations sidebar - fixed and above all content */}
-      <SideBar limit={8} className='fixed left-2 top-89 z-50' />
-      <div className='px-2 pt-10 max-w-[1440px] mx-auto'>
-        <div className='flex items-center justify-between mb-8'>
-          <div className='flex items-center gap-2 pt-2 mb-2'>
-            <Button variant='secondary' rounded='full' size='circle' onClick={() => navigate('/')} className='group'>
-              <i
-                className='bx bx-home text-3xl pb-0.5 transition-transform duration-100 group-active:scale-90 pointer-events-none'
-                aria-hidden='true'
-              ></i>
-            </Button>
-            <h1 className='text-5xl py-4 px-2 font-bold dark:text-neutral-100'>
-              {selectedProject ? `${selectedProject.name}` : 'Conversations'}
-            </h1>
-            {/* {selectedProject && (
+      <div className='flex fixed left-2 top-89 items-start'>
+        <SideBar limit={8} />
+      </div>
+      <div className='pl-20 md:pl-24'>
+        <div className='px-2 pt-10 max-w-[1440px] mx-auto'>
+          <div className='flex items-center justify-between mb-8'>
+            <div className='flex items-center gap-2 pt-2 mb-2'>
+              <Button variant='secondary' rounded='full' size='circle' onClick={() => navigate('/')} className='group'>
+                <i
+                  className='bx bx-home text-3xl pb-0.5 transition-transform duration-100 group-active:scale-90 pointer-events-none'
+                  aria-hidden='true'
+                ></i>
+              </Button>
+              <h1 className='text-5xl py-4 px-2 font-bold dark:text-neutral-100'>
+                {selectedProject ? `${selectedProject.name}` : 'Conversations'}
+              </h1>
+              {/* {selectedProject && (
                 <Button variant='secondary' size='small' onClick={handleEditProject}>
                   <i className='bx bx-edit text-lg' aria-hidden='true'></i>
                 </Button>
               )} */}
-          </div>
-          {/* {selectedProject?.context && (
+            </div>
+            {/* {selectedProject?.context && (
               <p className='text-sm text-gray-600 ygg-line-clamp-6 dark:text-gray-300 ml-12'>
                 {selectedProject.context}
               </p>
             )} */}
-        </div>
-      </div>
-      <div className='p-6 max-w-7xl mx-auto'>
-        <div className='mb-4 flex items-center justify-between'>
-          <h2 className='text-3xl py-4 font-bold dark:text-neutral-100'>Conversations</h2>
-          <div className='flex items-center gap-2 pt-2'>
-            <Button variant='primary' size='medium' onClick={handleEditProject} className='group'>
-              <p className='transition-transform duration-100 group-active:scale-95'>Project Settings</p>
-            </Button>
           </div>
         </div>
-        {/* New Conversation + Sort Controls + Search inline row */}
-        <div className='mb-6 flex items-center gap-3'>
-          <Button variant='primary' size='large' onClick={handleNewConversation} className='group'>
-            <p className='transition-transform duration-100 group-active:scale-95'>New Conversation</p>
-          </Button>
-
-          <div className='flex items-center gap-2'>
-            <span className='text-sm text-gray-600 dark:text-gray-300'>Sort by:</span>
-            <Select
-              value={sortBy}
-              onChange={value => setSortBy(value as 'updated' | 'created' | 'name')}
-              options={[
-                { value: 'updated', label: 'Updated' },
-                { value: 'created', label: 'Created' },
-                { value: 'name', label: 'Name' },
-              ]}
-              className='w-32 transition-transform duration-70 active:scale-95'
-            />
-            <Button
-              variant='secondary'
-              size='medium'
-              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              className='shrink-0 group'
-            >
-              <i
-                className={`bx ${sortOrder === 'asc' ? 'bx-sort-up' : 'bx-sort-down'} text-lg transition-transform duration-100 group-active:scale-90 pointer-events-none`}
-                aria-hidden='true'
-              ></i>
-            </Button>
+        <div className='p-6 max-w-7xl mx-auto'>
+          <div className='mb-4 flex items-center justify-between'>
+            <h2 className='text-3xl py-4 font-bold dark:text-neutral-100'>Conversations</h2>
+            <div className='flex items-center gap-2 pt-2'>
+              <Button variant='primary' size='medium' onClick={handleEditProject} className='group'>
+                <p className='transition-transform duration-100 group-active:scale-95'>Project Settings</p>
+              </Button>
+            </div>
           </div>
-        </div>
+          {/* New Conversation + Sort Controls + Search inline row */}
+          <div className='mb-6 flex items-center gap-3'>
+            <Button variant='primary' size='large' onClick={handleNewConversation} className='group'>
+              <p className='transition-transform duration-100 group-active:scale-95'>New Conversation</p>
+            </Button>
 
-        {loading && <p>Loading...</p>}
-        {error && <p className='text-red-500'>{error}</p>}
-        <div className='flex gap-4 items-start'>
-          <ul className='space-y-2 rounded flex-2'>
-            {conversations.map(conv => (
-              <li
-                key={conv.id}
-                className='p-3 mb-4 bg-indigo-50 rounded-lg cursor-pointer dark:bg-secondary-700 hover:bg-indigo-100 dark:hover:bg-secondary-800 group'
-                onClick={() => handleSelect(conv)}
+            <div className='flex items-center gap-2'>
+              <span className='text-sm text-gray-600 dark:text-gray-300'>Sort by:</span>
+              <Select
+                value={sortBy}
+                onChange={value => setSortBy(value as 'updated' | 'created' | 'name')}
+                options={[
+                  { value: 'updated', label: 'Updated' },
+                  { value: 'created', label: 'Created' },
+                  { value: 'name', label: 'Name' },
+                ]}
+                className='w-32 transition-transform duration-70 active:scale-95'
+              />
+              <Button
+                variant='secondary'
+                size='medium'
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                className='shrink-0 group'
               >
-                <div className='flex items-center justify-between'>
-                  <span className='font-semibold dark:text-neutral-100 transition-transform duration-100 group-active:scale-99'>
-                    {conv.title || `Conversation ${conv.id}`}
-                  </span>
-                  <Button
-                    variant='secondary'
-                    size='smaller'
-                    onClick={
-                      (e => {
-                        ;(e as unknown as React.MouseEvent).stopPropagation()
-                        handleDelete(conv.id)
-                      }) as unknown as () => void
-                    }
-                  >
-                    <i className='bx bx-trash-alt text-lg' aria-hidden='true'></i>
-                  </Button>
-                </div>
-                {conv.created_at && (
-                  <div className='text-xs text-neutral-900 dark:text-neutral-100 transition-transform duration-100 group-active:scale-99'>
-                    {new Date(conv.created_at).toLocaleString()}
+                <i
+                  className={`bx ${sortOrder === 'asc' ? 'bx-sort-up' : 'bx-sort-down'} text-lg transition-transform duration-100 group-active:scale-90 pointer-events-none`}
+                  aria-hidden='true'
+                ></i>
+              </Button>
+            </div>
+          </div>
+
+          {loading && <p>Loading...</p>}
+          {error && <p className='text-red-500'>{error}</p>}
+          <div className='flex gap-4 items-start'>
+            <ul className='space-y-2 rounded flex-2'>
+              {conversations.map(conv => (
+                <li
+                  key={conv.id}
+                  className='p-3 mb-4 bg-indigo-50 rounded-lg cursor-pointer dark:bg-secondary-700 hover:bg-indigo-100 dark:hover:bg-secondary-800 group'
+                  onClick={() => handleSelect(conv)}
+                >
+                  <div className='flex items-center justify-between'>
+                    <span className='font-semibold dark:text-neutral-100 transition-transform duration-100 group-active:scale-99'>
+                      {conv.title || `Conversation ${conv.id}`}
+                    </span>
+                    <Button
+                      variant='secondary'
+                      size='smaller'
+                      onClick={
+                        (e => {
+                          ;(e as unknown as React.MouseEvent).stopPropagation()
+                          handleDelete(conv.id)
+                        }) as unknown as () => void
+                      }
+                    >
+                      <i className='bx bx-trash-alt text-lg' aria-hidden='true'></i>
+                    </Button>
                   </div>
-                )}
-              </li>
-            ))}
-            {conversations.length === 0 && !loading && <p className='dark:text-neutral-300'>No conversations yet.</p>}
-          </ul>
-          <div className='flex-1'>
-            <SearchList
-              value={searchQuery}
-              onChange={handleSearchChange}
-              onSubmit={handleSearchSubmit}
-              results={searchResults}
-              loading={searchLoading}
-              onResultClick={handleResultClick}
-              placeholder='Search messages...'
-              dropdownVariant='secondary'
-            />
+                  {conv.created_at && (
+                    <div className='text-xs text-neutral-900 dark:text-neutral-100 transition-transform duration-100 group-active:scale-99'>
+                      {new Date(conv.created_at).toLocaleString()}
+                    </div>
+                  )}
+                </li>
+              ))}
+              {conversations.length === 0 && !loading && <p className='dark:text-neutral-300'>No conversations yet.</p>}
+            </ul>
+            <div className='flex-1'>
+              <SearchList
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onSubmit={handleSearchSubmit}
+                results={searchResults}
+                loading={searchLoading}
+                onResultClick={handleResultClick}
+                placeholder='Search messages...'
+                dropdownVariant='secondary'
+              />
+            </div>
           </div>
         </div>
       </div>

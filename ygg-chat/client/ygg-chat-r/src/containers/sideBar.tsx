@@ -53,7 +53,7 @@ const SideBar: React.FC<{ limit?: number; className?: string }> = ({ limit = 8, 
             size='extraLarge'
             rounded='full'
             onClick={() => handleSelect(conv.id)}
-            className='group relative h-14 w-14 overflow-visible !p-0 shadow-sm'
+            className='group relative h-14 w-14 overflow-visible p-1 shadow-sm'
           >
             {/* Avatar circle */}
             <span className='absolute inset-0 flex items-center justify-center'>
@@ -62,7 +62,7 @@ const SideBar: React.FC<{ limit?: number; className?: string }> = ({ limit = 8, 
               </span>
             </span>
             {/* Expanding label overlay (only this item) */}
-            <span className='pointer-events-none absolute left-16 top-1/2 -translate-y-1/2 translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 whitespace-nowrap rounded-lg bg-indigo-100 dark:bg-secondary-600 px-3 py-1.5 text-sm text-neutral-900 dark:text-neutral-100 shadow-lg transition-all duration-300 ease-in-out overflow-hidden max-w-0 group-hover:max-w-[500px] z-[100]'>
+            <span className='pointer-events-none absolute left-16 top-1/2 -translate-y-1/2 translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 whitespace-nowrap rounded-lg bg-indigo-100 dark:bg-secondary-600 px-3 py-1.5 text-sm text-neutral-900 dark:text-neutral-100 shadow-lg transition-all duration-300 ease-in-out overflow-hidden max-w-0 group-hover:max-w-[500px]'>
               <span className='flex flex-col'>
                 <span className='font-medium'>{conv.title || `Conversation ${conv.id}`}</span>
                 {(() => {
