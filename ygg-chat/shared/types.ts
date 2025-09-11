@@ -17,6 +17,17 @@ export interface BaseMessage {
   attachments_count?: number
 }
 
+export interface BaseModel {
+  name: string
+  version: string
+  displayName: string
+  description: string
+  inputTokenLimit: number
+  outputTokenLimit: number
+  thinking: boolean
+  supportedGenerationMethods: string[]
+}
+
 export interface Project {
   id: number
   name: string

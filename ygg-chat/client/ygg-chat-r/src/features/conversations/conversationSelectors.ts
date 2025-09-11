@@ -12,6 +12,11 @@ export const selectRecentConversations = createSelector([selectConvState], state
 export const selectRecentLoading = createSelector([selectConvState], state => state.recent.loading)
 export const selectRecentError = createSelector([selectConvState], state => state.recent.error)
 
+// Recent models selectors
+export const selectRecentModels = createSelector([selectConvState], state => state.recentModels.items)
+export const selectRecentModelsLoading = createSelector([selectConvState], state => state.recentModels.loading)
+export const selectRecentModelsError = createSelector([selectConvState], state => state.recentModels.error)
+
 // Selector to get a conversation by id
 export const makeSelectConversationById = (id: number) =>
   createSelector([selectAllConversations], conversations => conversations.find(c => c.id === id))

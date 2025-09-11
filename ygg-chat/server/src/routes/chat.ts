@@ -232,6 +232,16 @@ router.get(
   })
 )
 
+// Fetch most recently used model names from messages
+router.get(
+  '/models/recent',
+  asyncHandler(async (req, res) => {
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 5
+    const models = MessageService.getRecentModels(limit)
+    res.json({ models })
+  })
+)
+
 // Fetch Google Gemini models on the server to keep API key private
 router.get(
   '/models/gemini',

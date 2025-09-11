@@ -12,6 +12,7 @@ import {
   fetchMessageTree,
   fetchModelsForCurrentProvider,
   initializeUserAndConversation,
+  Model,
   refreshCurrentPathAfterDelete,
   selectConversationMessages,
   selectCurrentConversationId,
@@ -34,18 +35,20 @@ import {
   updateConversationTitle,
   updateMessage,
 } from '../features/chats'
+import { buildBranchPathForMessage } from '../features/chats/pathUtils'
 import {
   fetchContext,
   fetchConversations,
+  fetchRecentModels,
   fetchSystemPrompt,
   makeSelectConversationById,
+  selectRecentModels,
   systemPromptSet,
 } from '../features/conversations'
 import { removeSelectedFileForChat, updateIdeContext } from '../features/ideContext'
 import { selectSelectedFilesForChat, selectWorkspace } from '../features/ideContext/ideContextSelectors'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
 import { useIdeContext } from '../hooks/useIdeContext'
-import { buildBranchPathForMessage } from '../features/chats/pathUtils'
 function Chat() {
   const dispatch = useAppDispatch()
   const { ideContext } = useIdeContext()
@@ -82,6 +85,8 @@ function Chat() {
   const [openingFilePath, setOpeningFilePath] = useState<string | null>(null)
   // Anchor position for fixed expanded panel (viewport coords)
   const [expandedAnchor, setExpandedAnchor] = useState<{ left: number; top: number } | null>(null)
+  // Local copy of model list to prioritize recent models
+  const [localModel, setLocalModel] = useState<Model[] | null>(null)
 
   const handleCloseExpandedPreview = useCallback(() => {
     if (!expandedFilePath) return
@@ -184,6 +189,7 @@ function Chat() {
   const loading = useAppSelector(selectHeimdallLoading)
   const error = useAppSelector(selectHeimdallError)
   const compactMode = useAppSelector(selectHeimdallCompactMode)
+  const recentModels = useAppSelector(selectRecentModels)
   // Conversation title editing
   const currentConversation = useAppSelector(
     currentConversationId ? makeSelectConversationById(currentConversationId) : () => null
@@ -578,14 +584,55 @@ function Chat() {
   // Load models on mount
   useEffect(() => {
     dispatch(fetchModelsForCurrentProvider(true))
+    // Also fetch recent models (top 5)
+    dispatch(fetchRecentModels({ limit: 5 }))
   }, [dispatch])
 
   // Reload models when provider changes
   useEffect(() => {
     if (providers.currentProvider) {
       dispatch(fetchModelsForCurrentProvider(true))
+      // Refresh recent models as well
+      dispatch(fetchRecentModels({ limit: 5 }))
     }
   }, [providers.currentProvider, dispatch])
+
+  // Keep a local copy of models to allow reordering with recent models
+  useEffect(() => {
+    if (models && models.length > 0) {
+      setLocalModel(models)
+    } else {
+      setLocalModel(null)
+    }
+  }, [models])
+
+  // When recent models arrive, move them (alphabetically) to the front of the local list without duplicates
+  useEffect(() => {
+    if (!recentModels || recentModels.length === 0) return
+
+    setLocalModel(prev => {
+      const base = (prev && prev.length ? prev : models) || []
+      if (base.length === 0) return prev
+
+      // Only consider recent models that exist in the current base list
+      const baseNames = new Set(base.map(m => m.name))
+      const recentSorted = [...recentModels]
+        .filter(m => baseNames.has(m.name))
+        .sort((a, b) => a.name.localeCompare(b.name))
+
+      // If no recent models intersect with the base list, keep existing ordering
+      if (recentSorted.length === 0) return prev
+
+      const recentNames = new Set(recentSorted.map(m => m.name))
+
+      // Filter out any names that are in recent from the base list
+      const filtered = base.filter(m => !recentNames.has(m.name))
+
+      // Merge recent first
+      const merged: Model[] = [...recentSorted, ...filtered]
+      return merged
+    })
+  }, [recentModels, models])
 
   // Sync local input with Redux state when conversation changes
   useEffect(() => {
@@ -1083,9 +1130,9 @@ function Chat() {
                 <Select
                   value={selectedModel?.name || ''}
                   onChange={handleModelSelect}
-                  options={models.map(m => m.name)}
+                  options={(localModel ?? models).map(m => m.name)}
                   placeholder='Select a model...'
-                  disabled={models.length === 0}
+                  disabled={(localModel ?? models).length === 0}
                   className='w-full max-w-xs transition-transform duration-60 active:scale-99'
                   searchBarVisible={true}
                 />

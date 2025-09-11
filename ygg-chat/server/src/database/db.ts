@@ -342,6 +342,16 @@ export function initializeStatements() {
     // Messages - Tree operations (simplified with children_ids)
     getMessageTree: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'),
 
+    // Recently used models (distinct model_name ordered by most recent usage)
+    getRecentModels: db.prepare(`
+      SELECT model_name, MAX(created_at) AS last_used
+      FROM messages
+      WHERE COALESCE(model_name, '') != '' AND model_name != 'unknown'
+      GROUP BY model_name
+      ORDER BY last_used DESC
+      LIMIT ?
+    `),
+
     // Full Text Search operations
     searchMessages: db.prepare(`
       SELECT m.*, m.plain_text_content AS content_plain_text, highlight(messages_fts, 0, '<mark>', '</mark>') as highlighted

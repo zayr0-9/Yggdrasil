@@ -543,6 +543,13 @@ export class MessageService {
     return statements.getFileContentsByMessage.all(messageId) as FileContent[]
   }
 
+  // Recently used model names (ordered by most recent usage)
+  static getRecentModels(limit: number = 5): string[] {
+    const safeLimit = Math.max(1, Math.min(100, Number(limit) || 5))
+    const rows = statements.getRecentModels.all(safeLimit) as { model_name: string; last_used: string }[]
+    return rows.map(r => r.model_name)
+  }
+
   // Full Text Search methods
   static searchInConversation(query: string, conversationId: number): SearchResult[] {
     const sanitizedQuery = sanitizeFTSQuery(query)

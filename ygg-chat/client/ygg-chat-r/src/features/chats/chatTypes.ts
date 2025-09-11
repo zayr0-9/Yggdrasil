@@ -1,4 +1,4 @@
-import { BaseMessage } from '../../../../../shared/types'
+import { BaseMessage, BaseModel } from '../../../../../shared/types'
 
 // Message types (shared with conversations)
 export interface Message extends BaseMessage {
@@ -40,16 +40,7 @@ export interface StreamState {
   streamingMessageId: number | null
 }
 
-export interface Model {
-  name: string
-  version: string
-  displayName: string
-  description: string
-  inputTokenLimit: number
-  outputTokenLimit: number
-  thinking: boolean
-  supportedGenerationMethods: string[]
-}
+export interface Model extends BaseModel {}
 
 // Model types - simplified to match server
 export interface ModelState {

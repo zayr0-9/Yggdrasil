@@ -1,3 +1,5 @@
+import { BaseModel } from '../../../../../shared/types'
+
 export interface Conversation {
   id: number
   user_id: number
@@ -17,10 +19,18 @@ export interface ConversationsState {
   convContext: string | null
   // Recently updated conversations for quick access
   recent: RecentConversationsState
+  // Recently used model names (normalized to BaseModel)
+  recentModels: RecentModelState
 }
 
 export interface RecentConversationsState {
   items: Conversation[]
+  loading: boolean
+  error: string | null
+}
+
+export interface RecentModelState {
+  items: BaseModel[]
   loading: boolean
   error: string | null
 }

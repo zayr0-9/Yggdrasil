@@ -10,8 +10,36 @@ import {
 } from '../../utils/api'
 import { convContextSet, systemPromptSet } from './conversationSlice'
 import { Conversation } from './conversationTypes'
+import type { BaseModel } from '../../../../../shared/types'
 
 // Fetch conversations for current user (creates demo user if none)
+
+// Fetch recently used models based on recent messages (server returns names)
+export const fetchRecentModels = createAsyncThunk<BaseModel[], { limit?: number } | void>(
+  'conversations/fetchRecentModels',
+  async (args, { rejectWithValue }) => {
+    try {
+      const limit = args && typeof args.limit === 'number' ? args.limit : 5
+      const query = new URLSearchParams({ limit: String(limit) }).toString()
+      const res = await api.get<{ models: string[] }>(`/models/recent?${query}`)
+      const models = Array.isArray(res?.models) ? res.models : []
+      // Map plain names to BaseModel shape with sensible defaults
+      const normalized: BaseModel[] = models.map(name => ({
+        name,
+        version: '',
+        displayName: name,
+        description: '',
+        inputTokenLimit: 0,
+        outputTokenLimit: 0,
+        thinking: false,
+        supportedGenerationMethods: [],
+      }))
+      return normalized
+    } catch (err) {
+      return rejectWithValue(err instanceof Error ? err.message : 'Failed to fetch recent models') as any
+    }
+  }
+)
 export const fetchConversations = createAsyncThunk<Conversation[], void, { state: RootState }>(
   'conversations/fetchAll',
   async (_: void, { getState, rejectWithValue }) => {
