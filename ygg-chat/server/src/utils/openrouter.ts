@@ -1,7 +1,8 @@
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
-import { streamText } from 'ai'
+import { stepCountIs, streamText } from 'ai'
 import fs from 'fs'
 import path from 'path'
+import tools from './tools'
 
 // OpenRouter-configured OpenAI client
 const openrouterHeaders: Record<string, string> = {}
@@ -100,6 +101,14 @@ export async function generateResponse(
   try {
     result = await streamText({
       model: openrouter(model),
+      tools: tools.reduce(
+        (acc, tool) => {
+          acc[tool.name] = tool.tool
+          return acc
+        },
+        {} as Record<string, any>
+      ),
+      stopWhen: stepCountIs(20),
       messages: formattedMessages as any,
       abortSignal,
       onAbort: () => {

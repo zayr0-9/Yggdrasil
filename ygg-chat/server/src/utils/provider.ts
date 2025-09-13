@@ -52,12 +52,13 @@ export async function generateResponse(
     .map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content }))
 
   // Optionally prepend a dummy user context message
-  const aiSdkMessages = conversationContext && conversationContext.trim()
-    ? ([{ role: 'user' as const, content: conversationContext.trim() }, ...aiSdkBase] as Array<{
-        role: 'user' | 'assistant'
-        content: string
-      }>)
-    : aiSdkBase
+  const aiSdkMessages =
+    conversationContext && conversationContext.trim()
+      ? ([{ role: 'user' as const, content: conversationContext.trim() }, ...aiSdkBase] as Array<{
+          role: 'user' | 'assistant'
+          content: string
+        }>)
+      : aiSdkBase
 
   const aiSdkMessagesWithNote = attachmentNote
     ? [...aiSdkMessages, { role: 'user' as const, content: attachmentNote }]
@@ -102,7 +103,10 @@ export async function generateResponse(
       }
     }
     // If no user message found, append a synthetic trailing user note
-    return [...cloned, { ...(cloned[cloned.length - 1] || {}), role: 'user', content: attachmentNote }] as any as Message[]
+    return [
+      ...cloned,
+      { ...(cloned[cloned.length - 1] || {}), role: 'user', content: attachmentNote },
+    ] as any as Message[]
   })()
 
   switch (provider) {

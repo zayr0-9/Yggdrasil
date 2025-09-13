@@ -33,6 +33,9 @@ interface ChatMessageProps {
   onResend?: (id: string) => void
   isEditing?: boolean
   width: ChatMessageWidth
+  // When true (default), message cards have colored backgrounds and left borders.
+  // When false, they render with transparent background and border.
+  colored?: boolean
   modelName?: string
   className?: string
   artifacts?: string[]
@@ -199,6 +202,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
     onResend,
     isEditing = false,
     width = 'w-3/5',
+    colored = true,
     modelName,
     className,
     artifacts = [],
@@ -322,30 +326,38 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
     }
 
     const getRoleStyles = () => {
+      const transparentContainer = 'border-l-4 border-l-transparent bg-transparent dark:bg-transparent'
+      const useColored = !!colored
       switch (role) {
         case 'user':
           return {
-            container:
-              'bg-gray-800 border-l-4 border-l-yellow-500 dark:border-l-yPurple-400 bg-yellow-50 dark:bg-neutral-800',
+            container: useColored
+              ? 'bg-gray-800 border-l-4 border-l-yellow-500 dark:border-l-yPurple-400 bg-yellow-50 dark:bg-neutral-900'
+              : transparentContainer,
             role: 'text-indigo-800 dark:text-yPurple-50',
             roleText: 'User',
           }
         case 'assistant':
           return {
-            container:
-              'bg-gray-850 border-l-4 border-l-blue-500  dark:border-l-yBrown-400 bg-indigo-50  dark:bg-neutral-800',
+            container: useColored
+              ? 'bg-gray-850 border-l-4 border-l-blue-500  dark:border-l-yBrown-400 bg-indigo-50  dark:bg-neutral-900'
+              : transparentContainer,
             role: 'text-lime-800 dark:text-yBrown-50',
             roleText: 'Assistant',
           }
         case 'system':
           return {
-            container: 'bg-gray-800 border-l-4 border-l-purple-500 bg-purple-50 dark:bg-neutral-800',
+            container: useColored
+              ? 'bg-gray-800 border-l-4 border-l-purple-500 bg-purple-50 dark:bg-neutral-800'
+              : transparentContainer,
             role: 'text-purple-400',
             roleText: 'System',
           }
         default:
           return {
-            container: 'bg-gray-800 border-l-4 border-l-gray-500 bg-gray-50 dark:bg-neutral-800',
+            container: useColored
+              ? 'bg-gray-800 border-l-4 border-l-gray-500 bg-gray-50 dark:bg-neutral-800'
+              : transparentContainer,
             role: 'text-gray-400',
             roleText: 'Unknown',
           }
@@ -393,7 +405,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
           }
           <pre
             ref={preRef}
-            className={`not-prose overflow-auto rounded-lg border-0 ring-0 outline-none shadow-none bg-gray-100 text-gray-900 dark:bg-neutral-900 dark:text-neutral-100 p-3`}
+            className={`not-prose overflow-auto rounded-lg ring-0 outline-none shadow-none bg-gray-100 text-gray-900 dark:bg-neutral-900 dark:text-neutral-100 p-3 dark:border-1 dark:border-neutral-500`}
             {...props}
           >
             {children}
@@ -405,7 +417,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
     return (
       <div
         id={`message-${id}`}
-        className={`group rounded-lg p-4 mb-4 ${styles.container} ${width} transition-all duration-200 hover:bg-opacity-80 ${className ?? ''}`}
+        className={`group p-4 mb-4 ${styles.container} ${width} transition-all duration-200 hover:bg-opacity-80 ${className ?? ''}`}
       >
         {/* Header with role and actions */}
         <div className='flex items-center justify-between mb-3'>

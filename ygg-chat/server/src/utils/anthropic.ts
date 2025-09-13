@@ -1,8 +1,8 @@
 import { anthropic } from '@ai-sdk/anthropic'
-import { streamText } from 'ai'
+import { stepCountIs, streamText } from 'ai'
 import fs from 'fs'
 import path from 'path'
-
+import tools from './tools'
 export async function generateResponse(
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
   onChunk: (chunk: string) => void,
@@ -76,6 +76,14 @@ export async function generateResponse(
   try {
     result = await streamText({
       model: anthropic(model),
+      tools: tools.reduce(
+        (acc, t) => {
+          acc[t.name] = t.tool
+          return acc
+        },
+        {} as Record<string, any>
+      ),
+      stopWhen: stepCountIs(20),
       messages: formattedMessages as any,
       abortSignal,
       onAbort: () => {
@@ -88,7 +96,7 @@ export async function generateResponse(
               anthropic: {
                 thinking: {
                   type: 'enabled',
-                  budgetTokens: 8192,
+                  budgetTokens: 16384,
                 },
               },
             },
@@ -103,7 +111,14 @@ export async function generateResponse(
       return
     }
     if (enableThinking && (msg.toLowerCase().includes('thinking') || name.toLowerCase().includes('unsupported'))) {
-      result = await streamText({ model: anthropic(model), messages: formattedMessages as any, abortSignal, onAbort: () => { aborted = true } })
+      result = await streamText({
+        model: anthropic(model),
+        messages: formattedMessages as any,
+        abortSignal,
+        onAbort: () => {
+          aborted = true
+        },
+      })
     } else {
       throw err
     }

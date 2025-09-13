@@ -1,8 +1,8 @@
 import { google } from '@ai-sdk/google'
-import { streamText } from 'ai'
+import { stepCountIs, streamText } from 'ai'
 import fs from 'fs'
 import path from 'path'
-
+import tools from './tools'
 export async function generateResponse(
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
   onChunk: (chunk: string) => void,
@@ -74,23 +74,32 @@ export async function generateResponse(
       ? formattedMessages[lastUserIdx].content
       : [{ type: 'text', text: String(formattedMessages[lastUserIdx].content || '') }]
     formattedMessages[lastUserIdx] = { role: 'user', content: [...existing, ...parts] }
-    console.log(
-      'final messages sent to gemini',
-      formattedMessages.map(m => m.content)
-    )
+    // console.log(
+    //   'final messages sent to gemini',
+    //   formattedMessages.map(m => m.content)
+    // )
   }
   let aborted = false
   let result: any
   try {
     result = await streamText({
       model: google(model),
+      tools: tools.reduce(
+        (acc, tool) => {
+          acc[tool.name] = tool.tool
+          return acc
+        },
+        {} as Record<string, any>
+      ),
+
+      stopWhen: stepCountIs(20),
       messages: formattedMessages as any,
       // Enable Gemini "thinking" support per provider guide
       providerOptions: think
         ? {
             google: {
               thinkingConfig: {
-                thinkingBudget: 8192,
+                thinkingBudget: 10000,
                 includeThoughts: think,
               },
             },
