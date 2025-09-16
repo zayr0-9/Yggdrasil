@@ -65,6 +65,7 @@ export function initializeDatabase() {
       content TEXT NOT NULL,
       plain_text_content TEXT,
       thinking_block TEXT,
+      tool_calls TEXT,
       model_name TEXT DEFAULT 'unknown',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
@@ -228,6 +229,13 @@ export function initializeDatabase() {
     // Column already exists, ignore the error
   }
 
+  // Add migration for tool_calls on messages if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE messages ADD COLUMN tool_calls TEXT`)
+  } catch (error) {
+    // Column already exists, ignore the error
+  }
+
   // Initialize prepared statements after tables exist
   initializeStatements()
 
@@ -292,7 +300,7 @@ export function initializeStatements() {
 
     // Messages - Core operations
     createMessage: db.prepare(
-      'INSERT INTO messages (conversation_id, parent_id, role, content, thinking_block, children_ids, model_name) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO messages (conversation_id, parent_id, role, content, thinking_block, tool_calls, children_ids, model_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ),
     getMessageById: db.prepare(`
       SELECT 
@@ -332,7 +340,7 @@ export function initializeStatements() {
     `),
     getLastMessage: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1'),
     deleteMessagesByConversation: db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
-    updateMessage: db.prepare('UPDATE messages SET content = ?, thinking_block = ? WHERE id = ?'),
+    updateMessage: db.prepare('UPDATE messages SET content = ?, thinking_block = ?, tool_calls = ? WHERE id = ?'),
     deleteMessage: db.prepare('DELETE FROM messages WHERE id = ?'),
     // Batch delete messages by an array of IDs (pass JSON array string as the parameter)
     deleteMessagesByIds: db.prepare('DELETE FROM messages WHERE id IN (SELECT value FROM json_each(?))'),

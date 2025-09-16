@@ -26,6 +26,40 @@ export async function generateResponse(
   abortSignal?: AbortSignal,
   think: boolean = false
 ): Promise<void> {
+  const processStreamDelta = (delta: string) => {
+    // console.log('OpenRouter delta received:', JSON.stringify(delta))
+
+    // Simple immediate filtering - check if this delta contains complete tool calls
+    const toolCallRegex = /\{(?:[^{}]|"[^"]*")*\}/g
+
+    if (delta.includes('{"')) {
+      console.log('Delta contains JSON-like content, checking for tool calls...')
+      const matches = delta.match(toolCallRegex)
+      console.log('Tool call matches found:', matches)
+
+      if (matches) {
+        console.log('Extracting tool calls:', matches)
+        // Send tool calls immediately
+        for (const match of matches) {
+          console.log('Sending tool call:', match)
+          onChunk(JSON.stringify({ part: 'tool_call', delta: match }))
+        }
+
+        // Send cleaned text immediately
+        const cleanedDelta = delta.replace(toolCallRegex, '').trim()
+        console.log('Cleaned delta:', JSON.stringify(cleanedDelta))
+        if (cleanedDelta) {
+          onChunk(JSON.stringify({ part: 'text', delta: cleanedDelta }))
+        }
+      } else {
+        console.log('No complete tool calls found, sending as text')
+        onChunk(JSON.stringify({ part: 'text', delta }))
+      }
+    } else {
+      // No tool calls in this delta, send as text immediately
+      onChunk(JSON.stringify({ part: 'text', delta }))
+    }
+  }
   // Start with simple role/content messages
   let formattedMessages: any[] = messages.map(msg => ({
     role: msg.role as 'user' | 'assistant' | 'system',
@@ -90,10 +124,10 @@ export async function generateResponse(
       : [{ type: 'text', text: String(formattedMessages[lastUserIdx].content || '') }]
     formattedMessages[lastUserIdx] = { role: 'user', content: [...existing, ...parts] }
 
-    console.log(
-      'final messages sent to openrouter',
-      formattedMessages.map(m => m.content)
-    )
+    // console.log(
+    //   'final messages sent to openrouter',
+    //   formattedMessages.map(m => m.content)
+    // )
   }
 
   let aborted = false
@@ -103,12 +137,14 @@ export async function generateResponse(
       model: openrouter(model),
       tools: tools.reduce(
         (acc, tool) => {
-          acc[tool.name] = tool.tool
+          if (tool.enabled) {
+            acc[tool.name] = tool.tool
+          }
           return acc
         },
         {} as Record<string, any>
       ),
-      stopWhen: stepCountIs(20),
+      stopWhen: stepCountIs(40),
       messages: formattedMessages as any,
       abortSignal,
       onAbort: () => {
@@ -131,7 +167,9 @@ export async function generateResponse(
     (result && (result.fullStream as AsyncIterable<any>)) || (result && (result.dataStream as AsyncIterable<any>))
 
   try {
+    console.log('OpenRouter streaming - checking fullStream availability:', !!fullStream)
     if (fullStream && typeof (fullStream as any)[Symbol.asyncIterator] === 'function') {
+      console.log('Using fullStream path')
       for await (const part of fullStream) {
         try {
           const t = String((part as any)?.type || '')
@@ -141,28 +179,38 @@ export async function generateResponse(
             (part as any)?.text ??
             (typeof part === 'string' ? part : '')
 
+          // console.log('OpenRouter fullStream part:', { type: t, delta: JSON.stringify(delta) })
+
           if (!delta) continue
 
           // Only emit reasoning parts if caller requested thinking output
           const isReason = t.includes('reason') || t.includes('thinking')
+          const isToolCall = t.includes('tool-call') || t.includes('tool_call') || t.includes('tool-use')
           if (isReason) {
             if (think) {
               onChunk(JSON.stringify({ part: 'reasoning', delta }))
             } else {
               continue
             }
+          } else if (isToolCall) {
+            onChunk(JSON.stringify({ part: 'tool_call', delta }))
           } else {
-            onChunk(JSON.stringify({ part: 'text', delta }))
+            // Use stateful processing for tool call detection
+            // console.log('Calling processStreamDelta from fullStream')
+            processStreamDelta(delta)
           }
-        } catch {
-          // Ignore malformed parts
+        } catch (err) {
+          console.log('Error processing fullStream part:', err)
         }
       }
     } else {
       // Fallback plain text deltas
+      console.log('Using textStream fallback path')
       const { textStream } = result
       for await (const chunk of textStream as AsyncIterable<string>) {
-        onChunk(JSON.stringify({ part: 'text', delta: chunk }))
+        console.log('OpenRouter textStream chunk:', JSON.stringify(chunk))
+        // Use stateful processing for tool call detection in fallback as well
+        processStreamDelta(chunk)
       }
     }
   } catch (err: any) {

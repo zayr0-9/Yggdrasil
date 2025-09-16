@@ -20,6 +20,7 @@ import { saveBase64ImageAttachmentsForMessage } from '../utils/attachments'
 import { replaceFileMentionsWithContent, SelectedFileContent } from '../utils/fileMentionProcessor'
 import { abortGeneration, clearGeneration, createGeneration } from '../utils/generationManager'
 import { generateResponse } from '../utils/provider'
+import { updateToolEnabled, getToolByName } from '../utils/tools/index'
 
 const router = express.Router()
 
@@ -314,6 +315,31 @@ router.post(
   asyncHandler(async (req, res) => {
     const data = await modelService.refreshModels()
     res.json(data)
+  })
+)
+
+// Update tool enabled status
+router.patch(
+  '/tools/:toolName',
+  asyncHandler(async (req, res) => {
+    const { toolName } = req.params
+    const { enabled } = req.body
+
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be a boolean value' })
+    }
+
+    const success = updateToolEnabled(toolName, enabled)
+    if (!success) {
+      return res.status(404).json({ error: 'Tool not found' })
+    }
+
+    const updatedTool = getToolByName(toolName)
+    res.json({
+      success: true,
+      tool: updatedTool,
+      message: `Tool ${toolName} ${enabled ? 'enabled' : 'disabled'}`
+    })
   })
 )
 
@@ -770,31 +796,84 @@ router.post(
       for (let i = 0; i < repeats; i++) {
         let assistantContent = ''
         let assistantThinking = ''
+        let assistantToolCalls = ''
 
         await generateResponse(
           baseHistory,
           chunk => {
             try {
               const obj = JSON.parse(chunk)
-              const part = obj?.part as 'text' | 'reasoning' | undefined
+              const part = obj?.part as 'text' | 'reasoning' | 'tool_call' | undefined
               const delta = String(obj?.delta ?? '')
               if (part === 'reasoning') {
                 assistantThinking += delta
                 res.write(
                   `data: ${JSON.stringify({ type: 'chunk', part: 'reasoning', delta, content: '', iteration: i })}\n\n`
                 )
+              } else if (part === 'tool_call') {
+                assistantToolCalls += delta
+                res.write(`data: ${JSON.stringify({ type: 'tool_call', delta, content: '', iteration: i })}\n\n`)
               } else {
-                assistantContent += delta
-                res.write(
-                  `data: ${JSON.stringify({ type: 'chunk', part: 'text', delta, content: delta, iteration: i })}\n\n`
-                )
+                // Check if this delta contains tool calls and handle them
+                const toolCallRegex = /\{[^{}]*"[^"]*":\s*"[^"]*"[^{}]*\}/g
+                if (delta.includes('{"') && toolCallRegex.test(delta)) {
+                  // Extract tool calls from this delta
+                  const matches = delta.match(toolCallRegex)
+                  if (matches) {
+                    // Add to tool calls buffer
+                    const currentToolCalls = assistantToolCalls ? JSON.parse(assistantToolCalls) : []
+                    currentToolCalls.push(...matches)
+                    assistantToolCalls = JSON.stringify(currentToolCalls)
+
+                    // Send tool call chunk
+                    res.write(
+                      `data: ${JSON.stringify({ type: 'tool_call', delta: matches.join(''), content: '', iteration: i })}\n\n`
+                    )
+
+                    // Clean the delta of tool calls before adding to content
+                    const cleanedDelta = delta.replace(toolCallRegex, '').trim()
+                    if (cleanedDelta) {
+                      assistantContent += cleanedDelta
+                      res.write(
+                        `data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: cleanedDelta, content: cleanedDelta, iteration: i })}\n\n`
+                      )
+                    }
+                  }
+                } else {
+                  assistantContent += delta
+                  res.write(
+                    `data: ${JSON.stringify({ type: 'chunk', part: 'text', delta, content: delta, iteration: i })}\n\n`
+                  )
+                }
               }
             } catch {
-              // Fallback: treat as plain text
-              assistantContent += chunk
-              res.write(
-                `data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: chunk, content: chunk, iteration: i })}\n\n`
-              )
+              // Fallback: treat as plain text but still check for tool calls
+              const toolCallRegex = /\{[^{}]*"[^"]*":\s*"[^"]*"[^{}]*\}/g
+              if (chunk.includes('{"') && toolCallRegex.test(chunk)) {
+                const matches = chunk.match(toolCallRegex)
+                if (matches) {
+                  const currentToolCalls = assistantToolCalls ? JSON.parse(assistantToolCalls) : []
+                  currentToolCalls.push(...matches)
+                  assistantToolCalls = JSON.stringify(currentToolCalls)
+
+                  res.write(
+                    `data: ${JSON.stringify({ type: 'tool_call', delta: matches.join(''), content: '', iteration: i })}\n\n`
+                  )
+
+                  const cleanedChunk = chunk.replace(toolCallRegex, '').trim()
+                  if (cleanedChunk) {
+                    assistantContent += cleanedChunk
+                    res.write(
+                      `data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: cleanedChunk, content: cleanedChunk, iteration: i })}\n\n`
+                    )
+                  }
+                }
+              } else {
+                assistantContent += chunk
+                res.write(
+                  `data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: chunk, content: chunk, iteration: i })}\n\n`
+                )
+              }
             }
           },
           provider,
@@ -810,17 +889,31 @@ router.post(
           think
         )
 
-        if (assistantContent.trim() || assistantThinking.trim()) {
+
+        // Final cleanup: ensure tool calls are stripped from content before saving
+        const toolCallRegex = /\{[^{}]*"[^"]*":\s*"[^"]*"[^{}]*\}/g
+        if (!assistantToolCalls.trim() && assistantContent.includes('{"')) {
+          const matches = assistantContent.match(toolCallRegex)
+          if (matches) {
+            assistantToolCalls = JSON.stringify(matches)
+          }
+        }
+        const cleanedContent = assistantContent.replace(toolCallRegex, '').trim()
+
+        if (cleanedContent.trim() || assistantThinking.trim() || assistantToolCalls.trim()) {
           const assistantMessage = MessageService.create(
             conversationId,
             userMessage.id,
             'assistant',
-            assistantContent,
+            cleanedContent,
             assistantThinking,
-            selectedModel
+            selectedModel,
+            assistantToolCalls
           )
+          console.log(assistantMessage)
 
-          res.write(`data: ${JSON.stringify({ type: 'complete', message: assistantMessage, iteration: i })}\n\n`)
+          const cleanedMessage = { ...assistantMessage, content: cleanedContent }
+          res.write(`data: ${JSON.stringify({ type: 'complete', message: cleanedMessage, iteration: i })}\n\n`)
         } else {
           res.write(`data: ${JSON.stringify({ type: 'no_output', iteration: i })}\n\n`)
         }
@@ -888,15 +981,16 @@ router.post(
       // Look for file content in recent messages from this conversation that might match file mentions
       const recentMessages = MessageService.getByConversation(conversationId)
       const fileContentMap = new Map<string, any>()
-      
+
       // Collect all file content from recent messages
-      for (const msg of recentMessages.slice(-10)) { // Check last 10 messages
+      for (const msg of recentMessages.slice(-10)) {
+        // Check last 10 messages
         const fileContents = MessageService.getFileContents(msg.id)
         for (const fc of fileContents) {
           // Use file name and relative path as keys for lookup
           const fileName = fc.file_name
           const baseName = fc.relative_path.split('/').pop() || fc.file_name
-          
+
           if (!fileContentMap.has(fileName)) {
             fileContentMap.set(fileName, fc)
           }
@@ -905,11 +999,11 @@ router.post(
           }
         }
       }
-      
+
       // Check if current content has file mentions that match our stored files
       const mentionRegex = /@([A-Za-z0-9._\/-]+)/g
       const mentions = [...content.matchAll(mentionRegex)].map(match => match[1])
-      
+
       if (mentions.length > 0 && fileContentMap.size > 0) {
         // Convert matching database file content to SelectedFileContent format
         const matchingFiles: SelectedFileContent[] = []
@@ -928,7 +1022,7 @@ router.post(
             } else if (!fileContents) {
               fileContents = `[File content not available - ${dbFile.file_name}]`
             }
-            
+
             matchingFiles.push({
               path: dbFile.absolute_path,
               relativePath: dbFile.relative_path,
@@ -1041,6 +1135,7 @@ router.post(
 
       let assistantContent = ''
       let assistantThinking = ''
+      let assistantToolCalls = ''
 
       // Stream AI response with manual abort control
       const { id: messageId, controller } = createGeneration(userMessage.id)
@@ -1053,19 +1148,63 @@ router.post(
           chunk => {
             try {
               const obj = JSON.parse(chunk)
-              const part = obj?.part as 'text' | 'reasoning' | undefined
+              const part = obj?.part as 'text' | 'reasoning' | 'tool_call' | undefined
               const delta = String(obj?.delta ?? '')
               if (part === 'reasoning') {
                 assistantThinking += delta
                 res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'reasoning', delta, content: '' })}\n\n`)
+              } else if (part === 'tool_call') {
+                assistantToolCalls += delta
+                res.write(`data: ${JSON.stringify({ type: 'tool_call', delta, content: '' })}\n\n`)
               } else {
-                assistantContent += delta
-                res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'text', delta, content: delta })}\n\n`)
+                // Check if this delta contains tool calls and handle them
+                const toolCallRegex = /\{[^{}]*"[^"]*":\s*"[^"]*"[^{}]*\}/g
+                if (delta.includes('{"') && toolCallRegex.test(delta)) {
+                  // Extract tool calls from this delta
+                  const matches = delta.match(toolCallRegex)
+                  if (matches) {
+                    // Add to tool calls buffer
+                    const currentToolCalls = assistantToolCalls ? JSON.parse(assistantToolCalls) : []
+                    currentToolCalls.push(...matches)
+                    assistantToolCalls = JSON.stringify(currentToolCalls)
+
+                    // Send tool call chunk
+                    res.write(`data: ${JSON.stringify({ type: 'tool_call', delta: matches.join(''), content: '' })}\n\n`)
+
+                    // Clean the delta of tool calls before adding to content
+                    const cleanedDelta = delta.replace(toolCallRegex, '').trim()
+                    if (cleanedDelta) {
+                      assistantContent += cleanedDelta
+                      res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: cleanedDelta, content: cleanedDelta })}\n\n`)
+                    }
+                  }
+                } else {
+                  assistantContent += delta
+                  res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'text', delta, content: delta })}\n\n`)
+                }
               }
             } catch {
-              // Fallback: treat as plain text
-              assistantContent += chunk
-              res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: chunk, content: chunk })}\n\n`)
+              // Fallback: treat as plain text but still check for tool calls
+              const toolCallRegex = /\{[^{}]*"[^"]*":\s*"[^"]*"[^{}]*\}/g
+              if (chunk.includes('{"') && toolCallRegex.test(chunk)) {
+                const matches = chunk.match(toolCallRegex)
+                if (matches) {
+                  const currentToolCalls = assistantToolCalls ? JSON.parse(assistantToolCalls) : []
+                  currentToolCalls.push(...matches)
+                  assistantToolCalls = JSON.stringify(currentToolCalls)
+
+                  res.write(`data: ${JSON.stringify({ type: 'tool_call', delta: matches.join(''), content: '' })}\n\n`)
+
+                  const cleanedChunk = chunk.replace(toolCallRegex, '').trim()
+                  if (cleanedChunk) {
+                    assistantContent += cleanedChunk
+                    res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: cleanedChunk, content: cleanedChunk })}\n\n`)
+                  }
+                }
+              } else {
+                assistantContent += chunk
+                res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: chunk, content: chunk })}\n\n`)
+              }
             }
           },
           provider as 'ollama' | 'gemini' | 'anthropic' | 'openai',
@@ -1081,20 +1220,38 @@ router.post(
           think
         )
 
+
+        // Final cleanup: ensure tool calls are stripped from content before saving
+        const toolCallRegex = /\{[^{}]*"[^"]*":\s*"[^"]*"[^{}]*\}/g
+        if (!assistantToolCalls.trim() && assistantContent.includes('{"')) {
+          // Extract any remaining tool calls
+          const matches = assistantContent.match(toolCallRegex)
+          if (matches) {
+            assistantToolCalls = JSON.stringify(matches)
+            console.log('Final extraction - found tool calls:', assistantToolCalls)
+          }
+        }
+        // Always clean content regardless of whether we found new tool calls
+        const cleanedContent = assistantContent.replace(toolCallRegex, '').trim()
+        console.log('Original content length:', assistantContent.length, 'Cleaned length:', cleanedContent.length)
+
         // Normal completion -> persist assistant message
         const assistantMessage = MessageService.create(
           conversationId,
           userMessage.id,
           'assistant',
-          assistantContent,
+          cleanedContent,
           assistantThinking,
-          selectedModel
+          selectedModel,
+          assistantToolCalls
         )
-
+        console.log(assistantMessage)
+        // Send completion with cleaned content to override any streamed raw content
+        const cleanedMessage = { ...assistantMessage, content: cleanedContent }
         res.write(
           `data: ${JSON.stringify({
             type: 'complete',
-            message: assistantMessage,
+            message: cleanedMessage,
           })}\n\n`
         )
 
@@ -1112,17 +1269,30 @@ router.post(
             .toLowerCase()
             .includes('abort')
         if (isAbort) {
+
+          // Final cleanup for aborted messages
+          const toolCallRegex = /\{[^{}]*"[^"]*":\s*"[^"]*"[^{}]*\}/g
+          if (!assistantToolCalls.trim() && assistantContent.includes('{"')) {
+            const matches = assistantContent.match(toolCallRegex)
+            if (matches) {
+              assistantToolCalls = JSON.stringify(matches)
+            }
+          }
+          const cleanedContent = assistantContent.replace(toolCallRegex, '').trim()
+
           // Persist whatever we have as a partial message
-          if (assistantContent.trim() || assistantThinking.trim()) {
+          if (cleanedContent.trim() || assistantThinking.trim() || assistantToolCalls.trim()) {
             const assistantMessage = MessageService.create(
               conversationId,
               userMessage.id,
               'assistant',
-              assistantContent,
+              cleanedContent,
               assistantThinking,
-              selectedModel
+              selectedModel,
+              assistantToolCalls
             )
-            res.write(`data: ${JSON.stringify({ type: 'complete', message: assistantMessage, aborted: true })}\n\n`)
+            const cleanedMessage = { ...assistantMessage, content: cleanedContent }
+            res.write(`data: ${JSON.stringify({ type: 'complete', message: cleanedMessage, aborted: true })}\n\n`)
           } else {
             res.write(`data: ${JSON.stringify({ type: 'aborted' })}\n\n`)
           }
@@ -1187,13 +1357,7 @@ router.post(
       return res.status(400).json({ error: 'ids (number[]) is required' })
     }
 
-    const normalized = Array.from(
-      new Set(
-        ids
-          .map(n => Number(n))
-          .filter(n => Number.isFinite(n) && n > 0)
-      )
-    ) as number[]
+    const normalized = Array.from(new Set(ids.map(n => Number(n)).filter(n => Number.isFinite(n) && n > 0))) as number[]
 
     if (normalized.length === 0) {
       return res.status(400).json({ error: 'No valid ids provided' })

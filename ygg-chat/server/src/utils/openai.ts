@@ -1,6 +1,6 @@
 import { openai } from '@ai-sdk/openai'
-import { streamText, tool } from 'ai'
-import { z } from 'zod/v4'
+import { stepCountIs, streamText } from 'ai'
+import tools from './tools'
 
 export async function generateResponse(
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
@@ -13,18 +13,16 @@ export async function generateResponse(
   }))
   const { textStream } = await streamText({
     model: openai(model),
-    tools: {
-      weather: tool({
-        description: 'Get the weather in a location',
-        inputSchema: z.object({
-          location: z.string().describe('The location to get the weather for'),
-        }),
-        execute: async ({ location }) => ({
-          location,
-          temperature: 72 + Math.floor(Math.random() * 21) - 1000,
-        }),
-      }),
-    },
+    tools: tools.reduce(
+      (acc, tool) => {
+        acc[tool.name] = tool.tool
+        return acc
+      },
+      {} as Record<string, any>
+    ),
+
+    stopWhen: stepCountIs(40),
+
     messages: formattedMessages,
   })
   for await (const chunk of textStream) {

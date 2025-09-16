@@ -173,3 +173,15 @@ export const selectDisplayMessages = createSelector(
     return [...unique.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   }
 )
+
+// Tools selectors
+export const selectTools = createSelector([selectChatState], chat => chat.tools)
+
+export const selectEnabledTools = createSelector([selectTools], tools =>
+  tools.filter(tool => tool.enabled)
+)
+
+export const selectToolByName = createSelector(
+  [selectTools, (_state: RootState, toolName: string) => toolName],
+  (tools, toolName) => tools.find(tool => tool.name === toolName)
+)

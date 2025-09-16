@@ -4,6 +4,7 @@ import { convContextSet, systemPromptSet, updateContext, updateSystemPrompt } fr
 import { useAppDispatch, useAppSelector } from '../../hooks/redux'
 import { Button } from '../Button/button'
 import { InputTextArea } from '../InputTextArea/InputTextArea'
+import { ToolsSettings } from './ToolsSettings'
 
 type SettingsPaneProps = {
   open: boolean
@@ -76,34 +77,47 @@ export const SettingsPane: React.FC<SettingsPaneProps> = ({ open, onClose }) => 
 
       {/* Modal */}
       <div
-        className='relative z-50 w-full max-w-2xl rounded-lg p-4 bg-neutral-100 dark:bg-neutral-800 shadow-lg'
+        className='relative z-50 w-full max-w-4xl rounded-lg p-4 bg-neutral-100 dark:bg-neutral-800 shadow-lg max-h-[90vh] overflow-y-auto'
         onClick={e => e.stopPropagation()}
       >
         <h2 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>AI Settings</h2>
 
-        <InputTextArea
-          label='System prompt'
-          placeholder='Enter a system prompt to guide the assistant...'
-          value={systemPrompt}
-          onChange={handleChange}
-          minRows={6}
-          maxRows={16}
-          width='w-full'
-          showCharCount
-        />
-        <div className='py-2'></div>
-        <InputTextArea
-          label='Context'
-          placeholder='Enter a context to augment your chat...'
-          value={context}
-          onChange={handleContextChange}
-          minRows={6}
-          maxRows={16}
-          width='w-full'
-          showCharCount
-        />
+        <div className='space-y-6'>
+          {/* System Prompt Section */}
+          <div>
+            <InputTextArea
+              label='System prompt'
+              placeholder='Enter a system prompt to guide the assistant...'
+              value={systemPrompt}
+              onChange={handleChange}
+              minRows={6}
+              maxRows={16}
+              width='w-full'
+              showCharCount
+            />
+          </div>
 
-        <div className='mt-4 flex justify-end'>
+          {/* Context Section */}
+          <div>
+            <InputTextArea
+              label='Context'
+              placeholder='Enter a context to augment your chat...'
+              value={context}
+              onChange={handleContextChange}
+              minRows={6}
+              maxRows={16}
+              width='w-full'
+              showCharCount
+            />
+          </div>
+
+          {/* Tools Section */}
+          <div>
+            <ToolsSettings />
+          </div>
+        </div>
+
+        <div className='mt-6 flex justify-end'>
           <Button variant='secondary' size='small' onClick={onClose}>
             Close
           </Button>

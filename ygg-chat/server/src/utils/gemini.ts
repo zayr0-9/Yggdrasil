@@ -92,7 +92,7 @@ export async function generateResponse(
         {} as Record<string, any>
       ),
 
-      stopWhen: stepCountIs(20),
+      stopWhen: stepCountIs(40),
       messages: formattedMessages as any,
       // Enable Gemini "thinking" support per provider guide
       providerOptions: think
@@ -142,6 +142,8 @@ export async function generateResponse(
 
           if (think && t.includes('reasoning')) {
             onChunk(JSON.stringify({ part: 'reasoning', delta }))
+          } else if (t.includes('tool-call') || t.includes('tool_call') || t.includes('tool-use')) {
+            onChunk(JSON.stringify({ part: 'tool_call', delta }))
           } else if (t.includes('text') || typeof part === 'string') {
             onChunk(JSON.stringify({ part: 'text', delta }))
           }

@@ -13,7 +13,7 @@ const ENV_PATH = path.join(__dirname, '../../../.env')
 function parseEnvFile(content: string): Record<string, string> {
   const result: Record<string, string> = {}
   const lines = content.split('\n')
-  
+
   for (const line of lines) {
     const trimmed = line.trim()
     if (trimmed && !trimmed.startsWith('#')) {
@@ -26,20 +26,22 @@ function parseEnvFile(content: string): Record<string, string> {
       }
     }
   }
-  
+
   return result
 }
 
 // Convert key-value pairs back to .env format
 function formatEnvFile(envVars: Record<string, string>): string {
-  return Object.entries(envVars)
-    .map(([key, value]) => {
-      // Add quotes if value contains spaces or special characters
-      const needsQuotes = /[\s#"'\\]/.test(value)
-      const formattedValue = needsQuotes ? `"${value.replace(/"/g, '\\"')}"` : value
-      return `${key}=${formattedValue}`
-    })
-    .join('\n') + '\n'
+  return (
+    Object.entries(envVars)
+      .map(([key, value]) => {
+        // Add quotes if value contains spaces or special characters
+        const needsQuotes = /[\s#"'\\]/.test(value)
+        const formattedValue = needsQuotes ? `"${value.replace(/"/g, '\\"')}"` : value
+        return `${key}=${formattedValue}`
+      })
+      .join('\n') + '\n'
+  )
 }
 
 // Default API keys that should always be present
@@ -47,7 +49,8 @@ const DEFAULT_API_KEYS = {
   GOOGLE_GENERATIVE_AI_API_KEY: '',
   ANTHROPIC_API_KEY: '',
   OPENAI_API_KEY: '',
-  OPENROUTER_API_KEY: ''
+  OPENROUTER_API_KEY: '',
+  BRAVE_API_KEY: '',
 }
 
 // GET /api/settings/env - Read current .env file
@@ -60,10 +63,10 @@ router.get(
         fs.writeFileSync(ENV_PATH, '')
         return res.json(DEFAULT_API_KEYS)
       }
-      
+
       const content = fs.readFileSync(ENV_PATH, 'utf-8')
       const envVars = parseEnvFile(content)
-      
+
       // Ensure default API keys are always present
       const result = { ...DEFAULT_API_KEYS, ...envVars }
       res.json(result)
@@ -80,26 +83,26 @@ router.put(
   asyncHandler(async (req, res) => {
     try {
       const envVars = req.body
-      
+
       if (!envVars || typeof envVars !== 'object') {
         return res.status(400).json({ error: 'Invalid request body' })
       }
-      
+
       // Validate keys (no spaces, special characters)
       for (const key of Object.keys(envVars)) {
         if (!/^[A-Z_][A-Z0-9_]*$/i.test(key)) {
-          return res.status(400).json({ 
-            error: `Invalid environment variable name: ${key}. Use only letters, numbers, and underscores.` 
+          return res.status(400).json({
+            error: `Invalid environment variable name: ${key}. Use only letters, numbers, and underscores.`,
           })
         }
       }
-      
+
       // Ensure default API keys are always included
       const finalEnvVars = { ...DEFAULT_API_KEYS, ...envVars }
-      
+
       const content = formatEnvFile(finalEnvVars)
       fs.writeFileSync(ENV_PATH, content)
-      
+
       res.json({ success: true, message: 'Environment variables updated successfully' })
     } catch (error) {
       console.error('Error writing .env file:', error)

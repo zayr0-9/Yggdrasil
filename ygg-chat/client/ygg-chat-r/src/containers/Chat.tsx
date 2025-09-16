@@ -368,6 +368,7 @@ function Chat() {
     displayMessages,
     streamState.buffer,
     streamState.thinkingBuffer,
+    streamState.toolCallsBuffer,
     streamState.active,
     streamState.finished,
     selectedPath,
@@ -907,6 +908,7 @@ function Chat() {
         role={msg.role}
         content={msg.content}
         thinking={msg.thinking_block}
+        toolCalls={msg.tool_calls}
         timestamp={msg.created_at}
         width='w-full'
         modelName={msg.model_name}
@@ -973,12 +975,13 @@ function Chat() {
             )}
 
             {/* Show streaming content */}
-            {streamState.active && (Boolean(streamState.buffer) || Boolean(streamState.thinkingBuffer)) && (
+            {streamState.active && (Boolean(streamState.buffer) || Boolean(streamState.thinkingBuffer) || Boolean(streamState.toolCallsBuffer)) && (
               <ChatMessage
                 id='streaming'
                 role='assistant'
                 content={streamState.buffer}
                 thinking={streamState.thinkingBuffer}
+                toolCalls={streamState.toolCallsBuffer}
                 width='w-full'
                 modelName={selectedModel?.name || undefined}
                 className=''

@@ -16,12 +16,12 @@ export interface miniMessage {
 
 // Stream-specific types
 export interface StreamChunk {
-  type: 'chunk' | 'complete' | 'error' | 'user_message' | 'reset' | 'generation_started'
+  type: 'chunk' | 'complete' | 'error' | 'user_message' | 'reset' | 'generation_started' | 'tool_call'
   content?: string
   // delta is used for token-level updates from the server
   delta?: string
-  // part distinguishes normal text from reasoning tokens
-  part?: 'text' | 'reasoning'
+  // part distinguishes normal text from reasoning tokens from tool calls
+  part?: 'text' | 'reasoning' | 'tool_call'
   message?: Message
   error?: string
   // optional iteration index for multi-reply endpoints
@@ -34,6 +34,8 @@ export interface StreamState {
   buffer: string
   // separate buffer for reasoning/thinking tokens while streaming
   thinkingBuffer: string
+  // separate buffer for tool call tokens while streaming
+  toolCallsBuffer: string
   messageId: number | null
   error: string | null
   finished: boolean
@@ -134,6 +136,7 @@ export interface ChatState {
   initialization: InitializationState
   selectedNodes: number[]
   attachments: AttachmentsState
+  tools: tools[]
 }
 
 // Action payloads
@@ -197,4 +200,14 @@ export interface AttachmentsState {
   byMessage: Record<number, Attachment[]>
   // Backup of deleted image artifacts (as base64 data URLs) per message during branch editing
   backup: Record<number, string[]>
+}
+
+export interface tools {
+  name: string
+  enabled: boolean
+  tool: {
+    description: string
+    inputSchema: any
+    execute: any
+  }
 }

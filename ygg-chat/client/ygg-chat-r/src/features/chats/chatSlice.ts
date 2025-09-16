@@ -60,6 +60,7 @@ const makeInitialState = (): ChatState => ({
     active: false,
     buffer: '',
     thinkingBuffer: '',
+    toolCallsBuffer: '',
     messageId: null,
     error: null,
     finished: false,
@@ -95,6 +96,7 @@ const makeInitialState = (): ChatState => ({
     byMessage: {},
     backup: {},
   },
+  tools: [],
 })
 
 const initialState: ChatState = makeInitialState()
@@ -185,6 +187,7 @@ export const chatSlice = createSlice({
       state.streaming.active = true
       state.streaming.buffer = ''
       state.streaming.thinkingBuffer = ''
+      state.streaming.toolCallsBuffer = ''
       state.composition.input.content = ''
       state.streaming.error = null
       state.streaming.finished = false
@@ -213,6 +216,7 @@ export const chatSlice = createSlice({
       if (chunk.type === 'reset') {
         state.streaming.buffer = ''
         state.streaming.thinkingBuffer = ''
+        state.streaming.toolCallsBuffer = ''
         state.streaming.error = null
         return
       }
@@ -223,10 +227,16 @@ export const chatSlice = createSlice({
         if (chunk.part === 'reasoning') {
           const delta = chunk.delta ?? chunk.content ?? ''
           state.streaming.thinkingBuffer += delta
+        } else if (chunk.part === 'tool_call') {
+          const delta = chunk.delta ?? chunk.content ?? ''
+          state.streaming.toolCallsBuffer += delta
         } else {
           const delta = chunk.delta ?? chunk.content ?? ''
           state.streaming.buffer += delta
         }
+      } else if (chunk.type === 'tool_call') {
+        const delta = chunk.delta ?? chunk.content ?? ''
+        state.streaming.toolCallsBuffer += delta
       } else if (chunk.type === 'complete') {
         state.streaming.messageId = chunk.message?.id || null
         state.streaming.active = false
@@ -467,6 +477,14 @@ export const chatSlice = createSlice({
         const existing = Array.isArray(msg.artifacts) ? msg.artifacts : []
         msg.artifacts = [...existing, ...artifacts]
       }
+    },
+
+    // Tools management
+    toolsLoaded: (state, action: PayloadAction<any[]>) => {
+      state.tools = action.payload
+    },
+    toolsError: (_state, action: PayloadAction<string>) => {
+      console.error('Tools error:', action.payload)
     },
 
     stateReset: () => makeInitialState(),

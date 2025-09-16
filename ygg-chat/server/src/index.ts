@@ -5,12 +5,13 @@ import fs from 'fs'
 import { createServer } from 'http'
 import path from 'path'
 import { WebSocket, WebSocketServer } from 'ws'
-import { initializeDatabase, initializeStatements, db, rebuildFTSIndex } from './database/db'
-import { stripMarkdownToText } from './utils/markdownStripper'
+import { db, initializeDatabase, initializeStatements, rebuildFTSIndex } from './database/db'
 import chatRoutes from './routes/chat'
 import settingsRoutes from './routes/settings'
+import { stripMarkdownToText } from './utils/markdownStripper'
+import tools from './utils/tools/index'
 
-dotenv.config({ path: '../.env' })
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') })
 
 const app = express()
 const server = createServer(app)
@@ -137,6 +138,16 @@ app.use('/api', chatRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')))
 
+// Tools endpoint
+app.get('/api/tools', (req, res) => {
+  try {
+    res.json({ tools })
+  } catch (error) {
+    console.error('Error fetching tools:', error)
+    res.status(500).json({ error: 'Failed to fetch tools' })
+  }
+})
+
 // Debug endpoint to see connected clients
 app.get('/api/debug/ide-clients', (req, res) => {
   const clientList = Array.from(clients).map(c => ({
@@ -153,6 +164,9 @@ if (!fs.existsSync(dbPath)) {
 }
 
 initializeDatabase()
+console.log('Rebuilding FTS index on startup...')
+rebuildFTSIndex()
+console.log('FTS index rebuilt.')
 initializeStatements()
 ;(async () => {
   server.listen(3001, () => {
@@ -166,7 +180,7 @@ async function migratePlainTextAndFTS() {
   try {
     // Verify column exists (initializeDatabase attempted to add it)
     const hasColumn = db
-      .prepare("PRAGMA table_info(messages)")
+      .prepare('PRAGMA table_info(messages)')
       .all()
       .some((c: any) => String(c.name) === 'plain_text_content')
 
@@ -196,9 +210,9 @@ async function migratePlainTextAndFTS() {
     }
 
     // Always rebuild FTS to ensure it uses the latest plain_text_content
-    console.log('🔧 Rebuilding FTS index to use plain_text_content...')
-    rebuildFTSIndex()
-    console.log('✅ FTS rebuild complete.')
+    // console.log('🔧 Rebuilding FTS index to use plain_text_content...')
+    // rebuildFTSIndex()
+    // console.log('✅ FTS rebuild complete.')
   } catch (err) {
     console.warn('⚠️ Startup migration failed:', err)
   }

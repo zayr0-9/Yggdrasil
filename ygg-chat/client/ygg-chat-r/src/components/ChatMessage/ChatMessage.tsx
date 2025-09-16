@@ -25,6 +25,7 @@ interface ChatMessageProps {
   role: MessageRole
   content: string
   thinking?: string
+  toolCalls?: string
   timestamp?: string | Date
   onEdit?: (id: string, newContent: string) => void
   onBranch?: (id: string, newContent: string) => void
@@ -194,6 +195,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
     role,
     content,
     thinking,
+    toolCalls,
     timestamp,
     onEdit,
     onBranch,
@@ -214,6 +216,8 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
     const [copied, setCopied] = useState(false)
     // Toggle visibility of the reasoning/thinking block
     const [showThinking, setShowThinking] = useState(true)
+    // Toggle visibility of the tool calls block
+    const [showToolCalls, setShowToolCalls] = useState(true)
 
     const handleEdit = () => {
       dispatch(chatSliceActions.editingBranchSet(false))
@@ -332,7 +336,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
         case 'user':
           return {
             container: useColored
-              ? 'bg-gray-800 border-l-4 border-l-yellow-500 dark:border-l-yPurple-400 bg-yellow-50 dark:bg-neutral-900'
+              ? 'bg-gray-800 border-l-4 border-l-yellow-500 dark:border-l-yPurple-400 bg-neutral-50 dark:bg-neutral-900'
               : transparentContainer,
             role: 'text-indigo-800 dark:text-yPurple-50',
             roleText: 'User',
@@ -340,7 +344,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
         case 'assistant':
           return {
             container: useColored
-              ? 'bg-gray-850 border-l-4 border-l-blue-500  dark:border-l-yBrown-400 bg-indigo-50  dark:bg-neutral-900'
+              ? 'bg-gray-850 border-l-4 border-l-blue-500  dark:border-l-yBrown-400 bg-neutral-50  dark:bg-neutral-900'
               : transparentContainer,
             role: 'text-lime-800 dark:text-yBrown-50',
             roleText: 'Assistant',
@@ -442,6 +446,44 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
             copied={copied}
           />
         </div>
+
+        {/* Tool calls block */}
+        {typeof toolCalls === 'string' && toolCalls.trim().length > 0 && (
+          <div className='mb-3 rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-900/40 dark:bg-neutral-900'>
+            <div className='mb-2 flex items-center justify-between'>
+              <div className='text-xs font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-300'>
+                Tool Calls
+              </div>
+              <Button
+                type='button'
+                onClick={() => setShowToolCalls(s => !s)}
+                className='ml-2 text-xs px-2 py-1 border-1 border-blue-300 text-blue-800 dark:text-blue-300 dark:border-blue-900/60 hover:bg-blue-100 dark:hover:bg-neutral-800'
+                size='smaller'
+                variant='outline'
+                aria-expanded={showToolCalls}
+                aria-controls={`tool-calls-content-${id}`}
+              >
+                {showToolCalls ? 'Hide' : 'Show'}
+              </Button>
+            </div>
+            {showToolCalls && (
+              <div id={`tool-calls-content-${id}`} className='prose max-w-none dark:prose-invert w-full text-sm'>
+                <pre className='bg-gray-100 dark:bg-neutral-800 p-3 rounded-md overflow-auto text-xs'>
+                  <code className='text-blue-700 dark:text-blue-300'>
+                    {(() => {
+                      try {
+                        const parsed = JSON.parse(toolCalls)
+                        return JSON.stringify(parsed, null, 2)
+                      } catch {
+                        return toolCalls
+                      }
+                    })()}
+                  </code>
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Reasoning / thinking block */}
         {typeof thinking === 'string' && thinking.trim().length > 0 && (

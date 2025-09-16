@@ -12,6 +12,7 @@ import {
   Model,
   ModelsResponse,
   SendMessagePayload,
+  tools,
 } from './chatTypes'
 // TODO: Import when conversations feature is available
 // import { conversationActions } from '../conversations'
@@ -1095,6 +1096,43 @@ export const abortStreaming = createAsyncThunk<{ success: boolean }, { messageId
       return response
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to abort generation'
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Fetch available tools
+export const fetchTools = createAsyncThunk(
+  'chat/fetchTools',
+  async (_, { dispatch, rejectWithValue }) => {
+    try {
+      const response = await apiCall<{ tools: tools[] }>('/tools')
+      dispatch(chatSliceActions.toolsLoaded(response.tools))
+      return response.tools
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch tools'
+      dispatch(chatSliceActions.toolsError(message))
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Update tool enabled status
+export const updateToolEnabled = createAsyncThunk(
+  'chat/updateToolEnabled',
+  async ({ toolName, enabled }: { toolName: string; enabled: boolean }, { dispatch, rejectWithValue }) => {
+    try {
+      const response = await apiCall<{ success: boolean; tool: tools; message: string }>(`/tools/${toolName}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled }),
+      })
+
+      // Refresh tools list to get updated state
+      dispatch(fetchTools())
+
+      return response
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update tool'
       return rejectWithValue(message)
     }
   }

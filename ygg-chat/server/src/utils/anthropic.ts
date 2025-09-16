@@ -144,8 +144,9 @@ export async function generateResponse(
 
           if (!delta) continue
 
-          // Route reasoning vs text parts. Anthropic may label as 'thinking'/'reasoning'.
+          // Route reasoning vs text vs tool call parts. Anthropic may label as 'thinking'/'reasoning'.
           const isReason = t.includes('reason') || t.includes('thinking')
+          const isToolCall = t.includes('tool-call') || t.includes('tool_call') || t.includes('tool-use')
           if (isReason) {
             if (think) {
               onChunk(JSON.stringify({ part: 'reasoning', delta }))
@@ -153,8 +154,27 @@ export async function generateResponse(
               // Suppress reasoning output when thinking is disabled
               continue
             }
+          } else if (isToolCall) {
+            onChunk(JSON.stringify({ part: 'tool_call', delta }))
           } else {
-            onChunk(JSON.stringify({ part: 'text', delta }))
+            // Check if this delta contains tool calls mixed in with text
+            const toolCallRegex = /\{[^{}]*"[^"]*":\s*"[^"]*"[^{}]*\}/g
+            if (delta.includes('{"') && toolCallRegex.test(delta)) {
+              // Extract tool calls from this delta
+              const matches = delta.match(toolCallRegex)
+              if (matches) {
+                // Send tool calls separately
+                onChunk(JSON.stringify({ part: 'tool_call', delta: matches.join('') }))
+
+                // Send cleaned text separately
+                const cleanedDelta = delta.replace(toolCallRegex, '').trim()
+                if (cleanedDelta) {
+                  onChunk(JSON.stringify({ part: 'text', delta: cleanedDelta }))
+                }
+              }
+            } else {
+              onChunk(JSON.stringify({ part: 'text', delta }))
+            }
           }
         } catch {
           // Ignore malformed parts
@@ -166,7 +186,23 @@ export async function generateResponse(
         if (aborted || abortSignal?.aborted) {
           return
         }
-        onChunk(JSON.stringify({ part: 'text', delta: chunk }))
+        // Filter tool calls from textStream fallback as well
+        const toolCallRegex = /\{[^{}]*"[^"]*":\s*"[^"]*"[^{}]*\}/g
+        if (chunk.includes('{"') && toolCallRegex.test(chunk)) {
+          const matches = chunk.match(toolCallRegex)
+          if (matches) {
+            // Send tool calls separately
+            onChunk(JSON.stringify({ part: 'tool_call', delta: matches.join('') }))
+
+            // Send cleaned text separately
+            const cleanedChunk = chunk.replace(toolCallRegex, '').trim()
+            if (cleanedChunk) {
+              onChunk(JSON.stringify({ part: 'text', delta: cleanedChunk }))
+            }
+          }
+        } else {
+          onChunk(JSON.stringify({ part: 'text', delta: chunk }))
+        }
       }
     }
   } catch (err: any) {

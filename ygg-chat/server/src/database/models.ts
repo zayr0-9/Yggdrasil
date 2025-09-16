@@ -1,12 +1,16 @@
 import { BaseMessage, Project } from '../../../shared/types'
-import { statements, db } from './db'
 import { stripMarkdownToText } from '../utils/markdownStripper'
+import { db, statements } from './db'
 
 // Utility function to sanitize FTS queries
 function sanitizeFTSQuery(query: string): string {
-  // Remove or escape problematic characters for FTS5
-  // Wrap the entire query in double quotes to treat it as a phrase search
-  return `"${query.replace(/"/g, '""')}"`
+  // Split into terms, escape double-quotes, and append * for prefix matching.
+  return query
+    .trim()
+    .split(/\s+/)
+    .map(w => w.replace(/"/g, '""')) // escape quotes
+    .map(w => `${w}*`) // prefix search
+    .join(' OR ') // match any token
 }
 
 // Lazy getter for prepared statement to set plain_text_content, since tables are created at runtime
@@ -55,7 +59,7 @@ export class FileContentService {
 
     const result = statements.createFileContent.run(fileName, absolutePath, relativePath, fileContent, sizeBytes)
     const created = statements.getFileContentById.get(result.lastInsertRowid) as FileContent
-    
+
     // Create link if messageId provided
     if (messageId) {
       statements.linkFileContentToMessage.run(messageId, created.id)
@@ -383,7 +387,8 @@ export class MessageService {
     role: Message['role'],
     content: string,
     thinking_block: string,
-    modelName?: string
+    modelName?: string,
+    tool_calls?: string
     // children: []
   ): Message {
     const result = statements.createMessage.run(
@@ -392,6 +397,7 @@ export class MessageService {
       role,
       content,
       thinking_block,
+      tool_calls || null,
       '[]',
       modelName
     )
@@ -477,8 +483,13 @@ export class MessageService {
     statements.deleteMessagesByConversation.run(conversationId)
   }
 
-  static update(id: number, content: string, thinking_block: string | null = null): Message | undefined {
-    statements.updateMessage.run(content, thinking_block, id)
+  static update(
+    id: number,
+    content: string,
+    thinking_block: string | null = null,
+    tool_calls: string | null = null
+  ): Message | undefined {
+    statements.updateMessage.run(content, thinking_block, tool_calls, id)
     // Fire-and-forget: update plain text content
     try {
       stripMarkdownToText(content)

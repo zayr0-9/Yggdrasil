@@ -4,6 +4,7 @@ export interface BaseMessage {
   conversation_id: number
   role: 'user' | 'assistant'
   thinking_block?: string
+  tool_calls?: string
   content: string
   content_plain_text: string
   parent_id?: number | null

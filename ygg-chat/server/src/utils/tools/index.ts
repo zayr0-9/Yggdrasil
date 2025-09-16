@@ -1,12 +1,15 @@
 import { z } from 'zod/v4'
 // src/utils/tools/toolRegistry.ts
 // import { z } from 'zod/v4'
+import { braveSearch } from './core/braveSearch'
+import { browseWeb } from './core/browseWeb'
 import { createTextFile } from './core/createFile'
 import { deleteFile, safeDeleteFile } from './core/deleteFile'
 import { editFile } from './core/editFile'
 import { extractDirectoryStructure } from './core/getDirectoryTree'
 import { readTextFile } from './core/readFile'
 import { readMultipleTextFiles } from './core/readFiles'
+import searchHistory from './core/searchHistory'
 // export const directoryTool = tool({
 //   description:
 //     'Get the directory structure of a specified path. Useful for understanding project organization, finding files, or exploring codebases.',
@@ -37,6 +40,7 @@ import { readMultipleTextFiles } from './core/readFiles'
 
 interface tools {
   name: string
+  enabled: boolean
   tool: {
     description: string
     inputSchema: any
@@ -46,20 +50,8 @@ interface tools {
 
 const tools: tools[] = [
   {
-    name: 'weather',
-    tool: {
-      description: 'Get the weather in a location',
-      inputSchema: z.object({
-        location: z.string().describe('The location to get the weather for'),
-      }),
-      execute: async ({ location }: { location: string }) => ({
-        location,
-        temperature: 72 + Math.floor(Math.random() * 21) - 1000,
-      }),
-    },
-  },
-  {
     name: 'directory',
+    enabled: true,
     tool: {
       description:
         'Get the directory structure of a specified path. Useful for understanding project organization, finding files, or exploring codebases.',
@@ -86,6 +78,7 @@ const tools: tools[] = [
   },
   {
     name: 'read_file',
+    enabled: true,
     tool: {
       description:
         'Read the contents of a text file (code, config, docs). Rejects likely-binary files and truncates large files for safety.',
@@ -122,6 +115,7 @@ const tools: tools[] = [
   },
   {
     name: 'read_files',
+    enabled: true,
     tool: {
       description:
         "Read multiple text/code/config files and return a single concatenated string, separated by each file's relative path header.",
@@ -155,6 +149,7 @@ const tools: tools[] = [
   },
   {
     name: 'create_file',
+    enabled: false,
     tool: {
       description: 'Create a new text file with optional parent directory creation and overwrite support.',
       inputSchema: z.object({
@@ -186,6 +181,7 @@ const tools: tools[] = [
   },
   {
     name: 'delete_file',
+    enabled: false,
     tool: {
       description: 'Delete a file at the specified path. Optionally restrict deletions to specific file extensions.',
       inputSchema: z.object({
@@ -219,6 +215,7 @@ const tools: tools[] = [
   },
   {
     name: 'edit_file',
+    enabled: false,
     tool: {
       description:
         'Edit a file using search and replace operations or append content. Supports replacing all occurrences, first occurrence only, or appending.',
@@ -242,6 +239,177 @@ const tools: tools[] = [
       },
     },
   },
+  {
+    name: 'search_history',
+    enabled: false,
+    tool: {
+      description: 'Search chat history across user, project, or conversation using the DB FTS utilities.',
+      inputSchema: z.object({
+        query: z.string().describe('The search query to run'),
+        userId: z.number().int().optional().nullable().describe('Optional user id to scope search'),
+        projectId: z.number().int().optional().nullable().describe('Optional project id to scope search'),
+        conversationId: z.number().int().optional().nullable().describe('Optional conversation id to scope search'),
+        limit: z.number().int().optional().describe('Optional result limit (default 10)'),
+      }),
+      execute: async ({ query, userId, projectId, conversationId, limit }: any) => {
+        try {
+          const res = await searchHistory({ query, userId, projectId, conversationId, limit })
+          return {
+            success: true,
+            results: res,
+          }
+        } catch (err: any) {
+          return { success: false, error: err?.message ?? String(err) }
+        }
+      },
+    },
+  },
+  {
+    name: 'brave_search',
+    enabled: true,
+    tool: {
+      description:
+        'Search the web using Brave Search API. Returns web search results with titles, URLs, and descriptions.',
+      inputSchema: z.object({
+        query: z.string().describe('The search query to execute'),
+        count: z.number().int().min(1).max(20).optional().describe('Number of results to return (default 10, max 20)'),
+        offset: z.number().int().min(0).optional().describe('Number of results to skip (default 0)'),
+        safesearch: z.enum(['strict', 'moderate', 'off']).optional().describe('Safe search setting (default moderate)'),
+        country: z.string().optional().describe('Country code for localized results (e.g., "US", "GB")'),
+        search_lang: z.string().optional().describe('Language for search results (e.g., "en", "es")'),
+        extra_snippets: z.boolean().optional().describe('Include extra snippets in results'),
+        summary: z.boolean().optional().describe('Include AI-generated summary'),
+      }),
+      execute: async ({ query, count, offset, safesearch, country, search_lang, extra_snippets, summary }: any) => {
+        try {
+          const res = await braveSearch(query, {
+            count,
+            offset,
+            safesearch,
+            country,
+            search_lang,
+            extra_snippets,
+            summary,
+          })
+          return res
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error occurred during search',
+            query,
+          }
+        }
+      },
+    },
+  },
+  {
+    name: 'browse_web',
+    enabled: true,
+    tool: {
+      description:
+        'Browse a web page and extract its content, including text, headings, links, images, and metadata. Uses Playwright to handle JavaScript-rendered content. Supports both headless and non-headless modes for bot detection avoidance. Use headless mode as default unless specified by user.',
+      inputSchema: z.object({
+        url: z.string().url().describe('The URL to browse and extract content from'),
+        waitForSelector: z.string().optional().describe('Optional CSS selector to wait for before extracting content'),
+        timeout: z.number().int().min(5000).max(60000).optional().describe('Timeout in milliseconds (default 30000)'),
+        waitForNetworkIdle: z
+          .boolean()
+          .optional()
+          .describe('Wait for network to be idle before extracting (default true)'),
+        extractImages: z.boolean().optional().describe('Extract image information (default true)'),
+        extractLinks: z.boolean().optional().describe('Extract link information (default true)'),
+        extractMetadata: z.boolean().optional().describe('Extract page metadata (default true)'),
+        headless: z
+          .boolean()
+          .optional()
+          .describe('Run browser in headless mode (default true). Set to false to avoid bot detection.'),
+        useUserProfile: z
+          .boolean()
+          .optional()
+          .describe(
+            'Use existing browser profile with your cookies and extensions (default false). Only works with headless=false.'
+          ),
+        userDataDir: z
+          .string()
+          .optional()
+          .describe(
+            'Path to browser user data directory. Required when useUserProfile=true. Example: ~/.config/google-chrome or %LOCALAPPDATA%\\Google\\Chrome\\User Data'
+          ),
+        retries: z
+          .number()
+          .int()
+          .min(0)
+          .max(5)
+          .optional()
+          .describe('Number of retry attempts if browsing fails (default 2)'),
+        retryDelay: z
+          .number()
+          .int()
+          .min(100)
+          .max(10000)
+          .optional()
+          .describe('Delay between retries in milliseconds (default 1000)'),
+        useBrave: z.boolean().optional().describe('Use Brave browser instead of Chromium (default false)'),
+        executablePath: z.string().optional().describe('Custom path to browser executable (overrides useBrave)'),
+      }),
+      execute: async ({
+        url,
+        waitForSelector,
+        timeout,
+        waitForNetworkIdle,
+        extractImages,
+        extractLinks,
+        extractMetadata,
+        headless,
+        useUserProfile,
+        userDataDir,
+        retries,
+        retryDelay,
+        useBrave,
+        executablePath,
+      }: any) => {
+        try {
+          const result = await browseWeb(url, {
+            waitForSelector,
+            timeout,
+            waitForNetworkIdle,
+            extractImages,
+            extractLinks,
+            extractMetadata,
+            headless,
+            useUserProfile,
+            userDataDir,
+            retries,
+            retryDelay,
+            useBrave,
+            executablePath,
+          })
+          return result
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error occurred while browsing web',
+            url,
+          }
+        }
+      },
+    },
+  },
 ]
+
+// Function to update tool enabled status
+export const updateToolEnabled = (toolName: string, enabled: boolean): boolean => {
+  const tool = tools.find(t => t.name === toolName)
+  if (tool) {
+    tool.enabled = enabled
+    return true
+  }
+  return false
+}
+
+// Function to get tool by name
+export const getToolByName = (toolName: string): tools | undefined => {
+  return tools.find(t => t.name === toolName)
+}
 
 export default tools
