@@ -2,11 +2,12 @@
 import { Message } from '../database/models'
 import { generateResponse as anthropicGenerate } from './anthropic'
 import { generateResponse as geminiGenerate } from './gemini'
+import { generateResponse as lmstudioGenerate } from './lmstudio'
 import { generateResponse as ollamaGenerate } from './ollama'
 import { generateResponse as openaiGenerate } from './openai'
 import { generateResponse as openrouterGenerate } from './openrouter'
 
-export type ProviderType = 'ollama' | 'gemini' | 'anthropic' | 'openai' | 'openrouter'
+export type ProviderType = 'ollama' | 'gemini' | 'anthropic' | 'openai' | 'openrouter' | 'lmstudio'
 
 function getProviderModel(provider: ProviderType, model?: string): string {
   switch (provider) {
@@ -20,6 +21,8 @@ function getProviderModel(provider: ProviderType, model?: string): string {
       return model || 'gpt-4o' // Respect client-selected OpenAI model, default to gpt-4o
     case 'openrouter':
       return model || 'openrouter/auto' // Respect client-selected OpenRouter model, default to auto selection
+    case 'lmstudio':
+      return model || 'llama-3.2-1b' // Respect client-selected LM Studio model, default to llama-3.2-1b
     default:
       throw new Error(`Unknown provider: ${provider}`)
   }
@@ -132,6 +135,11 @@ export async function generateResponse(
       // Forward attachments for OpenRouter (AI SDK OpenAI adapter will translate file parts)
       const orAttachments = (attachments || []).map(a => ({ mimeType: a.mimeType, filePath: a.filePath }))
       return openrouterGenerate(aiSdkForOpenAI, onChunk, providerModel, orAttachments, abortSignal, think)
+    }
+    case 'lmstudio': {
+      // Forward attachments for LM Studio (AI SDK OpenAI-compatible adapter will translate file parts)
+      const lmAttachments = (attachments || []).map(a => ({ mimeType: a.mimeType, filePath: a.filePath }))
+      return lmstudioGenerate(aiSdkForOpenAI, onChunk, providerModel, lmAttachments, abortSignal, think)
     }
     default:
       throw new Error(`Unknown provider: ${provider}`)

@@ -200,6 +200,24 @@ export const fetchOpenRouterModels = createAsyncThunk(
   }
 )
 
+// Fetch LM Studio models from LM Studio API and load into ModelState.available
+export const fetchLMStudioModels = createAsyncThunk(
+  'chat/fetchLMStudioModels',
+  async (_: void, { dispatch, rejectWithValue }) => {
+    dispatch(chatSliceActions.modelsLoadingStarted())
+
+    try {
+      const payload = await apiCall<ModelsResponse>('/models/lmstudio')
+      dispatch(chatSliceActions.modelsLoaded(payload))
+      return payload
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch LM Studio models'
+      dispatch(chatSliceActions.modelsError(message))
+      return rejectWithValue(message)
+    }
+  }
+)
+
 // Provider-aware models fetch orchestrator
 export const fetchModelsForCurrentProvider = createAsyncThunk(
   'chat/fetchModelsForCurrentProvider',
@@ -222,6 +240,10 @@ export const fetchModelsForCurrentProvider = createAsyncThunk(
       }
       if (provider === 'openrouter') {
         const res = await (dispatch as any)(fetchOpenRouterModels()).unwrap()
+        return res
+      }
+      if (provider === 'lmstudio') {
+        const res = await (dispatch as any)(fetchLMStudioModels()).unwrap()
         return res
       }
       const res = await (dispatch as any)(fetchModels(force)).unwrap()

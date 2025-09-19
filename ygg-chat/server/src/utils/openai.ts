@@ -11,7 +11,7 @@ export async function generateResponse(
     role: msg.role as 'user' | 'assistant' | 'system',
     content: msg.content,
   }))
-  const { textStream } = await streamText({
+  const { textStream } = streamText({
     model: openai(model),
     tools: tools.reduce(
       (acc, tool) => {
@@ -20,7 +20,11 @@ export async function generateResponse(
       },
       {} as Record<string, any>
     ),
-
+    providerOptions: {
+      openai: {
+        reasoningEffort: 'low',
+      },
+    },
     stopWhen: stepCountIs(40),
 
     messages: formattedMessages,

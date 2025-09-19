@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef } from 'react'
 import { selectCurrentConversationId } from '../../features/chats'
 import { convContextSet, systemPromptSet, updateContext, updateSystemPrompt } from '../../features/conversations'
 import { useAppDispatch, useAppSelector } from '../../hooks/redux'
-import { Button } from '../Button/button'
 import { InputTextArea } from '../InputTextArea/InputTextArea'
 import { ToolsSettings } from './ToolsSettings'
 
@@ -16,6 +15,7 @@ export const SettingsPane: React.FC<SettingsPaneProps> = ({ open, onClose }) => 
   const systemPrompt = useAppSelector(state => state.conversations.systemPrompt ?? '')
   const context = useAppSelector(state => state.conversations.convContext ?? '')
   const conversationId = useAppSelector(selectCurrentConversationId)
+  const tools = useAppSelector(state => state.chat.tools ?? [])
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleChange = useCallback(
@@ -77,10 +77,18 @@ export const SettingsPane: React.FC<SettingsPaneProps> = ({ open, onClose }) => 
 
       {/* Modal */}
       <div
-        className='relative z-50 w-full max-w-4xl rounded-lg p-4 bg-neutral-100 dark:bg-neutral-800 shadow-lg max-h-[90vh] overflow-y-auto'
+        className={`relative z-50 w-full max-w-4xl rounded-lg p-4 bg-neutral-100 dark:bg-neutral-900 shadow-lg overflow-y-scroll thin-scrollbar transition-all duration-300 ease-in-out ${
+          tools.some(tool => tool.enabled) ? 'h-[60vh]' : 'h-[45vh]'
+        }`}
         onClick={e => e.stopPropagation()}
+        style={{ scrollbarGutter: 'stable' }}
       >
-        <h2 className='text-lg font-semibold text-stone-800 dark:text-stone-200 mb-3'>AI Settings</h2>
+        <div className='flex justify-between items-center mb-3 py-4'>
+          <h2 className='text-2xl font-semibold text-stone-800 dark:text-stone-200'>AI Settings</h2>
+          <button onClick={onClose} className='p-1 rounded-md transition-colors' aria-label='Close settings'>
+            <i className='bx bx-x text-2xl text-gray-600 dark:text-gray-400 active:scale-95'></i>
+          </button>
+        </div>
 
         <div className='space-y-6'>
           {/* System Prompt Section */}
@@ -94,6 +102,7 @@ export const SettingsPane: React.FC<SettingsPaneProps> = ({ open, onClose }) => 
               maxRows={16}
               width='w-full'
               showCharCount
+              outline={true}
             />
           </div>
 
@@ -108,6 +117,7 @@ export const SettingsPane: React.FC<SettingsPaneProps> = ({ open, onClose }) => 
               maxRows={16}
               width='w-full'
               showCharCount
+              outline={true}
             />
           </div>
 
@@ -115,12 +125,6 @@ export const SettingsPane: React.FC<SettingsPaneProps> = ({ open, onClose }) => 
           <div>
             <ToolsSettings />
           </div>
-        </div>
-
-        <div className='mt-6 flex justify-end'>
-          <Button variant='secondary' size='small' onClick={onClose}>
-            Close
-          </Button>
         </div>
       </div>
     </div>

@@ -309,6 +309,57 @@ router.get(
   })
 )
 
+// Fetch LM Studio models from local LM Studio server
+router.get(
+  '/models/lmstudio',
+  asyncHandler(async (req, res) => {
+    try {
+      const baseUrl = process.env.LMSTUDIO_BASE_URL || 'http://localhost:1234'
+      const response = await fetch(`${baseUrl}/v1/models`, {
+        signal: AbortSignal.timeout(5000),
+      })
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: `LM Studio server error: ${response.statusText}` })
+      }
+
+      const data = (await response.json()) as { data?: any[]; models?: any[] }
+      const rawModels: any[] = Array.isArray(data?.data) ? data.data! : Array.isArray(data?.models) ? data.models! : []
+
+      // Map LM Studio response to client Model shape
+      const models = rawModels
+        .map(m => {
+          const id = String(m?.id || m?.name || '')
+          if (!id) return null
+          const displayName = String(m?.display_name || m?.displayName || id)
+          const description = String(m?.description || '')
+          const inputTokenLimit = Number(m?.context_length ?? m?.max_tokens ?? 0)
+          const outputTokenLimit = Number(m?.max_output_tokens ?? 0)
+          const thinking = /thinking/i.test(id) || /thinking/i.test(displayName)
+          return {
+            name: id,
+            version: String(m?.version || ''),
+            displayName,
+            description,
+            inputTokenLimit,
+            outputTokenLimit,
+            thinking,
+            supportedGenerationMethods: ['chat', 'completion'],
+          }
+        })
+        .filter(Boolean) as any[]
+
+      const preferredDefault = 'llama-3.2-1b'
+      const defaultModel = models.find((m: any) => m.name === preferredDefault) || models[0] || null
+
+      res.json({ models, default: defaultModel })
+    } catch (error) {
+      console.error('Error fetching LM Studio models:', error)
+      res.status(500).json({ error: 'Failed to fetch LM Studio models. Ensure LM Studio is running locally.' })
+    }
+  })
+)
+
 // Force refresh models cache
 router.post(
   '/models/refresh',
@@ -1207,7 +1258,7 @@ router.post(
               }
             }
           },
-          provider as 'ollama' | 'gemini' | 'anthropic' | 'openai',
+          provider as 'ollama' | 'gemini' | 'anthropic' | 'openai' | 'openrouter' | 'lmstudio',
           selectedModel,
           createdAttachments.map(a => ({
             url: a?.url || undefined,

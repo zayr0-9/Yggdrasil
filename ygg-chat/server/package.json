@@ -13,6 +13,7 @@
     "@ai-sdk/anthropic": "^2.0.4",
     "@ai-sdk/google": "^2.0.3",
     "@ai-sdk/openai": "^2.0.14",
+    "@ai-sdk/openai-compatible": "^1.0.18",
     "@openrouter/ai-sdk-provider": "^1.2.0",
     "@types/better-sqlite3": "^7.6.13",
     "ai": "^5.0.6",

@@ -146,6 +146,14 @@ export async function generateResponse(
       ),
       stopWhen: stepCountIs(40),
       messages: formattedMessages as any,
+      providerOptions: {
+        openrouter: {
+          reasoning: {
+            max_tokens: 1000,
+          },
+        },
+      },
+
       abortSignal,
       onAbort: () => {
         aborted = true
