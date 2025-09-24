@@ -20,3 +20,28 @@ export const selectRecentModelsError = createSelector([selectConvState], state =
 // Selector to get a conversation by id
 export const makeSelectConversationById = (id: number) =>
   createSelector([selectAllConversations], conversations => conversations.find(c => c.id === id))
+
+// Selector to get conversations grouped by project_id
+export const selectConversationsByProject = createSelector([selectAllConversations], conversations => {
+  const grouped = new Map<number | null, { latestConversation: string; conversations: typeof conversations }>()
+
+  conversations.forEach(conv => {
+    const projectId = conv.project_id
+    const existing = grouped.get(projectId)
+
+    if (!existing) {
+      grouped.set(projectId, {
+        latestConversation: conv.updated_at,
+        conversations: [conv]
+      })
+    } else {
+      existing.conversations.push(conv)
+      // Keep track of the latest updated_at time
+      if (conv.updated_at > existing.latestConversation) {
+        existing.latestConversation = conv.updated_at
+      }
+    }
+  })
+
+  return grouped
+})

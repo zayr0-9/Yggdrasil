@@ -388,7 +388,8 @@ export class MessageService {
     content: string,
     thinking_block: string,
     modelName?: string,
-    tool_calls?: string
+    tool_calls?: string,
+    note?: string
     // children: []
   ): Message {
     const result = statements.createMessage.run(
@@ -399,7 +400,8 @@ export class MessageService {
       thinking_block,
       tool_calls || null,
       '[]',
-      modelName
+      modelName,
+      note || null
     )
     // Fire-and-forget: compute and persist plain text content, triggers will update FTS
     try {
@@ -487,9 +489,10 @@ export class MessageService {
     id: number,
     content: string,
     thinking_block: string | null = null,
-    tool_calls: string | null = null
+    tool_calls: string | null = null,
+    note: string | null = null
   ): Message | undefined {
-    statements.updateMessage.run(content, thinking_block, tool_calls, id)
+    statements.updateMessage.run(content, thinking_block, tool_calls, note, id)
     // Fire-and-forget: update plain text content
     try {
       stripMarkdownToText(content)

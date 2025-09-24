@@ -471,13 +471,13 @@ export const sendMessage = createAsyncThunk(
 
 export const updateMessage = createAsyncThunk(
   'chat/updateMessage',
-  async ({ id, content }: { id: number; content: string }, { dispatch, rejectWithValue }) => {
+  async ({ id, content, note }: { id: number; content: string; note?: string }, { dispatch, rejectWithValue }) => {
     try {
       const updated = await apiCall<Message>(`/messages/${id}`, {
         method: 'PUT',
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, note }),
       })
-      dispatch(chatSliceActions.messageUpdated({ id, content }))
+      dispatch(chatSliceActions.messageUpdated({ id, content, note }))
       return updated
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Update failed')

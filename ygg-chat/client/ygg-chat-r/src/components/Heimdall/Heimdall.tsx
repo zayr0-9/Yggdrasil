@@ -1,13 +1,19 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Move, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import type { JSX } from 'react'
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { deleteSelectedNodes, fetchConversationMessages, fetchMessageTree } from '../../features/chats/chatActions'
+import {
+  deleteSelectedNodes,
+  fetchConversationMessages,
+  fetchMessageTree,
+  updateMessage,
+} from '../../features/chats/chatActions'
 import { chatSliceActions } from '../../features/chats/chatSlice'
 import { buildBranchPathForMessage } from '../../features/chats/pathUtils'
 import type { RootState } from '../../store/store'
 import stripMarkdownToText from '../../utils/markdownStripper'
+import { TextArea } from '../TextArea/TextArea'
 import { TextField } from '../TextField/TextField'
 
 // Type definitions
@@ -75,6 +81,12 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   // Custom context menu after selection
   const [showContextMenu, setShowContextMenu] = useState<boolean>(false)
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null)
+  // Note dialog state
+  const [showNoteDialog, setShowNoteDialog] = useState<boolean>(false)
+  const [noteDialogPos, setNoteDialogPos] = useState<{ x: number; y: number } | null>(null)
+  const [noteMessageId, setNoteMessageId] = useState<number | null>(null)
+  const [noteText, setNoteText] = useState<string>('')
+
   // Keep a stable inner offset so the whole tree does not shift when nodes are added/removed
   const offsetRef = useRef<{ x: number; y: number } | null>(null)
   // Track which nodes have already been seen to avoid re-playing enter animations
@@ -97,6 +109,14 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   // Focused message id from global state and flat messages for search
   const focusedChatMessageId = useSelector((state: RootState) => state.chat.conversation.focusedChatMessageId)
   const flatMessages = useSelector((state: RootState) => state.chat.conversation.messages)
+  // Get the current message from Redux state
+  const getCurrentMessage = useCallback(
+    (messageId: number) => {
+      return flatMessages.find(m => m.id === messageId)
+    },
+    [flatMessages]
+  )
+
   // Maintain a plain-text processed copy of messages for client-side search
   const [plainMessages, setPlainMessages] = useState<any[]>([])
   useEffect(() => {
@@ -141,6 +161,61 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       document.body.classList.add('ygg-no-select')
     } catch {}
   }
+
+  // Debounced update function for notes
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const debouncedUpdateNote = useCallback(
+    (messageId: number, content: string, note: string) => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current)
+      }
+
+      debounceTimeoutRef.current = setTimeout(() => {
+        dispatch(updateMessage({ id: messageId, content, note }) as any)
+      }, 500) // 500ms debounce
+    },
+    [dispatch]
+  )
+
+  // Handle note dialog
+  const handleOpenNoteDialog = useCallback(
+    (nodeId: string, position: { x: number; y: number }) => {
+      const messageId = parseInt(nodeId, 10)
+      if (isNaN(messageId)) return
+
+      const message = getCurrentMessage(messageId)
+      if (!message) return
+
+      setNoteMessageId(messageId)
+      setNoteText(message.note || '')
+      setNoteDialogPos(position)
+      setShowNoteDialog(true)
+      setShowContextMenu(false)
+    },
+    [getCurrentMessage]
+  )
+
+  const handleCloseNoteDialog = useCallback(() => {
+    setShowNoteDialog(false)
+    setNoteDialogPos(null)
+    setNoteMessageId(null)
+    setNoteText('')
+  }, [])
+
+  const handleNoteTextChange = useCallback(
+    (newNoteText: string) => {
+      setNoteText(newNoteText)
+
+      if (noteMessageId !== null) {
+        const message = getCurrentMessage(noteMessageId)
+        if (message) {
+          debouncedUpdateNote(noteMessageId, message.content, newNoteText)
+        }
+      }
+    },
+    [noteMessageId, getCurrentMessage, debouncedUpdateNote]
+  )
 
   // Pointer Events with pointer capture for robust drag outside element
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>): void => {
@@ -258,6 +333,10 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         // eslint-disable-next-line @typescript-eslint/no-use-before-define
         removeGlobalMoveListeners()
       } catch {}
+      // Clean up debounce timeout
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current)
+      }
     }
   }, [])
 
@@ -955,6 +1034,18 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     }
   }, [showContextMenu])
 
+  // Close note dialog only on escape key (not on outside click)
+  useEffect(() => {
+    if (!showNoteDialog) return
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') handleCloseNoteDialog()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [showNoteDialog, handleCloseNoteDialog])
+
   const resetView = (): void => {
     // Compute bounds for fitting that ignore focusedNodeId so fit is consistent
     // across calls regardless of previous focus state.
@@ -1190,6 +1281,24 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 <p className='line-clamp-3 '>{node.message}</p>
               </div>
             </foreignObject>
+            {/* Note indicator for expanded view */}
+            {(() => {
+              const nodeIdNumber = parseInt(node.id, 10)
+              if (isNaN(nodeIdNumber)) return null
+              const message = getCurrentMessage(nodeIdNumber)
+              const hasNote = message?.note && message.note.trim().length > 0
+              return hasNote ? (
+                <circle
+                  cx={nodeWidth - 8}
+                  cy={nodeHeight - 8}
+                  r='4'
+                  fill='#fbbf24'
+                  stroke='#f59e0b'
+                  strokeWidth='1'
+                  style={{ pointerEvents: 'none' }}
+                />
+              ) : null
+            })()}
           </motion.g>
         )
       } else {
@@ -1262,6 +1371,24 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               }}
               onContextMenu={e => handleContextMenu(e, node.id)}
             />
+            {/* Note indicator for compact view */}
+            {(() => {
+              const nodeIdNumber = parseInt(node.id, 10)
+              if (isNaN(nodeIdNumber)) return null
+              const message = getCurrentMessage(nodeIdNumber)
+              const hasNote = message?.note && message.note.trim().length > 0
+              return hasNote ? (
+                <circle
+                  cx={x + circleRadius - 6}
+                  cy={y + circleRadius + 6}
+                  r='3'
+                  fill='#fbbf24'
+                  stroke='#f59e0b'
+                  strokeWidth='1'
+                  style={{ pointerEvents: 'none' }}
+                />
+              ) : null
+            })()}
             {/* Add a small indicator for branch nodes */}
             {/* {node.children && node.children.length > 1 && (
               <circle
@@ -1577,6 +1704,26 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 Copy
               </button>
             </li>
+            {selectedNodes.length === 1 && (
+              <li>
+                <button
+                  className='w-full text-left px-3 py-2 hover:bg-stone-100 dark:hover:bg-neutral-700'
+                  onClick={() => {
+                    const nodeId = String(selectedNodes[0])
+
+                    if (contextMenuPos) {
+                      handleOpenNoteDialog(nodeId, contextMenuPos)
+                    }
+                  }}
+                >
+                  {(() => {
+                    const message = getCurrentMessage(selectedNodes[0])
+                    const hasNote = message?.note && message.note.trim().length > 0
+                    return hasNote ? 'View Note' : 'Add Note'
+                  })()}
+                </button>
+              </li>
+            )}
             <li>
               <button
                 className='w-full text-left px-3 py-2 hover:bg-stone-100 dark:hover:bg-neutral-700 text-red-600 dark:text-red-400'
@@ -1589,7 +1736,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         </div>
       )}
       <div className='absolute bottom-4 left-4 flex flex-col gap-2'>
-        <div className='dark:bg-gray-800 bg-amber-50 text-stone-800 dark:text-stone-200 px-3 py-2 rounded-lg text-xs space-y-1 dark:bg-neutral-800 w-fit'>
+        <div className='bg-amber-50 dark:bg-neutral-800 text-stone-800 dark:text-stone-200 px-3 py-2 rounded-lg text-xs space-y-1 w-fit'>
           <div>Messages: {stats.totalNodes}</div>
           <div>Max depth: {stats.maxDepth}</div>
           <div>Branches: {stats.branches}</div>
@@ -1614,6 +1761,50 @@ export const Heimdall: React.FC<HeimdallProps> = ({
           </div>
           <div className='text-sm whitespace-normal break-words overflow-hidden ygg-line-clamp-6'>
             {selectedNode.message}
+          </div>
+        </div>
+      )}
+
+      {/* Note dialog */}
+      {showNoteDialog && noteDialogPos && noteMessageId !== null && (
+        <div
+          className='note-dialog-container absolute z-40 w-96 bg-white dark:bg-neutral-800 border border-stone-200 dark:border-neutral-700 rounded-lg shadow-lg'
+          style={{
+            left: Math.max(8, Math.min(noteDialogPos.x, Math.max(0, dimensions.width - 400))),
+            top: Math.max(8, Math.min(noteDialogPos.y, Math.max(0, dimensions.height - 300))),
+          }}
+          onMouseDown={e => e.stopPropagation()}
+          data-heimdall-wheel-exempt='true'
+        >
+          <div className='px-4 py-2'>
+            <div className='flex justify-between items-center mb-3'>
+              <h3 className='text-sm font-medium text-stone-800 dark:text-stone-200'>
+                {(() => {
+                  const message = getCurrentMessage(noteMessageId)
+                  const hasNote = message?.note && message.note.trim().length > 0
+                  return hasNote ? 'Edit Note' : 'Add Note'
+                })()}
+              </h3>
+              <button
+                onClick={handleCloseNoteDialog}
+                className='text-stone-400 hover:text-stone-600 dark:hover:text-stone-200'
+                title='Close'
+              >
+                ✕
+              </button>
+            </div>
+            <div className='mb-1'>
+              <TextArea
+                placeholder='Enter your note...'
+                value={noteText}
+                onChange={handleNoteTextChange}
+                minRows={3}
+                maxRows={8}
+                autoFocus
+                className='w-full'
+                width='w-full'
+              />
+            </div>
           </div>
         </div>
       )}

@@ -307,10 +307,13 @@ export const chatSlice = createSlice({
       state.conversation.messages = []
     },
 
-    messageUpdated: (state, action: PayloadAction<{ id: number; content: string }>) => {
-      const { id, content } = action.payload
+    messageUpdated: (state, action: PayloadAction<{ id: number; content: string; note?: string }>) => {
+      const { id, content, note } = action.payload
       const msg = state.conversation.messages.find(m => m.id === id)
-      if (msg) msg.content = content
+      if (msg) {
+        msg.content = content
+        if (note !== undefined) msg.note = note
+      }
     },
 
     messageDeleted: (state, action: PayloadAction<number>) => {

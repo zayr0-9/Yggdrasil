@@ -144,12 +144,12 @@ export async function generateResponse(
         },
         {} as Record<string, any>
       ),
-      stopWhen: stepCountIs(40),
+      stopWhen: stepCountIs(400),
       messages: formattedMessages as any,
       providerOptions: {
         openrouter: {
           reasoning: {
-            max_tokens: 1000,
+            max_tokens: 10000,
           },
         },
       },

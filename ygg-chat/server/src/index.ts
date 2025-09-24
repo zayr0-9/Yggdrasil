@@ -178,18 +178,19 @@ initializeStatements()
 // Startup migration: ensure plain_text_content is populated and FTS index built from it
 async function migratePlainTextAndFTS() {
   try {
-    // Verify column exists (initializeDatabase attempted to add it)
-    const hasColumn = db
+    // Verify plain_text_content column exists (initializeDatabase attempted to add it)
+    const hasPlainTextColumn = db
       .prepare('PRAGMA table_info(messages)')
       .all()
       .some((c: any) => String(c.name) === 'plain_text_content')
 
-    if (!hasColumn) {
+    if (!hasPlainTextColumn) {
       // If for some reason column is missing (shouldn't happen), add it
       try {
         db.exec(`ALTER TABLE messages ADD COLUMN plain_text_content TEXT`)
       } catch {}
     }
+
 
     // Select messages missing plain_text_content
     const selectMissing = db.prepare('SELECT id, content FROM messages WHERE plain_text_content IS NULL')

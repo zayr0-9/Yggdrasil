@@ -15,6 +15,7 @@ import {
   selectProjectsLoading,
 } from '../features/projects'
 import { searchActions, selectSearchLoading, selectSearchQuery, selectSearchResults } from '../features/search'
+import { fetchConversations, selectConversationsByProject } from '../features/conversations'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
 import EditProject from './EditProject'
 import SideBar from './sideBar'
@@ -28,6 +29,7 @@ const Homepage: React.FC = () => {
   const searchLoading = useAppSelector(selectSearchLoading)
   const searchResults = useAppSelector(selectSearchResults)
   const searchQuery = useAppSelector(selectSearchQuery)
+  const conversationsByProject = useAppSelector(selectConversationsByProject)
   //   const error = useAppSelector(selectProjectsError)
 
   const [showEditModal, setShowEditModal] = useState(false)
@@ -46,9 +48,13 @@ const Homepage: React.FC = () => {
     const sorted = [...projects].sort((a, b) => {
       switch (sortBy) {
         case 'updated':
-          // Use updated_at if available, otherwise fall back to created_at
-          const aDate = a.updated_at || a.created_at || ''
-          const bDate = b.updated_at || b.created_at || ''
+          // Use latest conversation time if available, otherwise fall back to project updated_at or created_at
+          const aConvData = conversationsByProject.get(a.id)
+          const bConvData = conversationsByProject.get(b.id)
+
+          const aDate = aConvData?.latestConversation || a.updated_at || a.created_at || ''
+          const bDate = bConvData?.latestConversation || b.updated_at || b.created_at || ''
+
           if (!aDate) return 1
           if (!bDate) return -1
           return bDate.localeCompare(aDate)
@@ -74,6 +80,7 @@ const Homepage: React.FC = () => {
   useEffect(() => {
     dispatch(chatSliceActions.stateReset())
     dispatch(fetchProjects())
+    dispatch(fetchConversations())
     dispatch(chatSliceActions.heimdallDataLoaded({ treeData: null }))
 
     // Context is now requested automatically on WebSocket connection

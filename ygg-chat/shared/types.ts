@@ -16,6 +16,7 @@ export interface BaseMessage {
   // Optional metadata for optimized attachment fetching
   has_attachments?: boolean
   attachments_count?: number
+  note?: string
 }
 
 export interface BaseModel {

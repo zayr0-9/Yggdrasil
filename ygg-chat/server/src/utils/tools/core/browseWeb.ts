@@ -46,8 +46,9 @@ class BrowserSession {
       }
 
       // Add user data directory for existing browser profile
-      if (options.useUserProfile && options.userDataDir) {
-        launchOptions.args.push(`--user-data-dir=${options.userDataDir}`)
+      const userDataDir = options.userDataDir || process.env.BRAVE_USER_DATA_DIR
+      if (options.useUserProfile && userDataDir) {
+        launchOptions.args.push(`--user-data-dir=${userDataDir}`)
       }
 
       // Set executable path for Brave browser

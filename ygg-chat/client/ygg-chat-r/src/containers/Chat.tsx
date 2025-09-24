@@ -975,18 +975,21 @@ function Chat() {
             )}
 
             {/* Show streaming content */}
-            {streamState.active && (Boolean(streamState.buffer) || Boolean(streamState.thinkingBuffer) || Boolean(streamState.toolCallsBuffer)) && (
-              <ChatMessage
-                id='streaming'
-                role='assistant'
-                content={streamState.buffer}
-                thinking={streamState.thinkingBuffer}
-                toolCalls={streamState.toolCallsBuffer}
-                width='w-full'
-                modelName={selectedModel?.name || undefined}
-                className=''
-              />
-            )}
+            {streamState.active &&
+              (Boolean(streamState.buffer) ||
+                Boolean(streamState.thinkingBuffer) ||
+                Boolean(streamState.toolCallsBuffer)) && (
+                <ChatMessage
+                  id='streaming'
+                  role='assistant'
+                  content={streamState.buffer}
+                  thinking={streamState.thinkingBuffer}
+                  toolCalls={streamState.toolCallsBuffer}
+                  width='w-full'
+                  modelName={selectedModel?.name || undefined}
+                  className=''
+                />
+              )}
             {streamState.active && (
               <div className=' pb-4 px-3 text-stone-800 dark:text-stone-200 flex justify-end'>
                 <i className='bx bx-loader-alt text-2xl animate-spin' style={{ animationDuration: '1s' }}></i>
@@ -1011,7 +1014,7 @@ function Chat() {
               state={sendingState.sending ? 'disabled' : 'default'}
               width='w-full'
               minRows={3}
-              autoFocus={streamState.finished}
+              autoFocus={true}
               showCharCount={true}
             />
             {/* Selected file chips moved from InputTextArea */}

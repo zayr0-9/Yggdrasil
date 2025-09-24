@@ -1377,11 +1377,11 @@ router.put(
   '/messages/:id',
   asyncHandler(async (req, res) => {
     const messageId = parseInt(req.params.id)
-    const { content } = req.body
+    const { content, note } = req.body
 
     if (!content) return res.status(400).json({ error: 'Content required' })
 
-    const updated = MessageService.update(messageId, content)
+    const updated = MessageService.update(messageId, content, undefined, undefined, note)
     if (!updated) return res.status(404).json({ error: 'Message not found' })
 
     res.json(updated)
