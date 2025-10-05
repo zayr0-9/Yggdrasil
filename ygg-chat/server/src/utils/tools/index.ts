@@ -367,21 +367,59 @@ const tools: tools[] = [
         retryDelay,
         useBrave,
         executablePath,
-      }: any) => {
+      }: {
+        url: string
+        waitForSelector?: string
+        timeout?: number
+        waitForNetworkIdle?: boolean
+        extractImages?: boolean
+        extractLinks?: boolean
+        extractMetadata?: boolean
+        headless?: boolean
+        useUserProfile?: boolean
+        userDataDir?: string
+        retries?: number
+        retryDelay?: number
+        useBrave?: boolean
+        executablePath?: string
+      }) => {
+        // Helper function to coerce string booleans to actual booleans
+        const toBoolean = (value: any): boolean | undefined => {
+          if (value === undefined || value === null) return undefined
+          if (typeof value === 'boolean') return value
+          if (typeof value === 'string') {
+            const lower = value.toLowerCase()
+            if (lower === 'true') return true
+            if (lower === 'false') return false
+          }
+          return undefined
+        }
+
+        // Helper function to coerce string numbers to actual numbers
+        const toNumber = (value: any): number | undefined => {
+          if (value === undefined || value === null) return undefined
+          if (typeof value === 'number') return value
+          if (typeof value === 'string') {
+            const parsed = parseInt(value, 10)
+            if (!isNaN(parsed)) return parsed
+          }
+          return undefined
+        }
+
         try {
           const result = await browseWeb(url, {
             waitForSelector,
-            timeout,
-            waitForNetworkIdle,
-            extractImages,
-            extractLinks,
-            extractMetadata,
-            headless,
-            useUserProfile,
+            timeout: toNumber(timeout),
+            waitForNetworkIdle: toBoolean(waitForNetworkIdle),
+            extractImages: toBoolean(extractImages),
+            extractLinks: toBoolean(extractLinks),
+            extractMetadata: toBoolean(extractMetadata),
+            headless: toBoolean(headless),
+            useUserProfile: toBoolean(useUserProfile),
             userDataDir,
-            retries,
-            retryDelay,
-            useBrave,
+            retries: toNumber(retries),
+            retryDelay: toNumber(retryDelay),
+            useBrave: toBoolean(useBrave),
             executablePath,
           })
           return result

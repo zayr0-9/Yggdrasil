@@ -42,7 +42,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
   width = 'max-w-3xl',
   className = '',
   minRows = 1,
-  maxRows = 10,
+  maxRows = 25,
   autoFocus = false,
   showCharCount = false,
   outline = false,
@@ -432,7 +432,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
 
   const baseStyles = outline
     ? `${width} px-4 py-3 rounded-xl transition-all duration-200 overflow-hidden bg-transparent border-2`
-    : `${width} px-4 py-3 rounded-xl transition-all duration-200 overflow-hidden bg-neutral-50 dark:bg-neutral-900`
+    : `${width} px-4 py-3 rounded-xl transition-all duration-200 overflow-hidden bg-neutral-50 dark:bg-yBlack-900`
   const labelClasses = state === 'disabled' ? 'opacity-40' : ''
 
   const stateStyles = outline
@@ -442,7 +442,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
         disabled: `${baseStyles} text-stone-800 dark:text-stone-200 border-gray-700 placeholder-neutral-700 dark:placeholder-neutral-200 cursor-not-allowed`,
       }
     : {
-        default: `${baseStyles} bg-gray-800 text-stone-900 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-gray-600 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 dark:focus:ring-2 dark:focus:ring-secondary-600`,
+        default: `${baseStyles} bg-gray-800 text-stone-900 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-gray-600 outline-none focus:border-neutral-300 focus:ring-0 focus:ring-neutral-300 focus:ring-opacity-50 dark:focus:ring-0 `,
         error: `${baseStyles} bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-red-500 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500 focus:ring-opacity-50`,
         disabled: `${baseStyles} bg-gray-900 text-stone-800 dark:text-stone-200 border-gray-700 placeholder-neutral-700 dark:placeholder-neutral-200 cursor-not-allowed`,
       }
@@ -474,7 +474,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
           onPaste={handlePaste}
           disabled={state === 'disabled'}
           // maxLength={maxLength}
-          className={`${stateStyles[state]} thin-scrollbar ${dragOver ? 'border-blue-500 ring-2 ring-blue-500' : ''} ${className}`}
+          className={`${stateStyles[state]} thin-scrollbar resize-none ${dragOver ? 'border-blue-500 ring-2 ring-blue-500' : ''} ${className}`}
           aria-invalid={state === 'error'}
           aria-describedby={state === 'error' && errorMessage ? errorId : undefined}
           autoFocus={autoFocus}
@@ -530,10 +530,17 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
           {imageDrafts.map((img, idx) => (
             <div
               key={idx}
-              className='w-16 h-16 rounded-md overflow-hidden border border-gray-600 bg-neutral-800'
+              className='relative w-16 h-16 rounded-md overflow-hidden border border-gray-600 bg-neutral-800 group'
               title={img.name}
             >
               <img src={img.dataUrl} alt={img.name || `image-${idx}`} className='w-full h-full object-cover' />
+              <button
+                onClick={() => dispatch(chatSliceActions.imageDraftRemoved(idx))}
+                className='absolute top-0 right-0 w-5 h-5 bg-red-400 hover:bg-red-700 text-white rounded-bl-md opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs font-bold'
+                aria-label='Remove image'
+              >
+                ×
+              </button>
             </div>
           ))}
         </div>

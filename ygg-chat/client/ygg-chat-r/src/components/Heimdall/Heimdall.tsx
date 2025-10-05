@@ -3,15 +3,23 @@ import { Move, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import type { JSX } from 'react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
+import { useNavigate } from 'react-router-dom'
 import {
   deleteSelectedNodes,
   fetchConversationMessages,
   fetchMessageTree,
+  insertBulkMessages,
+  // sendMessage,
   updateMessage,
 } from '../../features/chats/chatActions'
 import { chatSliceActions } from '../../features/chats/chatSlice'
 import { buildBranchPathForMessage } from '../../features/chats/pathUtils'
+import { createConversation } from '../../features/conversations/conversationActions'
+// import { selectSelectedProject } from '../../features/projects/projectSelectors'
+import { Message } from '@/features/chats'
+import { ConversationId, MessageId } from '../../../../../shared/types'
 import type { RootState } from '../../store/store'
+import { parseId } from '../../utils/helpers'
 import stripMarkdownToText from '../../utils/markdownStripper'
 import { TextArea } from '../TextArea/TextArea'
 import { TextField } from '../TextField/TextField'
@@ -49,7 +57,8 @@ interface HeimdallProps {
   loading?: boolean
   error?: string | null
   onNodeSelect?: (nodeId: string, path: string[]) => void
-  conversationId?: number | null
+  conversationId?: ConversationId | null
+  visibleMessageId?: MessageId | null
 }
 
 export const Heimdall: React.FC<HeimdallProps> = ({
@@ -59,10 +68,14 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   error = null,
   onNodeSelect,
   conversationId,
+  visibleMessageId = null,
 }) => {
   const dispatch = useDispatch()
+  const navigate = useNavigate()
   const selectedNodes = useSelector((state: RootState) => state.chat.selectedNodes)
   const currentPathIds = useSelector((state: RootState) => state.chat.conversation.currentPath)
+  // const selectedProject = useSelector(selectSelectedProject)
+  const allMessages = useSelector((state: RootState) => state.chat.conversation.messages)
   // Track total messages to detect a truly empty conversation
   const messagesCount = useSelector((state: RootState) => state.chat.conversation.messages.length)
 
@@ -84,7 +97,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   // Note dialog state
   const [showNoteDialog, setShowNoteDialog] = useState<boolean>(false)
   const [noteDialogPos, setNoteDialogPos] = useState<{ x: number; y: number } | null>(null)
-  const [noteMessageId, setNoteMessageId] = useState<number | null>(null)
+  const [noteMessageId, setNoteMessageId] = useState<MessageId | null>(null)
   const [noteText, setNoteText] = useState<string>('')
 
   // Keep a stable inner offset so the whole tree does not shift when nodes are added/removed
@@ -111,7 +124,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const flatMessages = useSelector((state: RootState) => state.chat.conversation.messages)
   // Get the current message from Redux state
   const getCurrentMessage = useCallback(
-    (messageId: number) => {
+    (messageId: MessageId) => {
       return flatMessages.find(m => m.id === messageId)
     },
     [flatMessages]
@@ -166,7 +179,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const debouncedUpdateNote = useCallback(
-    (messageId: number, content: string, note: string) => {
+    (messageId: MessageId, content: string, note: string) => {
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current)
       }
@@ -181,8 +194,8 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   // Handle note dialog
   const handleOpenNoteDialog = useCallback(
     (nodeId: string, position: { x: number; y: number }) => {
-      const messageId = parseInt(nodeId, 10)
-      if (isNaN(messageId)) return
+      const messageId = parseId(nodeId)
+      if (typeof messageId === 'number' && isNaN(messageId)) return
 
       const message = getCurrentMessage(messageId)
       if (!message) return
@@ -770,8 +783,8 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   }, [])
 
   // Function to determine which nodes are within the selection rectangle
-  const getNodesInSelectionRectangle = (): number[] => {
-    const selectedNodeIds: number[] = []
+  const getNodesInSelectionRectangle = (): MessageId[] => {
+    const selectedNodeIds: MessageId[] = []
 
     // Calculate selection rectangle bounds
     const minX = Math.min(selectionStart.x, selectionEnd.x)
@@ -812,9 +825,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       // Intersect test between node bounds and selection rectangle (all in screen space)
       const intersects = right >= minX && left <= maxX && bottom >= minY && top <= maxY
       if (intersects) {
-        const nodeIdNumber = parseInt(node.id, 10)
-        if (!isNaN(nodeIdNumber)) {
-          selectedNodeIds.push(nodeIdNumber)
+        const nodeIdParsed = parseId(node.id)
+        if ((typeof nodeIdParsed === 'number' && !isNaN(nodeIdParsed)) || typeof nodeIdParsed === 'string') {
+          selectedNodeIds.push(nodeIdParsed)
         }
       }
     })
@@ -899,27 +912,27 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     e.preventDefault() // Prevent default browser context menu
     e.stopPropagation()
 
-    // Convert nodeId to number for selectedNodes array
-    const nodeIdNumber = parseInt(nodeId, 10)
+    // Convert nodeId to parsed format for selectedNodes array
+    const nodeIdParsed = parseId(nodeId)
 
     // Check if the node is already selected
-    const isAlreadySelected = selectedNodes.includes(nodeIdNumber)
+    const isAlreadySelected = selectedNodes.includes(nodeIdParsed)
 
-    let newSelectedNodes: number[]
+    let newSelectedNodes: (number | string)[]
 
     if (e.ctrlKey || e.metaKey) {
       // Multi-select: toggle the node in the selection
       if (isAlreadySelected) {
-        newSelectedNodes = selectedNodes.filter(id => id !== nodeIdNumber)
+        newSelectedNodes = selectedNodes.filter(id => id !== nodeIdParsed)
       } else {
-        newSelectedNodes = [...selectedNodes, nodeIdNumber]
+        newSelectedNodes = [...selectedNodes, nodeIdParsed]
       }
     } else {
       // Without modifiers: toggle off if already selected; otherwise single-select this node
       if (isAlreadySelected) {
-        newSelectedNodes = selectedNodes.filter(id => id !== nodeIdNumber)
+        newSelectedNodes = selectedNodes.filter(id => id !== nodeIdParsed)
       } else {
-        newSelectedNodes = [nodeIdNumber]
+        newSelectedNodes = [nodeIdParsed]
       }
     }
 
@@ -1013,6 +1026,160 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     } finally {
       setShowContextMenu(false)
       // Clear selection after copy
+      dispatch(chatSliceActions.nodesSelected([]))
+    }
+  }
+
+  // Helper: Check if all selected nodes belong to the same branch (linear parent-child chain)
+  const areNodesOnSameBranch = (messageIds: MessageId[], messages: Message[]): boolean => {
+    if (messageIds.length <= 1) return true
+
+    const idSet = new Set(messageIds.map(String))
+    const messageMap = new Map(messages.map(m => [String(m.id), m]))
+
+    // Check for valid linear structure (no forks within selection)
+    for (const id of messageIds) {
+      const msg = messageMap.get(String(id))
+      if (!msg) return false
+
+      // Count how many selected messages are this message's children
+      const childrenInSelection = messages.filter(m => m.parent_id === msg.id && idSet.has(String(m.id))).length
+
+      // If more than 1 child in selection, it's a fork - not a linear branch
+      if (childrenInSelection > 1) return false
+    }
+
+    // Find root (node with no parent in selection)
+    const root = messageIds.find(id => {
+      const msg = messageMap.get(String(id))
+      return !msg?.parent_id || !idSet.has(String(msg.parent_id))
+    })
+
+    if (!root) return false
+
+    // Verify all nodes are reachable from root (connected chain)
+    const reachable = new Set<string>()
+    let current: MessageId | null = root
+    while (current) {
+      reachable.add(String(current))
+      // const msg = messageMap.get(String(current))
+      const nextChild = messages.find(m => m.parent_id === current && idSet.has(String(m.id)))
+      current = nextChild?.id || null
+    }
+
+    return reachable.size === messageIds.length
+  }
+
+  // Helper: Sort messages by branch path (root → leaf)
+  const sortMessagesByBranch = (messageIds: MessageId[], messages: Message[]): MessageId[] => {
+    const idSet = new Set(messageIds.map(String))
+    const messageMap = new Map(messages.map(m => [String(m.id), m]))
+
+    // Find root (node with no parent in selection)
+    const root = messageIds.find(id => {
+      const msg = messageMap.get(String(id))
+      return !msg?.parent_id || !idSet.has(String(msg.parent_id))
+    })
+
+    if (!root) return messageIds
+
+    // Build sorted array from root to leaf
+    const sorted: MessageId[] = []
+    let current: MessageId | null = root
+
+    while (current) {
+      sorted.push(current)
+      const nextChild = messages.find(m => m.parent_id === current && idSet.has(String(m.id)))
+      current = nextChild?.id || null
+    }
+
+    return sorted
+  }
+
+  // Create new chat from selected nodes
+  const handleCreateNewChat = async (): Promise<void> => {
+    try {
+      const ids = selectedNodes || []
+      if (ids.length === 0) {
+        setShowContextMenu(false)
+        return
+      }
+
+      // Build a map of message ID to full message data from state
+      const messageMap = new Map<string, any>()
+      allMessages.forEach(msg => {
+        messageMap.set(String(msg.id), msg)
+      })
+
+      // Check if all selected nodes belong to same branch and sort if they do
+      const onSameBranch = areNodesOnSameBranch(ids, allMessages)
+      const orderedIds = onSameBranch ? sortMessagesByBranch(ids, allMessages) : ids
+
+      // Collect selected messages in the determined order
+      const messagesToCopy: Array<{
+        role: 'user' | 'assistant'
+        content: string
+        thinking_block?: string
+        model_name?: string
+        tool_calls?: string
+        note?: string
+      }> = []
+
+      const seen = new Set<string>()
+      for (const idNum of orderedIds) {
+        const idStr = String(idNum)
+        if (seen.has(idStr)) continue
+        seen.add(idStr)
+
+        const msg = messageMap.get(idStr)
+        if (msg) {
+          messagesToCopy.push({
+            role: msg.role,
+            content: msg.content,
+            thinking_block: msg.thinking_block || '',
+            model_name: msg.model_name || 'unknown',
+            tool_calls: msg.tool_calls || undefined,
+            note: msg.note || undefined,
+          })
+        }
+      }
+
+      if (messagesToCopy.length === 0) {
+        setShowContextMenu(false)
+        return
+      }
+
+      // Generate title from first message content
+      const firstContent = messagesToCopy[0].content
+      const title = firstContent.slice(0, 100) + (firstContent.length > 100 ? '...' : '')
+
+      // Create new conversation using the current project context
+      const newConversation = await (dispatch as any)(createConversation({ title })).unwrap()
+
+      if (!newConversation?.id) {
+        console.error('Failed to create new conversation')
+        return
+      }
+
+      // Insert messages as a chain preserving their structure
+      await (dispatch as any)(
+        insertBulkMessages({
+          conversationId: newConversation.id,
+          messages: messagesToCopy,
+        })
+      ).unwrap()
+
+      // Fetch messages and tree to populate the new conversation before navigation
+      await (dispatch as any)(fetchConversationMessages(newConversation.id)).unwrap()
+      await (dispatch as any)(fetchMessageTree(newConversation.id)).unwrap()
+
+      // Navigate to the new chat
+      navigate(`/chat/${newConversation.id}`)
+    } catch (error) {
+      console.error('Failed to create new chat from selection:', error)
+    } finally {
+      setShowContextMenu(false)
+      // Clear selection after creating new chat
       dispatch(chatSliceActions.nodesSelected([]))
     }
   }
@@ -1198,9 +1365,16 @@ export const Heimdall: React.FC<HeimdallProps> = ({
   const renderNodes = (): JSX.Element[] => {
     return Object.values(positions).map(({ x, y, node }) => {
       const isExpanded = !compactMode || node.id === focusedNodeId
-      const nodeIdNumber = parseInt(node.id, 10)
-      const isNodeSelected = !isNaN(nodeIdNumber) && selectedNodes.includes(nodeIdNumber)
-      const isOnCurrentPath = !isNaN(nodeIdNumber) && currentPathSet.has(nodeIdNumber)
+      const nodeIdParsed = parseId(node.id)
+      const isNodeSelected =
+        ((typeof nodeIdParsed === 'number' && !isNaN(nodeIdParsed)) || typeof nodeIdParsed === 'string') &&
+        selectedNodes.includes(nodeIdParsed)
+      const isOnCurrentPath =
+        ((typeof nodeIdParsed === 'number' && !isNaN(nodeIdParsed)) || typeof nodeIdParsed === 'string') &&
+        currentPathSet.has(nodeIdParsed)
+      const isVisible =
+        ((typeof nodeIdParsed === 'number' && !isNaN(nodeIdParsed)) || typeof nodeIdParsed === 'string') &&
+        visibleMessageId === nodeIdParsed
       const isNew = !firstPaintRef.current && !seenNodeIdsRef.current.has(node.id)
 
       if (isExpanded) {
@@ -1226,6 +1400,20 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 stroke='currentColor'
                 strokeWidth='3'
                 className='animate-pulse-slow stroke-rose-300 dark:stroke-yPurple-50 transition-colors duration-300 '
+              />
+            )}
+            {/* Visible message highlight */}
+            {isVisible && (
+              <rect
+                width={nodeWidth + 8}
+                height={nodeHeight + 8}
+                x={-4}
+                y={-4}
+                rx='12'
+                fill='none'
+                stroke='currentColor'
+                strokeWidth='2'
+                className='stroke-cyan-400 dark:stroke-cyan-300'
               />
             )}
             {/* Selection highlight */}
@@ -1270,6 +1458,12 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               onMouseLeave={() => setSelectedNode(null)}
               onClick={() => {
                 if (onNodeSelect) {
+                  const nodeIdParsed = parseId(node.id)
+                  // If clicked node is already in current path, just update focused message
+                  if (currentPathIds && currentPathIds.includes(nodeIdParsed)) {
+                    dispatch(chatSliceActions.focusedChatMessageSet(nodeIdParsed))
+                    return
+                  }
                   const path = getPathWithDescendants(node.id)
                   onNodeSelect(node.id, path)
                 }
@@ -1283,9 +1477,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
             </foreignObject>
             {/* Note indicator for expanded view */}
             {(() => {
-              const nodeIdNumber = parseInt(node.id, 10)
-              if (isNaN(nodeIdNumber)) return null
-              const message = getCurrentMessage(nodeIdNumber)
+              const nodeIdParsed = parseId(node.id)
+              if (typeof nodeIdParsed === 'number' && isNaN(nodeIdParsed)) return null
+              const message = getCurrentMessage(nodeIdParsed)
               const hasNote = message?.note && message.note.trim().length > 0
               return hasNote ? (
                 <circle
@@ -1321,6 +1515,18 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 // stroke='rgba(16, 185, 129, 0.9)'
                 strokeWidth='3'
                 className='animate-pulse-slow stroke-rose-300 dark:stroke-slate-100'
+              />
+            )}
+            {/* Visible message highlight for compact mode */}
+            {isVisible && (
+              <circle
+                cx={x}
+                cy={y + circleRadius}
+                r={circleRadius + 6}
+                fill='none'
+                stroke='currentColor'
+                strokeWidth='2'
+                className='stroke-cyan-400 dark:stroke-cyan-300'
               />
             )}
             {/* Selection highlight for compact mode */}
@@ -1365,6 +1571,12 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               onClick={() => {
                 // Trigger node selection callback
                 if (onNodeSelect) {
+                  const nodeIdParsed = parseId(node.id)
+                  // If clicked node is already in current path, just update focused message
+                  if (currentPathIds && currentPathIds.includes(nodeIdParsed)) {
+                    dispatch(chatSliceActions.focusedChatMessageSet(nodeIdParsed))
+                    return
+                  }
                   const path = getPathWithDescendants(node.id)
                   onNodeSelect(node.id, path)
                 }
@@ -1373,9 +1585,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
             />
             {/* Note indicator for compact view */}
             {(() => {
-              const nodeIdNumber = parseInt(node.id, 10)
-              if (isNaN(nodeIdNumber)) return null
-              const message = getCurrentMessage(nodeIdNumber)
+              const nodeIdParsed = parseId(node.id)
+              if (typeof nodeIdParsed === 'number' && isNaN(nodeIdParsed)) return null
+              const message = getCurrentMessage(nodeIdParsed)
               const hasNote = message?.note && message.note.trim().length > 0
               return hasNote ? (
                 <circle
@@ -1724,6 +1936,14 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 </button>
               </li>
             )}
+            <li>
+              <button
+                className='w-full text-left px-3 py-2 hover:bg-stone-100 dark:hover:bg-neutral-700'
+                onClick={handleCreateNewChat}
+              >
+                Create New Chat
+              </button>
+            </li>
             <li>
               <button
                 className='w-full text-left px-3 py-2 hover:bg-stone-100 dark:hover:bg-neutral-700 text-red-600 dark:text-red-400'

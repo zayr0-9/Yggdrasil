@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
+import { ConversationId } from '../../../../../shared/types'
 import { updateConversationTitle } from '../chats'
 import {
   createConversation,
@@ -38,7 +39,7 @@ const conversationSlice = createSlice({
       state.items = []
       state.error = null
     },
-    activeConversationIdSet: (state, action: PayloadAction<number | null>) => {
+    activeConversationIdSet: (state, action: PayloadAction<ConversationId | null>) => {
       state.activeConversationId = action.payload
     },
     systemPromptSet: (state, action: PayloadAction<string | null>) => {
@@ -146,7 +147,7 @@ const conversationSlice = createSlice({
         state.loading = true
         state.error = null
       })
-      .addCase(deleteConversation.fulfilled, (state, action: PayloadAction<number>) => {
+      .addCase(deleteConversation.fulfilled, (state, action: PayloadAction<ConversationId>) => {
         state.loading = false
         state.items = state.items.filter(conv => conv.id !== action.payload)
       })

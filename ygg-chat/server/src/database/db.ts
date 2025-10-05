@@ -92,6 +92,23 @@ export function initializeDatabase() {
     )
   `)
 
+  // Provider cost tracking table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS provider_cost (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      message_id INTEGER NOT NULL,
+      prompt_tokens INTEGER DEFAULT 0,
+      completion_tokens INTEGER DEFAULT 0,
+      reasoning_tokens INTEGER DEFAULT 0,
+      approx_cost REAL DEFAULT 0.0,
+      api_credit_cost REAL DEFAULT 0.0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+    )
+  `)
+
   // Join table to support many-to-many links between messages and attachments
   db.exec(`
     CREATE TABLE IF NOT EXISTS message_attachment_links (
@@ -162,10 +179,125 @@ export function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_mfcl_file_content_id ON message_file_content_links(file_content_id);
   `)
 
+  // Provider cost indexes
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_provider_cost_user_id ON provider_cost(user_id);
+    CREATE INDEX IF NOT EXISTS idx_provider_cost_message_id ON provider_cost(message_id);
+    CREATE INDEX IF NOT EXISTS idx_provider_cost_created_at ON provider_cost(created_at);
+    CREATE INDEX IF NOT EXISTS idx_provider_cost_user_created ON provider_cost(user_id, created_at);
+  `)
+
+  // Migration for existing provider_cost table - add user_id column if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE provider_cost ADD COLUMN user_id INTEGER`)
+    console.log('Added user_id column to provider_cost table')
+  } catch (error) {
+    // Column already exists, ignore the error
+  }
+
+  // Populate user_id for existing records that don't have it
+  try {
+    db.exec(`
+      UPDATE provider_cost
+      SET user_id = (
+        SELECT c.user_id
+        FROM messages m
+        JOIN conversations c ON m.conversation_id = c.id
+        WHERE m.id = provider_cost.message_id
+      )
+      WHERE user_id IS NULL
+    `)
+  } catch (error) {
+    console.log('Error populating user_id for existing records:', error)
+  }
+
+  // Migration - add foreign key constraint for user_id (if not already present)
+  // Note: SQLite doesn't support adding foreign key constraints to existing tables
+  // So we'll handle this constraint logically in the application
+
+  // Migration - remove model_name and provider columns if they exist
+  try {
+    // SQLite doesn't support DROP COLUMN, so we need to recreate the table if these columns exist
+    const tableInfo = db.prepare('PRAGMA table_info(provider_cost)').all() as any[]
+    const hasModelName = tableInfo.some(col => col.name === 'model_name')
+    const hasProvider = tableInfo.some(col => col.name === 'provider')
+
+    if (hasModelName || hasProvider) {
+      console.log('Migrating provider_cost table to remove model_name and provider columns...')
+
+      // Create new table with correct schema
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS provider_cost_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          message_id INTEGER NOT NULL,
+          prompt_tokens INTEGER DEFAULT 0,
+          completion_tokens INTEGER DEFAULT 0,
+          reasoning_tokens INTEGER DEFAULT 0,
+          approx_cost REAL DEFAULT 0.0,
+          api_credit_cost REAL DEFAULT 0.0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+        )
+      `)
+
+      // Copy data from old table, populating user_id from conversations
+      db.exec(`
+        INSERT INTO provider_cost_new (id, user_id, message_id, prompt_tokens, completion_tokens, reasoning_tokens, approx_cost, api_credit_cost, created_at)
+        SELECT
+          pc.id,
+          COALESCE(c.user_id, 1) as user_id,  -- Default to user 1 if not found
+          pc.message_id,
+          pc.prompt_tokens,
+          pc.completion_tokens,
+          pc.reasoning_tokens,
+          pc.approx_cost,
+          pc.api_credit_cost,
+          pc.created_at
+        FROM provider_cost pc
+        LEFT JOIN messages m ON pc.message_id = m.id
+        LEFT JOIN conversations c ON m.conversation_id = c.id
+      `)
+
+      // Drop old table and rename new one
+      db.exec('DROP TABLE provider_cost')
+      db.exec('ALTER TABLE provider_cost_new RENAME TO provider_cost')
+
+      console.log('Provider_cost table migration completed.')
+    }
+  } catch (error) {
+    console.error('Error during provider_cost table migration:', error)
+  }
+
+  // Provider cost view with message details (join table equivalent)
+  db.exec(`
+    CREATE VIEW IF NOT EXISTS provider_cost_with_message AS
+    SELECT
+      pc.id,
+      pc.user_id,
+      pc.message_id,
+      pc.prompt_tokens,
+      pc.completion_tokens,
+      pc.reasoning_tokens,
+      pc.approx_cost,
+      pc.api_credit_cost,
+      pc.created_at,
+      m.conversation_id,
+      m.role,
+      m.content,
+      m.model_name,
+      m.created_at as message_created_at,
+      c.title as conversation_title
+    FROM provider_cost pc
+    JOIN messages m ON pc.message_id = m.id
+    JOIN conversations c ON m.conversation_id = c.id
+  `)
+
   // Full Text Search virtual table
   db.exec(`
     CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-      content, 
+      content,
       conversation_id UNINDEXED,
       message_id UNINDEXED,
       tokenize = 'porter unicode61'
@@ -347,7 +479,9 @@ export function initializeStatements() {
     `),
     getLastMessage: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1'),
     deleteMessagesByConversation: db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
-    updateMessage: db.prepare('UPDATE messages SET content = ?, thinking_block = ?, tool_calls = ?, note = ? WHERE id = ?'),
+    updateMessage: db.prepare(
+      'UPDATE messages SET content = ?, thinking_block = ?, tool_calls = ?, note = ? WHERE id = ?'
+    ),
     deleteMessage: db.prepare('DELETE FROM messages WHERE id = ?'),
     // Batch delete messages by an array of IDs (pass JSON array string as the parameter)
     deleteMessagesByIds: db.prepare('DELETE FROM messages WHERE id IN (SELECT value FROM json_each(?))'),
@@ -507,6 +641,33 @@ export function initializeStatements() {
     getFileContentById: db.prepare('SELECT * FROM message_file_content WHERE id = ?'),
     getFileContentByPath: db.prepare('SELECT * FROM message_file_content WHERE absolute_path = ?'),
     deleteFileContentLinksByMessage: db.prepare('DELETE FROM message_file_content_links WHERE message_id = ?'),
+
+    // Provider Cost operations
+    createProviderCost: db.prepare(
+      'INSERT INTO provider_cost (user_id, message_id, prompt_tokens, completion_tokens, reasoning_tokens, approx_cost, api_credit_cost) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ),
+    getProviderCostByMessage: db.prepare('SELECT * FROM provider_cost WHERE message_id = ?'),
+    getProviderCostsByUser: db.prepare(`
+      SELECT * FROM provider_cost
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+    `),
+    getProviderCostWithMessageByUser: db.prepare(`
+      SELECT * FROM provider_cost_with_message
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+    `),
+    getTotalCostByUser: db.prepare(`
+      SELECT
+        SUM(prompt_tokens) as total_prompt_tokens,
+        SUM(completion_tokens) as total_completion_tokens,
+        SUM(reasoning_tokens) as total_reasoning_tokens,
+        SUM(approx_cost) as total_cost_usd,
+        SUM(api_credit_cost) as total_api_credits
+      FROM provider_cost
+      WHERE user_id = ?
+    `),
+    deleteProviderCostByMessage: db.prepare('DELETE FROM provider_cost WHERE message_id = ?'),
   }
 }
 

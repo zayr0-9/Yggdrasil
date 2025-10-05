@@ -1,14 +1,22 @@
 // This file contains types shared between client and server
+
+// Environment-aware ID type
+// In local mode (SQLite): number
+// In web mode (Supabase): string (UUID)
+export type MessageId = number | string
+export type ConversationId = number | string
+export type ProjectId = number | string
+
 export interface BaseMessage {
-  id: number
-  conversation_id: number
+  id: MessageId
+  conversation_id: ConversationId
   role: 'user' | 'assistant'
   thinking_block?: string
   tool_calls?: string
   content: string
   content_plain_text: string
-  parent_id?: number | null
-  children_ids: number[]
+  parent_id?: MessageId | null
+  children_ids: MessageId[]
   created_at: string // ISO timestamp, consistent naming
   updated_at?: string
   model_name: string
@@ -31,7 +39,7 @@ export interface BaseModel {
 }
 
 export interface Project {
-  id: number
+  id: ProjectId
   name: string
   created_at: string
   updated_at: string
@@ -65,8 +73,8 @@ export interface ErrorResponse {
 
 // Linked file content metadata saved per message
 export interface MessageFileContent {
-  id: number
-  message_id: number
+  id: MessageId
+  message_id: MessageId
   file_name: string
   file_path?: string | null
   relative_path?: string | null

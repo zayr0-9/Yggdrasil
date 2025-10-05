@@ -25,6 +25,8 @@ import {
   selectSearchResults,
 } from '../features/search'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
+import { ConversationId } from '../../../../shared/types'
+import { parseId } from '../utils/helpers'
 import EditProject from './EditProject'
 import SideBar from './sideBar'
 
@@ -89,8 +91,8 @@ const ConversationPage: React.FC = () => {
 
     // Fetch conversations by project ID if projectId is provided, otherwise fetch all
     if (projectId) {
-      dispatch(fetchConversationsByProjectId(parseInt(projectId)))
-      dispatch(fetchProjectById(parseInt(projectId)))
+      dispatch(fetchConversationsByProjectId(parseId(projectId)))
+      dispatch(fetchProjectById(parseId(projectId)))
     } else {
       dispatch(fetchConversations())
     }
@@ -106,7 +108,7 @@ const ConversationPage: React.FC = () => {
     dispatch(activeConversationIdSet(conv.id))
   }
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (id: ConversationId) => {
     dispatch(deleteConversation({ id }))
   }
 

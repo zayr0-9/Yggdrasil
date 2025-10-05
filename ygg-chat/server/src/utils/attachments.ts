@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { AttachmentService } from '../database/models'
+import { MessageId } from '../../../shared/types'
 
 export type Base64AttachmentInput = {
   dataUrl: string
@@ -34,7 +35,7 @@ function extFromMimeOrName(mimeType: string, name?: string): string {
   return hinted || '.bin'
 }
 
-export function saveBase64ImageAttachmentsForMessage(messageId: number, items: Base64AttachmentInput[]) {
+export function saveBase64ImageAttachmentsForMessage(messageId: MessageId, items: Base64AttachmentInput[]) {
   const created: ReturnType<typeof AttachmentService.getById>[] = []
   if (!Array.isArray(items) || items.length === 0) return created
 

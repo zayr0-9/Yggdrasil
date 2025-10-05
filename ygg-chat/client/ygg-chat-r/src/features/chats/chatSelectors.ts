@@ -1,4 +1,5 @@
 import { createSelector } from '@reduxjs/toolkit'
+import { MessageId } from '../../../../../shared/types'
 import { RootState } from '../../store/store'
 
 // Base selector
@@ -163,13 +164,21 @@ export const selectDisplayMessages = createSelector(
       const pathSet = new Set(currentPath)
       const filtered = messages.filter(m => pathSet.has(m.id))
       if (filtered.length > 0) {
+        console.log(
+          'display messages #####',
+          filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        )
         return filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
       }
     }
 
     // Fallback 2: show all messages chronologically (deduped)
-    const unique = new Map<number, (typeof messages)[number]>()
+    const unique = new Map<MessageId, (typeof messages)[number]>()
     for (const m of messages) if (!unique.has(m.id)) unique.set(m.id, m)
+    console.log(
+      'display messages #####',
+      [...unique.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    )
     return [...unique.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   }
 )
@@ -177,9 +186,7 @@ export const selectDisplayMessages = createSelector(
 // Tools selectors
 export const selectTools = createSelector([selectChatState], chat => chat.tools)
 
-export const selectEnabledTools = createSelector([selectTools], tools =>
-  tools.filter(tool => tool.enabled)
-)
+export const selectEnabledTools = createSelector([selectTools], tools => tools.filter(tool => tool.enabled))
 
 export const selectToolByName = createSelector(
   [selectTools, (_state: RootState, toolName: string) => toolName],

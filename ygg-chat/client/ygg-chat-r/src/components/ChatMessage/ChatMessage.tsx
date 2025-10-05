@@ -1,8 +1,9 @@
+import type { RootState } from '@/store/store'
 import 'boxicons' // Types
 import 'boxicons/css/boxicons.min.css'
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { useDispatch } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
 import { chatSliceActions } from '../../features/chats/chatSlice'
@@ -51,6 +52,7 @@ interface MessageActionsProps {
   onSave?: () => void
   onCancel?: () => void
   onSaveBranch?: () => void
+  onMore?: () => void
   isEditing: boolean
   editMode?: 'edit' | 'branch'
   copied?: boolean
@@ -65,6 +67,7 @@ const MessageActions: React.FC<MessageActionsProps> = ({
   onSave,
   onCancel,
   onSaveBranch,
+  onMore,
   isEditing,
   editMode = 'edit',
   copied = false,
@@ -183,6 +186,15 @@ const MessageActions: React.FC<MessageActionsProps> = ({
               </svg>
             </button>
           )}
+          {onMore && (
+            <button
+              onClick={onMore}
+              className='p-1.5 rounded-md text-gray-400 hover:text-purple-400 hover:bg-indigo-100 dark:hover:bg-neutral-700 transition-colors duration-150 active:scale-90'
+              title='More options'
+            >
+              <i className='bx bx-dots-vertical-rounded text-base'></i>
+            </button>
+          )}
         </>
       )}
     </div>
@@ -218,6 +230,15 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
     const [showThinking, setShowThinking] = useState(true)
     // Toggle visibility of the tool calls block
     const [showToolCalls, setShowToolCalls] = useState(true)
+    // More menu states
+    const [showMoreMenu, setShowMoreMenu] = useState(false)
+    const [showMoreInfo, setShowMoreInfo] = useState(false)
+    const moreMenuRef = useRef<HTMLDivElement | null>(null)
+
+    // Get message data from Redux store
+    const messageData = useSelector((state: RootState) =>
+      state.chat.conversation.messages.find(m => String(m.id) === String(id))
+    )
 
     const handleEdit = () => {
       dispatch(chatSliceActions.editingBranchSet(false))
@@ -297,6 +318,37 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
       if (Number.isNaN(numericId)) return
       dispatch(chatSliceActions.messageArtifactDeleted({ messageId: numericId, index }))
     }
+
+    const handleMoreClick = () => {
+      setShowMoreMenu(!showMoreMenu)
+      setShowMoreInfo(false)
+    }
+
+    const handleMoreInfoClick = () => {
+      setShowMoreInfo(true)
+    }
+
+    const handleBackToMenu = () => {
+      setShowMoreInfo(false)
+    }
+
+    // Click outside handler
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+          setShowMoreMenu(false)
+          setShowMoreInfo(false)
+        }
+      }
+
+      if (showMoreMenu) {
+        document.addEventListener('mousedown', handleClickOutside)
+      }
+
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+      }
+    }, [showMoreMenu])
 
     const copyPlainText = async (text: string) => {
       // Try async clipboard API first
@@ -395,12 +447,12 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
       }
 
       return (
-        <div className='relative group my-3 not-prose'>
+        <div className='relative group/code my-3 not-prose'>
           {
             <Button
               type='button'
               onClick={handleCopyCode}
-              className='absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-150 border-1 text-slate-900 dark:text-white border-neutral-600 dark:border-neutral-600 dark:hover:bg-neutral-700'
+              className='absolute top-2 right-2 z-10 opacity-0 group-hover/code:opacity-100 transition-opacity duration-150 border-1 text-slate-900 dark:text-white border-neutral-600 dark:border-neutral-600 dark:hover:bg-neutral-700'
               size='smaller'
               variant='outline'
             >
@@ -432,19 +484,76 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
             )}
           </div>
 
-          <MessageActions
-            onEdit={role === 'user' ? handleEdit : undefined}
-            onBranch={role === 'user' ? handleBranch : undefined}
-            onDelete={handleDelete}
-            onCopy={handleCopy}
-            onResend={role === 'assistant' ? handleResend : undefined}
-            onSave={handleSave}
-            onSaveBranch={handleSaveBranch}
-            onCancel={handleCancel}
-            isEditing={editingState}
-            editMode={editMode}
-            copied={copied}
-          />
+          <div className='relative'>
+            <MessageActions
+              onEdit={role === 'user' ? handleEdit : handleEdit}
+              onBranch={role === 'user' ? handleBranch : undefined}
+              onDelete={handleDelete}
+              onCopy={handleCopy}
+              onResend={role === 'assistant' ? handleResend : undefined}
+              onSave={handleSave}
+              onSaveBranch={handleSaveBranch}
+              onCancel={handleCancel}
+              onMore={handleMoreClick}
+              isEditing={editingState}
+              editMode={editMode}
+              copied={copied}
+            />
+            {/* More menu dropdown */}
+            {showMoreMenu && (
+              <div
+                ref={moreMenuRef}
+                className='absolute right-0 top-8 z-20 w-80 rounded-md shadow-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700'
+              >
+                {!showMoreInfo ? (
+                  <div className='py-1'>
+                    <button
+                      onClick={handleMoreInfoClick}
+                      className='w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-neutral-100 dark:hover:bg-neutral-700'
+                    >
+                      More Info
+                    </button>
+                  </div>
+                ) : (
+                  <div className='p-3'>
+                    <div className='flex items-center justify-between mb-2'>
+                      <h3 className='text-sm font-semibold text-gray-700 dark:text-gray-300'>Message Info</h3>
+                      <button
+                        onClick={handleBackToMenu}
+                        className='text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                      >
+                        Back
+                      </button>
+                    </div>
+                    <div className='max-h-96 overflow-y-auto text-xs space-y-1.5'>
+                      {messageData ? (
+                        <>
+                          {Object.entries(messageData)
+                            .filter(
+                              ([key]) =>
+                                key !== 'content' &&
+                                key !== 'plain_text_content' &&
+                                key !== 'artifacts' &&
+                                key !== 'content_plain_text'
+                            )
+                            .map(([key, value]) => (
+                              <div key={key} className='flex gap-2'>
+                                <span className='font-medium text-gray-600 dark:text-gray-400 shrink-0'>{key}:</span>
+                                <span className='text-gray-800 dark:text-gray-200 break-all'>
+                                  {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                                </span>
+                              </div>
+                            ))}
+                        </>
+                      ) : (
+                        <p className='text-gray-500 dark:text-gray-400'>No message data found</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Tool calls block */}

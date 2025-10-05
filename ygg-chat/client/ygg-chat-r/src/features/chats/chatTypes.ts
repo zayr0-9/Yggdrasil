@@ -1,4 +1,4 @@
-import { BaseMessage, BaseModel } from '../../../../../shared/types'
+import { BaseMessage, BaseModel, MessageId, ConversationId } from '../../../../../shared/types'
 
 // Message types (shared with conversations)
 export interface Message extends BaseMessage {
@@ -26,7 +26,7 @@ export interface StreamChunk {
   error?: string
   // optional iteration index for multi-reply endpoints
   iteration?: number
-  messageId?: number
+  messageId?: MessageId
 }
 
 export interface StreamState {
@@ -36,10 +36,10 @@ export interface StreamState {
   thinkingBuffer: string
   // separate buffer for tool call tokens while streaming
   toolCallsBuffer: string
-  messageId: number | null
+  messageId: MessageId | null
   error: string | null
   finished: boolean
-  streamingMessageId: number | null
+  streamingMessageId: MessageId | null
 }
 
 export interface Model extends BaseModel {}
@@ -88,15 +88,17 @@ export interface CompositionState {
   multiReplyCount: number
   imageDrafts: ImageDraft[] // base64-encoded images + metadata from drag/drop
   editingBranch: boolean // true when user is editing a branch; controls UI like hiding image drafts
+  optimisticMessage: Message | null // temp message for instant UI feedback in web mode only
+  optimisticBranchMessage: Message | null // temp branched message for instant UI feedback in web mode only
 }
 
 export interface ConversationState {
-  currentConversationId: number | null
-  focusedChatMessageId: number | null
-  currentPath: number[] // Array of message IDs forming current branch
+  currentConversationId: ConversationId | null
+  focusedChatMessageId: MessageId | null
+  currentPath: MessageId[] // Array of message IDs forming current branch
   messages: Message[] // Linear messages in current path order
-  bookmarked: number[] //each index contains id of a message selected
-  excludedMessages: number[] //id of each message which are NOT to be sent for chat,
+  bookmarked: MessageId[] //each index contains id of a message selected
+  excludedMessages: MessageId[] //id of each message which are NOT to be sent for chat,
   context: string
 }
 
@@ -114,13 +116,13 @@ export interface HeimdallState {
   error: string | null
   compactMode: boolean
   lastFetchedAt: number | null
-  lastConversationId: number | null
+  lastConversationId: ConversationId | null
 }
 
 export interface InitializationState {
   loading: boolean
   error: string | null
-  userId: number | null
+  userId: string | null
 }
 
 export interface ChatState {
@@ -134,23 +136,24 @@ export interface ChatState {
   conversation: ConversationState
   heimdall: HeimdallState
   initialization: InitializationState
-  selectedNodes: number[]
+  selectedNodes: MessageId[]
   attachments: AttachmentsState
   tools: tools[]
 }
 
 // Action payloads
 export interface SendMessagePayload {
-  conversationId: number
+  conversationId: ConversationId
   input: MessageInput
-  parent: number
+  parent: MessageId
   repeatNum: number
   think: boolean
+  retrigger?: boolean
 }
 
 export interface EditMessagePayload {
-  conversationId: number
-  originalMessageId: number
+  conversationId: ConversationId
+  originalMessageId: MessageId
   newContent: string
   modelOverride?: string
   systemPrompt?: string
@@ -158,8 +161,8 @@ export interface EditMessagePayload {
 }
 
 export interface BranchMessagePayload {
-  conversationId: number
-  parentId: number
+  conversationId: ConversationId
+  parentId: MessageId
   content: string
   modelOverride?: string
   systemPrompt?: string
@@ -182,8 +185,8 @@ export interface ModelsResponse {
 
 // Attachment types (mirror server `Attachment` interface)
 export interface Attachment {
-  id: number
-  message_id: number | null
+  id: MessageId
+  message_id: MessageId | null
   kind: 'image'
   mime_type: string
   storage: 'file' | 'url'
@@ -197,9 +200,9 @@ export interface Attachment {
 }
 
 export interface AttachmentsState {
-  byMessage: Record<number, Attachment[]>
+  byMessage: Record<string, Attachment[]>
   // Backup of deleted image artifacts (as base64 data URLs) per message during branch editing
-  backup: Record<number, string[]>
+  backup: Record<string, string[]>
 }
 
 export interface tools {

@@ -1,7 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
-import { Chat, ConversationPage, Homepage, Settings } from './containers'
+import { Chat, ConversationPage, Homepage, Login, Settings } from './containers'
 import IdeContextBootstrap from './IdeContextBootstrap'
+import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
   return (
@@ -9,10 +10,43 @@ function App() {
       {/* Establish IDE Context WebSocket globally so it's not tied to any specific page */}
       <IdeContextBootstrap />
       <Routes>
-        <Route path='/conversationPage' element={<ConversationPage />} />
-        <Route path='/' element={<Homepage />} />
-        <Route path='/chat/:id' element={<Chat />} />
-        <Route path='/settings' element={<Settings />} />
+        {/* Public route */}
+        <Route path='/login' element={<Login />} />
+
+        {/* Protected routes */}
+        <Route
+          path='/conversationPage'
+          element={
+            <ProtectedRoute>
+              <ConversationPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/'
+          element={
+            <ProtectedRoute>
+              <Homepage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/chat/:id'
+          element={
+            <ProtectedRoute>
+              <Chat />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/settings'
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Fallback */}
         <Route path='*' element={<Navigate to='/' replace />} />
       </Routes>

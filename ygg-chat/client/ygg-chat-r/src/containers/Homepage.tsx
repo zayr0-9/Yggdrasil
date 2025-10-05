@@ -2,11 +2,12 @@ import 'boxicons'
 import 'boxicons/css/boxicons.min.css'
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Project } from '../../../../shared/types'
+import { Project, ProjectId } from '../../../../shared/types'
 import { Button } from '../components'
 import SearchList from '../components/SearchList/SearchList'
 import { Select } from '../components/Select/Select'
 import { chatSliceActions } from '../features/chats'
+import { fetchConversations, selectConversationsByProject } from '../features/conversations'
 import {
   deleteProject,
   fetchProjects,
@@ -15,8 +16,8 @@ import {
   selectProjectsLoading,
 } from '../features/projects'
 import { searchActions, selectSearchLoading, selectSearchQuery, selectSearchResults } from '../features/search'
-import { fetchConversations, selectConversationsByProject } from '../features/conversations'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
+import { supabase } from '../lib/supabase'
 import EditProject from './EditProject'
 import SideBar from './sideBar'
 
@@ -115,7 +116,7 @@ const Homepage: React.FC = () => {
     navigate(`/conversationPage?projectId=${project.id}`)
   }
 
-  const handleDeleteProject = (id: number) => {
+  const handleDeleteProject = (id: ProjectId) => {
     dispatch(deleteProject(id))
   }
 
@@ -149,6 +150,11 @@ const Homepage: React.FC = () => {
     navigate(`/chat/${conversationId}#${messageId}`)
   }
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    // The ProtectedRoute component will automatically redirect to /login
+  }
+
   return (
     <div className='bg-zinc-50 min-h-screen dark:bg-yBlack-500 flex flex-col'>
       {/* Recent conversations sidebar - fixed; page content padded to avoid overlap */}
@@ -180,6 +186,20 @@ const Homepage: React.FC = () => {
               >
                 <i
                   className={`bx ${themeMode === 'system' ? 'bx-desktop' : themeMode === 'dark' ? 'bx-moon' : 'bx-sun'} text-3xl p-1 transition-transform duration-100 group-active:scale-90 pointer-events-none`}
+                  aria-hidden='true'
+                ></i>
+              </Button>
+              <Button
+                variant='secondary'
+                size='smaller'
+                onClick={handleLogout}
+                rounded='full'
+                title='Logout'
+                aria-label='Logout'
+                className='group'
+              >
+                <i
+                  className='bx bx-log-out text-3xl p-1 transition-transform duration-100 group-active:scale-90 pointer-events-none'
                   aria-hidden='true'
                 ></i>
               </Button>

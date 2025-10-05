@@ -1,16 +1,14 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
+import { apiCall } from '../../utils/api'
 import { SearchResult } from './searchTypes'
+import { ProjectId } from '../../../../../shared/types'
 
 // Async thunk to perform search against server API
 export const performSearch = createAsyncThunk<SearchResult[], string, { rejectValue: string }>(
   'search/perform',
   async (query, { rejectWithValue }) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/search?q=${encodeURIComponent(query)}`)
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`)
-      }
-      const raw: any[] = await response.json()
+      const raw: any[] = await apiCall<any[]>(`/search?q=${encodeURIComponent(query)}`)
       const data: SearchResult[] = raw.map(r => ({
         conversationId: r.conversation_id ?? r.conversationId,
         messageId: r.messageId ?? r.id?.toString(),
@@ -19,7 +17,7 @@ export const performSearch = createAsyncThunk<SearchResult[], string, { rejectVa
         highlighted: r.highlighted,
         conversationTitle: r.conversation_title ?? r.conversationTitle,
       }))
-      return data
+      return data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
       return rejectWithValue(message)
@@ -29,20 +27,16 @@ export const performSearch = createAsyncThunk<SearchResult[], string, { rejectVa
 
 // Async thunk to perform project-specific search
 export const performProjectSearch = createAsyncThunk<
-  SearchResult[], 
-  { query: string; projectId: number }, 
+  SearchResult[],
+  { query: string; projectId?: ProjectId },
   { rejectValue: string }
 >(
   'search/performProject',
   async ({ query, projectId }, { rejectWithValue }) => {
     try {
-      const response = await fetch(
-        `http://localhost:3001/api/search/project?q=${encodeURIComponent(query)}&projectId=${projectId}`
+      const raw: any[] = await apiCall<any[]>(
+        `/search/project?q=${encodeURIComponent(query)}&projectId=${projectId}`
       )
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`)
-      }
-      const raw: any[] = await response.json()
       const data: SearchResult[] = raw.map(r => ({
         conversationId: r.conversation_id ?? r.conversationId,
         messageId: r.messageId ?? r.id?.toString(),
@@ -51,7 +45,7 @@ export const performProjectSearch = createAsyncThunk<
         highlighted: r.highlighted,
         conversationTitle: r.conversation_title ?? r.conversationTitle,
       }))
-      return data
+      return data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
       return rejectWithValue(message)

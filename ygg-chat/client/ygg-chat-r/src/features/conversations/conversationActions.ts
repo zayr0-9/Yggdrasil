@@ -8,9 +8,34 @@ import {
   patchConversationSystemPrompt,
   type SystemPromptPatchResponse,
 } from '../../utils/api'
+import { supabase } from '../../lib/supabase'
 import { convContextSet, systemPromptSet } from './conversationSlice'
 import { Conversation } from './conversationTypes'
-import type { BaseModel } from '../../../../../shared/types'
+import type { BaseModel, ConversationId, ProjectId } from '../../../../../shared/types'
+
+// Environment-aware user ID helper
+const getUserId = async (state: RootState): Promise<string | number> => {
+  const environment = import.meta.env.VITE_ENVIRONMENT || 'local'
+
+  if (environment === 'web') {
+    // Supabase mode - get from auth session
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (!session?.user?.id) {
+      throw new Error('User not authenticated')
+    }
+    return session.user.id
+  } else {
+    // Local mode - use demo user pattern
+    let userId = state.users.currentUser?.id
+    if (!userId) {
+      const user = await api.post<{ id: number }>('/users', { username: 'homepage-user' })
+      userId = user.id
+    }
+    return userId
+  }
+}
 
 // Fetch conversations for current user (creates demo user if none)
 
@@ -44,15 +69,8 @@ export const fetchConversations = createAsyncThunk<Conversation[], void, { state
   'conversations/fetchAll',
   async (_: void, { getState, rejectWithValue }) => {
     try {
-      // ensure demo user
       const state = getState()
-      let userId = state.users.currentUser?.id
-      if (!userId) {
-        const user = await api.post<{
-          id: number
-        }>('/users', { username: 'homepage-user' })
-        userId = user.id
-      }
+      const userId = await getUserId(state)
       return await api.get<Conversation[]>(`/users/${userId}/conversations`)
     } catch (err) {
       return rejectWithValue(err instanceof Error ? err.message : 'Failed to fetch conversations')
@@ -66,11 +84,7 @@ export const fetchRecentConversations = createAsyncThunk<Conversation[], { limit
   async ({ limit = 10 } = {}, { getState, rejectWithValue }) => {
     try {
       const state = getState()
-      let userId = state.users.currentUser?.id
-      if (!userId) {
-        const user = await api.post<{ id: number }>('/users', { username: 'homepage-user' })
-        userId = user.id
-      }
+      const userId = await getUserId(state)
       const query = new URLSearchParams({ limit: String(limit) }).toString()
       return await api.get<Conversation[]>(`/users/${userId}/conversations/recent?${query}`)
     } catch (err) {
@@ -80,9 +94,9 @@ export const fetchRecentConversations = createAsyncThunk<Conversation[], { limit
 )
 
 // Fetch conversations by project ID
-export const fetchConversationsByProjectId = createAsyncThunk<Conversation[], number, { state: RootState }>(
+export const fetchConversationsByProjectId = createAsyncThunk<Conversation[], ProjectId, { state: RootState }>(
   'conversations/fetchByProjectId',
-  async (projectId: number, { rejectWithValue }) => {
+  async (projectId: ProjectId, { rejectWithValue }) => {
     try {
       return await api.get<Conversation[]>(`/conversations/project/${projectId}`)
     } catch (err) {
@@ -97,11 +111,7 @@ export const createConversation = createAsyncThunk<Conversation, { title?: strin
   async ({ title }, { getState, rejectWithValue }) => {
     try {
       const state = getState()
-      let userId = state.users.currentUser?.id
-      if (!userId) {
-        const user = await api.post<{ id: number }>('/users', { username: 'homepage-user' })
-        userId = user.id
-      }
+      const userId = await getUserId(state)
 
       // Get selected project ID from state
       const selectedProject = state.projects.selectedProject
@@ -131,7 +141,7 @@ export const updateConversation = createAsyncThunk<Conversation, { id: number; t
 )
 
 // Delete conversation by id
-export const deleteConversation = createAsyncThunk<number, { id: number }, { state: RootState }>(
+export const deleteConversation = createAsyncThunk<ConversationId, { id: ConversationId }, { state: RootState }>(
   'conversations/delete',
   async ({ id }, { rejectWithValue }) => {
     try {
@@ -144,7 +154,7 @@ export const deleteConversation = createAsyncThunk<number, { id: number }, { sta
 )
 
 // Fetch the conversation system prompt and store in state.chat.systemPrompt
-export const fetchSystemPrompt = createAsyncThunk<string | null, number>(
+export const fetchSystemPrompt = createAsyncThunk<string | null, ConversationId>(
   'chat/fetchSystemPrompt',
   async (conversationId, { dispatch, rejectWithValue }) => {
     try {
@@ -160,9 +170,9 @@ export const fetchSystemPrompt = createAsyncThunk<string | null, number>(
 )
 
 // Fetch conversation context
-export const fetchContext = createAsyncThunk<string | null, number>(
+export const fetchContext = createAsyncThunk<string | null, ConversationId>(
   'chat/fetchContext',
-  async (conversationId, { dispatch, rejectWithValue }) => {
+  async (conversationId, { dispatch, rejectWithValue}) => {
     try {
       const res = await getConversationContext(conversationId)
       const value = res.context
@@ -178,7 +188,7 @@ export const fetchContext = createAsyncThunk<string | null, number>(
 // Update the conversation system prompt on the server and reflect in state
 export const updateSystemPrompt = createAsyncThunk<
   SystemPromptPatchResponse,
-  { id: number; systemPrompt: string | null }
+  { id: ConversationId; systemPrompt: string | null }
 >('chat/updateSystemPrompt', async ({ id, systemPrompt }, { dispatch, rejectWithValue }) => {
   try {
     const updated = await patchConversationSystemPrompt(id, systemPrompt)
@@ -193,8 +203,8 @@ export const updateSystemPrompt = createAsyncThunk<
 })
 
 export const updateContext = createAsyncThunk<
-  { id: number; context: string | null }, // return type
-  { id: number; context: string | null } // argument type
+  { id: ConversationId; context: string | null }, // return type
+  { id: ConversationId; context: string | null } // argument type
 >('chat/updateContext', async ({ id, context }, { dispatch, rejectWithValue }) => {
   try {
     const updated = await patchConversationContext(id, context) // ConversationPatchResponse

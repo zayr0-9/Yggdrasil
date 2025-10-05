@@ -16,6 +16,7 @@ import { Provider } from 'react-redux'
 import App from './App'
 import './index.css'
 import { store } from './store/store'
+import { AuthProvider } from './contexts/AuthContext'
 
 // Global theme manager: keeps the `dark` class in sync with user preference and system theme
 // Runs once per page load (guarded for HMR) so it applies across all routes
@@ -71,7 +72,9 @@ const root = ReactDOM.createRoot(rootElement)
 root.render(
   <React.StrictMode>
     <Provider store={store}>
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </Provider>
   </React.StrictMode>
 )

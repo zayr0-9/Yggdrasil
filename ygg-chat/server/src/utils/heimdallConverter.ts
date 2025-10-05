@@ -1,6 +1,7 @@
 // server/src/utils/heimdallConverter.ts
 
 import { Message } from '../database/models'
+import { MessageId } from '../../../shared/types'
 
 // Types matching Heimdall component expectations
 interface ChatNode {
@@ -109,9 +110,10 @@ export function debugMessageTree(messages: Message[]): void {
     roots.map(r => r.id)
   )
 
-  const childCounts = new Map<number, number>()
+  const childCounts = new Map<MessageId, number>()
   messages.forEach(msg => {
-    if (msg.parent_id != null) { // covers both null and undefined
+    if (msg.parent_id != null) {
+      // covers both null and undefined
       const parentId = msg.parent_id
       const count = childCounts.get(parentId) ?? 0
       childCounts.set(parentId, count + 1)
@@ -120,7 +122,7 @@ export function debugMessageTree(messages: Message[]): void {
 
   console.log('Parent → Child counts:')
   Array.from(childCounts.entries())
-    .sort(([a], [b]) => a - b)
+    .sort(([a], [b]) => Number(a) - Number(b))
     .forEach(([parentId, count]) => {
       console.log(`  ${parentId} → ${count} children`)
     })
@@ -172,7 +174,7 @@ export function getMessageTreeStats(messages: Message[]): {
   let maxDepth = 0
   let branchPoints = 0
 
-  const calculateDepth = (messageId: number, currentDepth: number = 0): number => {
+  const calculateDepth = (messageId: MessageId, currentDepth: number = 0): number => {
     maxDepth = Math.max(maxDepth, currentDepth)
 
     const children = messages.filter(msg => msg.parent_id === messageId)

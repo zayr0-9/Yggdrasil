@@ -38,7 +38,7 @@ class ModelService {
       //local ollama server replace with your own
       //need to import this from an easily editable json or front end
       const response = await fetch('http://172.31.32.1:11434/api/tags', {
-        signal: AbortSignal.timeout(5000), // 5s timeout
+        signal: AbortSignal.timeout(2000), // 5s timeout
       })
       //error, quit function
       if (!response.ok) {

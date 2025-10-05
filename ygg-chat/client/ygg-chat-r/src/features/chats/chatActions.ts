@@ -1,4 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
+import { ConversationId, MessageId } from '../../../../../shared/types'
 import type { RootState } from '../../store/store'
 import { API_BASE, apiCall, createStreamingRequest } from '../../utils/api'
 import type { Conversation } from '../conversations/conversationTypes'
@@ -274,7 +275,7 @@ export const selectModel = createAsyncThunk('chat/selectModel', async (model: Mo
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
   async (
-    { conversationId, input, parent, repeatNum, think }: SendMessagePayload,
+    { conversationId, input, parent, repeatNum, think, retrigger = false }: SendMessagePayload,
     { dispatch, getState, rejectWithValue, signal }
   ) => {
     dispatch(chatSliceActions.sendingStarted())
@@ -332,6 +333,7 @@ export const sendMessage = createAsyncThunk(
             attachmentsBase64,
             selectedFiles: selectedFilesForChat,
             think,
+            retrigger,
           }),
           signal: controller.signal,
         })
@@ -359,6 +361,7 @@ export const sendMessage = createAsyncThunk(
             attachmentsBase64,
             selectedFiles: selectedFilesForChat,
             think,
+            retrigger,
           }),
           signal: controller.signal,
         })
@@ -377,13 +380,20 @@ export const sendMessage = createAsyncThunk(
       let userMessage: any = null
       // Guard to ensure we only try to update the title once per send
       let titleUpdated = false
+      // Buffer for incomplete lines across chunks
+      let buffer = ''
 
       try {
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
 
-          const lines = decoder.decode(value).split('\n')
+          // Append new data to buffer and split by newlines
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+
+          // Keep the last incomplete line in the buffer
+          buffer = lines.pop() || ''
 
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue
@@ -400,6 +410,11 @@ export const sendMessage = createAsyncThunk(
                 dispatch(chatSliceActions.messageAdded(chunk.message))
                 // And update currentPath to navigate to this new node
                 dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
+                // Clear optimistic message immediately when real user message confirmed (web mode only)
+                const isWebMode = import.meta.env.VITE_ENVIRONMENT === 'web'
+                if (isWebMode) {
+                  dispatch(chatSliceActions.optimisticMessageCleared())
+                }
                 // Live-update: append current image drafts to this new user message's artifacts
                 if (drafts.length > 0) {
                   dispatch(
@@ -434,6 +449,9 @@ export const sendMessage = createAsyncThunk(
                 // Reset streaming buffer for next iteration
                 dispatch(chatSliceActions.streamChunkReceived({ type: 'reset' } as any))
                 messageId = chunk.message.id
+              } else if (chunk.type === 'aborted') {
+                // Server deleted the empty assistant message, no need to keep it in client state
+                dispatch(chatSliceActions.streamChunkReceived({ type: 'error', error: 'Generation aborted' }))
               } else if (chunk.type === 'error') {
                 dispatch(chatSliceActions.streamChunkReceived(chunk))
                 throw new Error(chunk.error || 'Stream error')
@@ -471,7 +489,7 @@ export const sendMessage = createAsyncThunk(
 
 export const updateMessage = createAsyncThunk(
   'chat/updateMessage',
-  async ({ id, content, note }: { id: number; content: string; note?: string }, { dispatch, rejectWithValue }) => {
+  async ({ id, content, note }: { id: MessageId; content: string; note?: string }, { dispatch, rejectWithValue }) => {
     try {
       const updated = await apiCall<Message>(`/messages/${id}`, {
         method: 'PUT',
@@ -488,7 +506,7 @@ export const updateMessage = createAsyncThunk(
 // Fetch conversation messages from server
 export const fetchConversationMessages = createAsyncThunk(
   'chat/fetchConversationMessages',
-  async (conversationId: number, { dispatch, rejectWithValue, getState }) => {
+  async (conversationId: ConversationId, { dispatch, rejectWithValue, getState }) => {
     try {
       const raw = await apiCall<Message[]>(`/conversations/${conversationId}/messages`)
       // Ensure client-only fields exist
@@ -527,7 +545,7 @@ export const fetchConversationMessages = createAsyncThunk(
 
 export const deleteMessage = createAsyncThunk(
   'chat/deleteMessage',
-  async ({ id, conversationId }: { id: number; conversationId: number }, { dispatch, rejectWithValue }) => {
+  async ({ id, conversationId }: { id: MessageId; conversationId: ConversationId }, { dispatch, rejectWithValue }) => {
     try {
       await apiCall(`/messages/${id}`, { method: 'DELETE' })
       // Refetch conversation messages to ensure sync with server
@@ -641,13 +659,20 @@ export const editMessageWithBranching = createAsyncThunk(
       const decoder = new TextDecoder()
       let messageId: number | null = null
       let userMessage: any = null
+      // Buffer for incomplete lines across chunks
+      let buffer = ''
 
       try {
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
 
-          const lines = decoder.decode(value).split('\n')
+          // Append new data to buffer and split by newlines
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+
+          // Keep the last incomplete line in the buffer
+          buffer = lines.pop() || ''
 
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue
@@ -674,6 +699,12 @@ export const editMessageWithBranching = createAsyncThunk(
                     })
                   )
                 }
+
+                // Clear optimistic branch message immediately when real branch message confirmed (web mode only)
+                const isWebMode = import.meta.env.VITE_ENVIRONMENT === 'web'
+                if (isWebMode) {
+                  dispatch(chatSliceActions.optimisticBranchMessageCleared())
+                }
               }
 
               if (chunk.type === 'generation_started') {
@@ -688,6 +719,9 @@ export const editMessageWithBranching = createAsyncThunk(
                 dispatch(chatSliceActions.messageAdded(chunk.message))
                 // Navigate path to completed assistant reply
                 dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
+              } else if (chunk.type === 'aborted') {
+                // Server deleted the empty assistant message, no need to keep it in client state
+                dispatch(chatSliceActions.streamChunkReceived({ type: 'error', error: 'Generation aborted' }))
               } else if (chunk.type === 'error') {
                 throw new Error(chunk.error || 'Stream error')
               }
@@ -778,13 +812,20 @@ export const sendMessageToBranch = createAsyncThunk(
       const decoder = new TextDecoder()
       let messageId: number | null = null
       let userMessage: any = null
+      // Buffer for incomplete lines across chunks
+      let buffer = ''
 
       try {
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
 
-          const lines = decoder.decode(value).split('\n')
+          // Append new data to buffer and split by newlines
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+
+          // Keep the last incomplete line in the buffer
+          buffer = lines.pop() || ''
 
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue
@@ -806,6 +847,9 @@ export const sendMessageToBranch = createAsyncThunk(
               if (chunk.type === 'complete' && chunk.message) {
                 messageId = chunk.message.id
                 dispatch(chatSliceActions.messageBranchCreated({ newMessage: chunk.message }))
+              } else if (chunk.type === 'aborted') {
+                // Server deleted the empty assistant message, no need to keep it in client state
+                dispatch(chatSliceActions.streamChunkReceived({ type: 'error', error: 'Generation aborted' }))
               } else if (chunk.type === 'error') {
                 throw new Error(chunk.error || 'Stream error')
               }
@@ -842,7 +886,7 @@ export const sendMessageToBranch = createAsyncThunk(
 // Fetch Heimdall message tree
 export const fetchMessageTree = createAsyncThunk(
   'chat/fetchMessageTree',
-  async (conversationId: number, { dispatch, rejectWithValue, getState }) => {
+  async (conversationId: ConversationId, { dispatch, rejectWithValue, getState }) => {
     // Gating: avoid duplicate in-flight fetches and throttle rapid refetches
     const state = getState() as RootState
     const { heimdall } = state.chat
@@ -877,12 +921,12 @@ export const fetchMessageTree = createAsyncThunk(
 export const refreshCurrentPathAfterDelete = createAsyncThunk(
   'chat/refreshCurrentPathAfterDelete',
   async (
-    { conversationId, messageId }: { conversationId: number; messageId: number },
+    { conversationId, messageId }: { conversationId: ConversationId; messageId: MessageId },
     { getState, dispatch, rejectWithValue }
   ) => {
     try {
       // Fetch direct children of the deleted message from the server
-      const children = await apiCall<number[]>(`/conversations/${conversationId}/messages/${messageId}/children`)
+      const children = await apiCall<MessageId[]>(`/conversations/${conversationId}/messages/${messageId}/children`)
 
       const state = getState() as RootState
       const currentPath = state.chat.conversation.currentPath || []
@@ -933,7 +977,7 @@ export const initializeUserAndConversation = createAsyncThunk(
         body: JSON.stringify({ userId: user.id }),
       })
 
-      dispatch(chatSliceActions.initializationCompleted({ userId: user.id, conversationId: conversation.id }))
+      dispatch(chatSliceActions.initializationCompleted({ userId: String(user.id), conversationId: conversation.id }))
       return { userId: user.id, conversationId: conversation.id }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to initialize'
@@ -946,7 +990,7 @@ export const initializeUserAndConversation = createAsyncThunk(
 // Delete multiple messages by their IDs
 export const deleteSelectedNodes = createAsyncThunk(
   'chat/deleteSelectedNodes',
-  async (ids: number[], { rejectWithValue }) => {
+  async (ids: MessageId[], { rejectWithValue }) => {
     try {
       const response = await apiCall<{ deleted: number }>('/messages/deleteMany', {
         method: 'POST',
@@ -961,7 +1005,7 @@ export const deleteSelectedNodes = createAsyncThunk(
 )
 
 // Update a conversation title (Chat feature convenience)
-export const updateConversationTitle = createAsyncThunk<Conversation, { id: number; title: string }>(
+export const updateConversationTitle = createAsyncThunk<Conversation, { id: ConversationId; title: string }>(
   'chat/updateConversationTitle',
   async ({ id, title }, { rejectWithValue }) => {
     try {
@@ -1029,7 +1073,7 @@ export const linkAttachmentsToMessage = createAsyncThunk<Attachment[], { message
 )
 
 // Fetch attachments for a message
-export const fetchAttachmentsByMessage = createAsyncThunk<Attachment[], { messageId: number }>(
+export const fetchAttachmentsByMessage = createAsyncThunk<Attachment[], { messageId: MessageId }>(
   'chat/fetchAttachmentsByMessage',
   async ({ messageId }, { dispatch, rejectWithValue }) => {
     try {
@@ -1081,7 +1125,7 @@ export const deleteAttachmentsByMessage = createAsyncThunk<{ deleted: number }, 
 )
 
 // Fetch a single attachment by ID
-export const fetchAttachmentById = createAsyncThunk<Attachment, { id: number }>(
+export const fetchAttachmentById = createAsyncThunk<Attachment, { id: MessageId }>(
   'chat/fetchAttachmentById',
   async ({ id }, { dispatch, rejectWithValue }) => {
     try {
@@ -1103,41 +1147,53 @@ export const fetchAttachmentById = createAsyncThunk<Attachment, { id: number }>(
 )
 
 // Abort a running generation
-export const abortStreaming = createAsyncThunk<{ success: boolean }, { messageId: number }, { state: RootState }>(
-  'chat/abortStreaming',
-  async ({ messageId }, { dispatch, rejectWithValue }) => {
-    try {
-      const response = await apiCall<{ success: boolean }>(`/messages/${messageId}/abort`, {
-        method: 'POST',
-      })
+export const abortStreaming = createAsyncThunk<
+  { success: boolean; messageDeleted?: boolean },
+  { messageId: MessageId },
+  { state: RootState }
+>('chat/abortStreaming', async ({ messageId }, { dispatch, getState, rejectWithValue }) => {
+  try {
+    const response = await apiCall<{ success: boolean; messageDeleted?: boolean }>(`/messages/${messageId}/abort`, {
+      method: 'POST',
+    })
 
-      if (response.success) {
-        dispatch(chatSliceActions.streamingAborted())
+    if (response.success) {
+      dispatch(chatSliceActions.streamingAborted())
+
+      // If the assistant message was deleted, refetch messages to update the UI
+      if (response.messageDeleted) {
+        const state = getState()
+        const conversationId = state.chat.conversation.currentConversationId
+        if (conversationId) {
+          // Stabilize the currentPath first by truncating past the deleted leaf
+          // Pass the user messageId (the generation root); the thunk will truncate before any direct child on path
+          // dispatch(
+          //   refreshCurrentPathAfterDelete({ conversationId, messageId })
+          // )
+          dispatch(fetchConversationMessages(conversationId))
+        }
       }
-
-      return response
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to abort generation'
-      return rejectWithValue(message)
     }
+
+    return response
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to abort generation'
+    return rejectWithValue(message)
   }
-)
+})
 
 // Fetch available tools
-export const fetchTools = createAsyncThunk(
-  'chat/fetchTools',
-  async (_, { dispatch, rejectWithValue }) => {
-    try {
-      const response = await apiCall<{ tools: tools[] }>('/tools')
-      dispatch(chatSliceActions.toolsLoaded(response.tools))
-      return response.tools
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch tools'
-      dispatch(chatSliceActions.toolsError(message))
-      return rejectWithValue(message)
-    }
+export const fetchTools = createAsyncThunk('chat/fetchTools', async (_, { dispatch, rejectWithValue }) => {
+  try {
+    const response = await apiCall<{ tools: tools[] }>('/tools')
+    dispatch(chatSliceActions.toolsLoaded(response.tools))
+    return response.tools
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch tools'
+    dispatch(chatSliceActions.toolsError(message))
+    return rejectWithValue(message)
   }
-)
+})
 
 // Update tool enabled status
 export const updateToolEnabled = createAsyncThunk(
@@ -1155,6 +1211,39 @@ export const updateToolEnabled = createAsyncThunk(
       return response
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update tool'
+      return rejectWithValue(message)
+    }
+  }
+)
+
+// Bulk insert messages (for copying message chains to new conversation)
+export const insertBulkMessages = createAsyncThunk(
+  'chat/insertBulkMessages',
+  async (
+    {
+      conversationId,
+      messages,
+    }: {
+      conversationId: ConversationId
+      messages: Array<{
+        role: 'user' | 'assistant'
+        content: string
+        thinking_block?: string
+        model_name?: string
+        tool_calls?: string
+        note?: string
+      }>
+    },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await apiCall<{ messages: Message[] }>(`/conversations/${conversationId}/messages/bulk`, {
+        method: 'POST',
+        body: JSON.stringify({ messages }),
+      })
+      return response.messages
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to insert bulk messages'
       return rejectWithValue(message)
     }
   }

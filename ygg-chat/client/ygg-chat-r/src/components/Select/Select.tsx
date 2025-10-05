@@ -68,7 +68,7 @@ export const Select: React.FC<SelectProps> = ({
     }
   }, [size])
 
-  // Close on outside click
+  // Close on outside click (use 'click' so option selection handlers run first)
   useEffect(() => {
     if (!open) return
     const onDocClick = (e: MouseEvent) => {
@@ -78,8 +78,8 @@ export const Select: React.FC<SelectProps> = ({
       if (searchRef.current?.contains(t)) return
       setOpen(false)
     }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
+    document.addEventListener('click', onDocClick)
+    return () => document.removeEventListener('click', onDocClick)
   }, [open])
 
   // Reset search term when dropdown closes
@@ -169,7 +169,7 @@ export const Select: React.FC<SelectProps> = ({
       <button
         ref={btnRef}
         type='button'
-        className={`w-full inline-flex items-center justify-between gap-2 ${sizeClass} dark:bg-secondary-500 rounded bg-neutral-50 text-stone-800 dark:text-stone-200 border border-neutral-200/70 dark:border-neutral-700 shadow-sm hover:bg-neutral-100 dark:hover:bg-secondary-600 disabled:opacity-60 disabled:cursor-not-allowed`}
+        className={`w-full inline-flex items-center justify-between gap-2 ${sizeClass} dark:bg-yBlack-900 rounded bg-neutral-50 text-stone-800 dark:text-stone-200 border dark:border-0 border-neutral-200/70  hover:bg-neutral-100 dark:hover:bg-yBlack-500 disabled:opacity-60 disabled:cursor-not-allowed`}
         aria-haspopup='listbox'
         aria-expanded={open}
         onClick={() => !disabled && setOpen(o => !o)}
@@ -187,7 +187,7 @@ export const Select: React.FC<SelectProps> = ({
           ref={listRef}
           role='listbox'
           tabIndex={-1}
-          className={`absolute z-50 w-full left-0 ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'} rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-secondary-600  shadow-xl`}
+          className={`absolute z-50 w-full left-0 ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'} rounded-lg overflow-hidden border border-neutral-200 dark:border-0 dark:border-neutral-700 bg-white dark:bg-yBlack-900  shadow-xl`}
           style={{ maxHeight: listMaxHeight }}
         >
           {searchBarVisible && (
@@ -198,7 +198,7 @@ export const Select: React.FC<SelectProps> = ({
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 placeholder='Search...'
-                className='w-full px-2 py-1 text-sm rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-stone-800 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-neutral-500'
+                className='w-full px-2 py-1 text-sm rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-stone-800 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-neutral-800 dark:focus:ring-2 dark:focus:ring-neutral-700 dark:border-0'
                 autoFocus
               />
             </div>
@@ -222,9 +222,15 @@ export const Select: React.FC<SelectProps> = ({
                     role='option'
                     aria-selected={isSelected}
                     onMouseEnter={() => setActiveIndex(idx)}
+                    onMouseDown={e => {
+                      // Select on mousedown to beat any outside click handlers and avoid losing the event
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleSelect(opt.value)
+                    }}
                     onClick={() => handleSelect(opt.value)}
                     className={`w-full text-left px-3 py-2 text-sm transition-colors
-                      ${isActive ? 'bg-neutral-100 dark:bg-secondary-500' : ''}
+                      ${isActive ? 'bg-neutral-100 dark:bg-yBlack-500' : ''}
                       ${isSelected ? 'font-medium' : ''}
                       text-stone-800 dark:text-stone-100`}
                   >

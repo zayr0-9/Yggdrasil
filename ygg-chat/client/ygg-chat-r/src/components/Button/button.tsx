@@ -7,7 +7,7 @@ type ButtonProps = Omit<
 > & {
   className?: string
   children: React.ReactNode
-  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'outline2'
+  variant?: 'primary' | 'secondary' | 'tertiary' | 'outline' | 'danger' | 'outline2'
   size?: 'smaller' | 'small' | 'medium' | 'large' | 'extraLarge' | 'circle'
   disabled?: boolean
   onClick?: () => void
@@ -36,6 +36,8 @@ export const Button: React.FC<ButtonProps> = ({
       'bg-indigo-400 text-white hover:bg-indigo-500 dark:bg-yPink-200 dark:hover:bg-yPink-300 focus:ring-1 dark:focus:ring-yPink-300',
     secondary:
       'bg-indigo-300 hover:bg-indigo-400 dark:bg-secondary-500 text-neutral-50 dark:text-white dark:hover:bg-secondary-600 focus:ring-1 dark:focus:ring-secondary-400 dark:focus:secondary-500',
+    tertiary:
+      'bg-indigo-300 hover:bg-indigo-400 dark:bg-yBlack-900 text-neutral-50 dark:text-white dark:hover:bg-yBlack-500 focus:ring-1 dark:focus:ring-yBlack-500 dark:focus:yBlack-500',
     outline: 'border-2 border-neutral-300 text-neutral-300 hover:bg-blue-50',
     outline2: ' text-neutral-300 dark:hover:bg-neutral-700',
     danger:

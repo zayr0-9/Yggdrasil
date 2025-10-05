@@ -4,10 +4,12 @@ import express from 'express'
 import fs from 'fs'
 import multer from 'multer'
 import path from 'path'
+import { MessageId } from '../../../shared/types'
 import {
   AttachmentService,
   ConversationService,
   FileContentService,
+  Message,
   MessageService,
   ProjectService,
   UserService,
@@ -20,7 +22,7 @@ import { saveBase64ImageAttachmentsForMessage } from '../utils/attachments'
 import { replaceFileMentionsWithContent, SelectedFileContent } from '../utils/fileMentionProcessor'
 import { abortGeneration, clearGeneration, createGeneration } from '../utils/generationManager'
 import { generateResponse } from '../utils/provider'
-import { updateToolEnabled, getToolByName } from '../utils/tools/index'
+import { getToolByName, updateToolEnabled } from '../utils/tools/index'
 
 const router = express.Router()
 
@@ -389,7 +391,7 @@ router.patch(
     res.json({
       success: true,
       tool: updatedTool,
-      message: `Tool ${toolName} ${enabled ? 'enabled' : 'disabled'}`
+      message: `Tool ${toolName} ${enabled ? 'enabled' : 'disabled'}`,
     })
   })
 )
@@ -631,6 +633,26 @@ router.patch(
     }
   })
 )
+// Clone conversation
+router.post(
+  '/conversations/:id/clone',
+  asyncHandler(async (req, res) => {
+    const conversationId = parseInt(req.params.id)
+
+    const existing = ConversationService.getById(conversationId)
+    if (!existing) {
+      return res.status(404).json({ error: 'Conversation not found' })
+    }
+
+    const cloned = ConversationService.clone(conversationId)
+    if (!cloned) {
+      return res.status(500).json({ error: 'Failed to clone conversation' })
+    }
+
+    res.json(cloned)
+  })
+)
+
 //delete conversation
 router.delete(
   '/conversations/:id/',
@@ -802,7 +824,7 @@ router.post(
     const selectedModel = modelName || conversation.model_name || (await modelService.getDefaultModel())
 
     // Determine parent ID: use requested parentId if provided, otherwise get last message
-    let parentId: number | null = null
+    let parentId: MessageId | null = null
     if (requestedParentId !== undefined) {
       const parentMessage = MessageService.getById(requestedParentId)
       parentId = parentMessage ? requestedParentId : null
@@ -848,6 +870,17 @@ router.post(
         let assistantContent = ''
         let assistantThinking = ''
         let assistantToolCalls = ''
+
+        // Create assistant message placeholder for cost tracking
+        const assistantMessage = MessageService.create(
+          conversationId,
+          userMessage.id,
+          'assistant',
+          '...',
+          '',
+          selectedModel,
+          ''
+        )
 
         await generateResponse(
           baseHistory,
@@ -937,9 +970,10 @@ router.post(
           systemPrompt,
           controller.signal,
           combinedContext ? combinedContext : null,
-          think
+          think,
+          assistantMessage.id,
+          conversation.user_id
         )
-
 
         // Final cleanup: ensure tool calls are stripped from content before saving
         const toolCallRegex = /\{[^{}]*"[^"]*":\s*"[^"]*"[^{}]*\}/g
@@ -952,18 +986,16 @@ router.post(
         const cleanedContent = assistantContent.replace(toolCallRegex, '').trim()
 
         if (cleanedContent.trim() || assistantThinking.trim() || assistantToolCalls.trim()) {
-          const assistantMessage = MessageService.create(
-            conversationId,
-            userMessage.id,
-            'assistant',
+          // Update the existing assistant message with final content
+          const updatedMessage = MessageService.update(
+            assistantMessage.id,
             cleanedContent,
             assistantThinking,
-            selectedModel,
             assistantToolCalls
           )
-          console.log(assistantMessage)
+          console.log(updatedMessage)
 
-          const cleanedMessage = { ...assistantMessage, content: cleanedContent }
+          const cleanedMessage = { ...updatedMessage, content: cleanedContent }
           res.write(`data: ${JSON.stringify({ type: 'complete', message: cleanedMessage, iteration: i })}\n\n`)
         } else {
           res.write(`data: ${JSON.stringify({ type: 'no_output', iteration: i })}\n\n`)
@@ -996,6 +1028,65 @@ router.post(
   })
 )
 
+// Bulk insert messages (for copying message chains)
+router.post(
+  '/conversations/:id/messages/bulk',
+  asyncHandler(async (req, res) => {
+    const conversationId = parseInt(req.params.id)
+    const { messages } = req.body as {
+      messages: Array<{
+        role: 'user' | 'assistant'
+        content: string
+        thinking_block?: string
+        model_name?: string
+        tool_calls?: string
+        note?: string
+      }>
+    }
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'Messages array required' })
+    }
+
+    // Verify conversation exists
+    const conversation = ConversationService.getById(conversationId)
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' })
+    }
+
+    const createdMessages: Message[] = []
+    let lastMessageId: MessageId | null = null
+
+    // Insert messages sequentially, maintaining parent-child relationships
+    for (const msg of messages) {
+      const newMessage = MessageService.create(
+        conversationId,
+        lastMessageId, // Parent is the previous message in the chain
+        msg.role,
+        msg.content,
+        msg.thinking_block || '',
+        msg.model_name || 'unknown',
+        msg.tool_calls || undefined,
+        msg.note || undefined
+      )
+      createdMessages.push(newMessage)
+      lastMessageId = newMessage.id
+    }
+
+    // Update conversation timestamp
+    ConversationService.touch(conversationId)
+
+    // Auto-generate title if this is the first message
+    if (!conversation.title && messages.length > 0) {
+      const firstContent = messages[0].content
+      const title = firstContent.slice(0, 100) + (firstContent.length > 100 ? '...' : '')
+      ConversationService.updateTitle(conversationId, title)
+    }
+
+    res.json({ messages: createdMessages })
+  })
+)
+
 // Send message with streaming response
 router.post(
   '/conversations/:id/messages',
@@ -1010,6 +1101,7 @@ router.post(
       systemPrompt,
       think,
       selectedFiles,
+      retrigger = false,
     } = req.body as {
       content: string
       messages?: any[]
@@ -1019,9 +1111,10 @@ router.post(
       systemPrompt?: string
       think?: boolean
       selectedFiles?: SelectedFileContent[]
+      retrigger?: boolean
     }
 
-    if (!content) {
+    if (!content && !retrigger) {
       return res.status(400).json({ error: 'Message content required' })
     }
     console.log('server | content', content)
@@ -1119,7 +1212,7 @@ router.post(
     // Use conversation's model or provided model or default
     const selectedModel = modelName || conversation.model_name || (await modelService.getDefaultModel())
     // Determine parent ID: use requested parentId if provided, otherwise get last message
-    let parentId: number | null = null
+    let parentId: MessageId | null = null
     if (requestedParentId !== undefined) {
       const parentMessage = MessageService.getById(requestedParentId)
       parentId = parentMessage ? requestedParentId : null
@@ -1132,25 +1225,37 @@ router.post(
       }
     }
 
-    // Save user message with proper parent ID
-    const userMessage = MessageService.create(conversationId, parentId, 'user', content, '', selectedModel)
-    console.log('server | user message', messages)
+    // Save user message with proper parent ID (skip if retrigger)
+    let userMessage
+    if (retrigger) {
+      // For retrigger, get the last user message instead of creating a new one
+      const lastMessage = MessageService.getLastMessage(conversationId)
+      if (!lastMessage || lastMessage.role !== 'user') {
+        return res.status(400).json({ error: 'Cannot retrigger: last message is not from user' })
+      }
+      userMessage = lastMessage
+      console.log('server | retrigger | user message', messages)
+      console.log('server | retriggering from existing user message', userMessage.id)
+    } else {
+      userMessage = MessageService.create(conversationId, parentId, 'user', content, '', selectedModel)
+      console.log('server | user message', messages)
 
-    // Store file content in database if selectedFiles were provided
-    if (selectedFiles && selectedFiles.length > 0) {
-      for (const file of selectedFiles) {
-        try {
-          const fileContent = FileContentService.create({
-            fileName: file.name || file.relativePath.split('/').pop() || 'unknown',
-            absolutePath: file.path,
-            relativePath: file.relativePath,
-            fileContent: file.contents,
-            sizeBytes: file.contentLength,
-            messageId: userMessage.id,
-          })
-          console.log('Stored file content:', fileContent.file_name)
-        } catch (error) {
-          console.error('Error storing file content:', error)
+      // Store file content in database if selectedFiles were provided
+      if (selectedFiles && selectedFiles.length > 0) {
+        for (const file of selectedFiles) {
+          try {
+            const fileContent = FileContentService.create({
+              fileName: file.name || file.relativePath.split('/').pop() || 'unknown',
+              absolutePath: file.path,
+              relativePath: file.relativePath,
+              fileContent: file.contents,
+              sizeBytes: file.contentLength,
+              messageId: userMessage.id,
+            })
+            console.log('Stored file content:', fileContent.file_name)
+          } catch (error) {
+            console.error('Error storing file content:', error)
+          }
         }
       }
     }
@@ -1164,8 +1269,10 @@ router.post(
       'Access-Control-Allow-Headers': 'Cache-Control',
     })
 
-    // Send user message immediately
-    res.write(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`)
+    // Send user message immediately (only if not retrigger)
+    if (!retrigger) {
+      res.write(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`)
+    }
 
     try {
       // Decode and persist any base64 attachments (images)
@@ -1187,6 +1294,18 @@ router.post(
       let assistantContent = ''
       let assistantThinking = ''
       let assistantToolCalls = ''
+      let lastChunkId = ''
+
+      // Create assistant message placeholder for cost tracking
+      const assistantMessage = MessageService.create(
+        conversationId,
+        userMessage.id,
+        'assistant',
+        '...',
+        '',
+        selectedModel,
+        ''
+      )
 
       // Stream AI response with manual abort control
       const { id: messageId, controller } = createGeneration(userMessage.id)
@@ -1201,6 +1320,12 @@ router.post(
               const obj = JSON.parse(chunk)
               const part = obj?.part as 'text' | 'reasoning' | 'tool_call' | undefined
               const delta = String(obj?.delta ?? '')
+              const genId = obj?.chunkId
+              // console.log('genId from chat.ts:', genId)
+
+              // Store the last valid chunkId
+              if (genId) lastChunkId = genId
+
               if (part === 'reasoning') {
                 assistantThinking += delta
                 res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'reasoning', delta, content: '' })}\n\n`)
@@ -1220,13 +1345,17 @@ router.post(
                     assistantToolCalls = JSON.stringify(currentToolCalls)
 
                     // Send tool call chunk
-                    res.write(`data: ${JSON.stringify({ type: 'tool_call', delta: matches.join(''), content: '' })}\n\n`)
+                    res.write(
+                      `data: ${JSON.stringify({ type: 'tool_call', delta: matches.join(''), content: '' })}\n\n`
+                    )
 
                     // Clean the delta of tool calls before adding to content
                     const cleanedDelta = delta.replace(toolCallRegex, '').trim()
                     if (cleanedDelta) {
                       assistantContent += cleanedDelta
-                      res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: cleanedDelta, content: cleanedDelta })}\n\n`)
+                      res.write(
+                        `data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: cleanedDelta, content: cleanedDelta })}\n\n`
+                      )
                     }
                   }
                 } else {
@@ -1249,7 +1378,9 @@ router.post(
                   const cleanedChunk = chunk.replace(toolCallRegex, '').trim()
                   if (cleanedChunk) {
                     assistantContent += cleanedChunk
-                    res.write(`data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: cleanedChunk, content: cleanedChunk })}\n\n`)
+                    res.write(
+                      `data: ${JSON.stringify({ type: 'chunk', part: 'text', delta: cleanedChunk, content: cleanedChunk })}\n\n`
+                    )
                   }
                 }
               } else {
@@ -1268,9 +1399,10 @@ router.post(
           systemPrompt,
           controller.signal,
           combinedContext ? combinedContext : null,
-          think
+          think,
+          assistantMessage.id,
+          conversation.user_id
         )
-
 
         // Final cleanup: ensure tool calls are stripped from content before saving
         const toolCallRegex = /\{[^{}]*"[^"]*":\s*"[^"]*"[^{}]*\}/g
@@ -1286,19 +1418,19 @@ router.post(
         const cleanedContent = assistantContent.replace(toolCallRegex, '').trim()
         console.log('Original content length:', assistantContent.length, 'Cleaned length:', cleanedContent.length)
 
-        // Normal completion -> persist assistant message
-        const assistantMessage = MessageService.create(
-          conversationId,
-          userMessage.id,
-          'assistant',
+        // Normal completion -> update assistant message with final content
+        const updatedAssistantMessage = MessageService.update(
+          assistantMessage.id,
           cleanedContent,
           assistantThinking,
-          selectedModel,
           assistantToolCalls
+          // TODO: Add lastChunkId as parameter once database field is added
+          // lastChunkId
         )
-        console.log(assistantMessage)
+        console.log('Last chunk ID:', lastChunkId)
+        console.log(updatedAssistantMessage)
         // Send completion with cleaned content to override any streamed raw content
-        const cleanedMessage = { ...assistantMessage, content: cleanedContent }
+        const cleanedMessage = { ...updatedAssistantMessage, content: cleanedContent }
         res.write(
           `data: ${JSON.stringify({
             type: 'complete',
@@ -1320,7 +1452,6 @@ router.post(
             .toLowerCase()
             .includes('abort')
         if (isAbort) {
-
           // Final cleanup for aborted messages
           const toolCallRegex = /\{[^{}]*"[^"]*":\s*"[^"]*"[^{}]*\}/g
           if (!assistantToolCalls.trim() && assistantContent.includes('{"')) {
@@ -1333,21 +1464,25 @@ router.post(
 
           // Persist whatever we have as a partial message
           if (cleanedContent.trim() || assistantThinking.trim() || assistantToolCalls.trim()) {
-            const assistantMessage = MessageService.create(
-              conversationId,
-              userMessage.id,
-              'assistant',
+            const updatedMessage = MessageService.update(
+              assistantMessage.id,
               cleanedContent,
               assistantThinking,
-              selectedModel,
               assistantToolCalls
+              // TODO: Add lastChunkId as parameter once database field is added
+              // lastChunkId
             )
-            const cleanedMessage = { ...assistantMessage, content: cleanedContent }
+            const cleanedMessage = { ...updatedMessage, content: cleanedContent }
             res.write(`data: ${JSON.stringify({ type: 'complete', message: cleanedMessage, aborted: true })}\n\n`)
           } else {
+            // Delete the placeholder message if no content was generated
+            console.log('deleted empty message ######################')
+            MessageService.delete(assistantMessage.id)
             res.write(`data: ${JSON.stringify({ type: 'aborted' })}\n\n`)
           }
         } else {
+          // Delete placeholder message on general error
+          MessageService.delete(assistantMessage.id)
           res.write(
             `data: ${JSON.stringify({
               type: 'error',
@@ -1688,9 +1823,38 @@ router.delete(
 router.post(
   '/messages/:id/abort',
   asyncHandler(async (req, res) => {
-    const messageId = parseInt(req.params.id)
-    const success = abortGeneration(messageId)
-    res.json({ success })
+    const userMessageId = parseInt(req.params.id)
+    const success = abortGeneration(userMessageId)
+
+    // Check if the aborted assistant message is empty and delete it
+    let messageDeleted = false
+    if (success) {
+      try {
+        // Get children of the user message to find the assistant message
+        const childrenIds = MessageService.getChildrenIds(userMessageId)
+
+        // Find the most recent assistant message child
+        for (const childId of childrenIds.reverse()) {
+          const message = MessageService.getById(childId)
+          if (message && message.role === 'assistant') {
+            const hasContent =
+              (message.content && message.content.trim() && message.content !== '...') ||
+              (message.thinking_block && message.thinking_block.trim()) ||
+              (message.tool_calls && message.tool_calls.trim())
+
+            if (!hasContent) {
+              MessageService.delete(childId)
+              messageDeleted = true
+            }
+            break // Only check the first (most recent) assistant message
+          }
+        }
+      } catch (error) {
+        console.error('Error checking/deleting aborted message:', error)
+      }
+    }
+
+    res.json({ success, messageDeleted })
   })
 )
 

@@ -1,22 +1,24 @@
 // server/src/utils/generationManager.ts
-const controllers = new Map<number, AbortController>()
-const abortingGenerations = new Set<number>()
+import { MessageId } from '../../../shared/types'
 
-export function createGeneration(messageId: number) {
+const controllers = new Map<MessageId, AbortController>()
+const abortingGenerations = new Set<MessageId>()
+
+export function createGeneration(messageId: MessageId) {
   const controller = new AbortController()
   controllers.set(messageId, controller)
   return { id: messageId, controller }
 }
 
-export function getController(messageId: number): AbortController | undefined {
+export function getController(messageId: MessageId): AbortController | undefined {
   return controllers.get(messageId)
 }
 
-export function getSignal(messageId: number): AbortSignal | undefined {
+export function getSignal(messageId: MessageId): AbortSignal | undefined {
   return controllers.get(messageId)?.signal
 }
 
-export function abortGeneration(messageId: number): boolean {
+export function abortGeneration(messageId: MessageId): boolean {
   // Mark as aborting to prevent clearGeneration from removing it
   abortingGenerations.add(messageId)
 
@@ -35,7 +37,7 @@ export function abortGeneration(messageId: number): boolean {
   return true
 }
 
-export function clearGeneration(messageId: number): void {
+export function clearGeneration(messageId: MessageId): void {
   // Don't clear if currently being aborted
   if (abortingGenerations.has(messageId)) {
     return

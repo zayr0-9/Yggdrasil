@@ -1,5 +1,6 @@
 import { createSelector } from '@reduxjs/toolkit'
 import { RootState } from '../../store/store'
+import { ConversationId, ProjectId } from '../../../../../shared/types'
 
 const selectConvState = (state: RootState) => state.conversations
 
@@ -18,12 +19,12 @@ export const selectRecentModelsLoading = createSelector([selectConvState], state
 export const selectRecentModelsError = createSelector([selectConvState], state => state.recentModels.error)
 
 // Selector to get a conversation by id
-export const makeSelectConversationById = (id: number) =>
+export const makeSelectConversationById = (id: ConversationId) =>
   createSelector([selectAllConversations], conversations => conversations.find(c => c.id === id))
 
 // Selector to get conversations grouped by project_id
 export const selectConversationsByProject = createSelector([selectAllConversations], conversations => {
-  const grouped = new Map<number | null, { latestConversation: string; conversations: typeof conversations }>()
+  const grouped = new Map<ProjectId | null, { latestConversation: string; conversations: typeof conversations }>()
 
   conversations.forEach(conv => {
     const projectId = conv.project_id

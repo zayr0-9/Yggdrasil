@@ -11,7 +11,7 @@ export const fetchProjects = createAsyncThunk('projects/fetchProjects', async ()
 })
 
 // Fetch project by ID
-export const fetchProjectById = createAsyncThunk('projects/fetchProjectById', async (projectId: number) => {
+export const fetchProjectById = createAsyncThunk('projects/fetchProjectById', async (projectId: number | string) => {
   const response = await apiCall(`/projects/${projectId}`, {
     method: 'GET',
   })
@@ -36,7 +36,7 @@ export const createProject = createAsyncThunk('projects/createProject', async (p
 
 // Update project
 export interface UpdateProjectPayload {
-  id: number
+  id: number | string
   name: string
   context?: string
   system_prompt?: string
@@ -52,7 +52,7 @@ export const updateProject = createAsyncThunk('projects/updateProject', async (p
 })
 
 // Delete project
-export const deleteProject = createAsyncThunk('projects/deleteProject', async (projectId: number) => {
+export const deleteProject = createAsyncThunk('projects/deleteProject', async (projectId: number | string) => {
   await apiCall(`/projects/${projectId}`, {
     method: 'DELETE',
   })

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Project } from '../../../../shared/types'
+import { Project, ConversationId } from '../../../../shared/types'
 import { Button } from '../components'
 import { chatSliceActions } from '../features/chats'
 import { activeConversationIdSet, fetchRecentConversations } from '../features/conversations'
@@ -25,14 +25,10 @@ const SideBar: React.FC<{ limit?: number; className?: string }> = ({ limit = 8, 
     dispatch(fetchRecentConversations({ limit }))
   }, [dispatch, limit])
 
-  // Ensure projects are available to label project names
-  useEffect(() => {
-    if (!projects || projects.length === 0) {
-      dispatch(fetchProjects())
-    }
-  }, [dispatch])
+  // Projects are fetched by Homepage component and stored in Redux
+  // No need to fetch again here since projects state is global
 
-  const handleSelect = (id: number) => {
+  const handleSelect = (id: ConversationId) => {
     dispatch(chatSliceActions.conversationSet(id))
     dispatch(activeConversationIdSet(id))
     navigate(`/chat/${id}`)

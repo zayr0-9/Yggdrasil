@@ -1,4 +1,4 @@
-import { BaseMessage, Project } from '../../../shared/types'
+import { BaseMessage, Project, MessageId, ConversationId } from '../../../shared/types'
 import { stripMarkdownToText } from '../utils/markdownStripper'
 import { db, statements } from './db'
 
@@ -42,7 +42,7 @@ export class FileContentService {
     relativePath: string
     fileContent?: string | null
     sizeBytes?: number | null
-    messageId?: number | null
+    messageId?: MessageId | null
   }): FileContent {
     const { fileName, absolutePath, relativePath, fileContent = null, sizeBytes = null, messageId = null } = params
 
@@ -51,8 +51,8 @@ export class FileContentService {
     if (existing) {
       // Link to message if provided
       if (messageId) {
-        statements.linkFileContentToMessage.run(messageId, existing.id)
-        return { ...existing, message_id: messageId }
+        statements.linkFileContentToMessage.run(Number(messageId), existing.id)
+        return { ...existing, message_id: Number(messageId) }
       }
       return existing
     }
@@ -62,8 +62,8 @@ export class FileContentService {
 
     // Create link if messageId provided
     if (messageId) {
-      statements.linkFileContentToMessage.run(messageId, created.id)
-      return { ...created, message_id: messageId }
+      statements.linkFileContentToMessage.run(Number(messageId), created.id)
+      return { ...created, message_id: Number(messageId) }
     }
     return created
   }
@@ -104,7 +104,7 @@ export class AttachmentService {
    * If sha256 is provided and exists, the existing record is returned (dedupe) unless messageId is provided to relink.
    */
   static create(params: {
-    messageId?: number | null
+    messageId?: MessageId | null
     kind: 'image'
     mimeType: string
     storage?: 'file' | 'url'
@@ -134,9 +134,9 @@ export class AttachmentService {
       if (existing) {
         // Link via join table if a messageId is provided
         if (messageId) {
-          statements.linkAttachmentToMessage.run(messageId, existing.id)
+          statements.linkAttachmentToMessage.run(Number(messageId), existing.id)
           // Return with message context for backward compatibility
-          return { ...existing, message_id: messageId }
+          return { ...existing, message_id: Number(messageId) }
         }
         return existing
       }
@@ -144,7 +144,7 @@ export class AttachmentService {
 
     const resolvedStorage: 'file' | 'url' = storage ?? (url ? 'url' : 'file')
     const result = statements.createAttachment.run(
-      messageId,
+      messageId !== null ? Number(messageId) : null,
       kind,
       mimeType,
       resolvedStorage,
@@ -158,8 +158,8 @@ export class AttachmentService {
     const created = statements.getAttachmentById.get(result.lastInsertRowid) as Attachment
     // Create link if messageId provided
     if (messageId) {
-      statements.linkAttachmentToMessage.run(messageId, created.id)
-      return { ...created, message_id: messageId }
+      statements.linkAttachmentToMessage.run(Number(messageId), created.id)
+      return { ...created, message_id: Number(messageId) }
     }
     return created
   }
@@ -168,10 +168,10 @@ export class AttachmentService {
     return statements.getAttachmentsByMessage.all(messageId) as Attachment[]
   }
 
-  static linkToMessage(attachmentId: number, messageId: number): Attachment | undefined {
-    statements.linkAttachmentToMessage.run(messageId, attachmentId)
+  static linkToMessage(attachmentId: number, messageId: MessageId): Attachment | undefined {
+    statements.linkAttachmentToMessage.run(Number(messageId), attachmentId)
     const base = statements.getAttachmentById.get(attachmentId) as Attachment | undefined
-    return base ? { ...base, message_id: messageId } : undefined
+    return base ? { ...base, message_id: Number(messageId) } : undefined
   }
 
   static findBySha256(sha256: string): Attachment | undefined {
@@ -196,9 +196,11 @@ export class AttachmentService {
 export interface Conversation {
   id: number
   user_id: number
+  project_id?: number | null
   title: string | null
   model_name: string
   system_prompt?: string | null
+  conversation_context?: string | null
   created_at: string
   updated_at: string
 }
@@ -241,6 +243,38 @@ export interface FileContent {
   file_content?: string | null
   size_bytes?: number | null
   created_at: string
+}
+
+// Provider cost tracking for messages
+export interface ProviderCost {
+  id: number
+  user_id: number
+  message_id: number
+  prompt_tokens: number
+  completion_tokens: number
+  reasoning_tokens: number
+  approx_cost: number
+  api_credit_cost: number
+  created_at: string
+}
+
+// Provider cost with message details (from view)
+export interface ProviderCostWithMessage {
+  id: number
+  user_id: number
+  message_id: number
+  prompt_tokens: number
+  completion_tokens: number
+  reasoning_tokens: number
+  approx_cost: number
+  api_credit_cost: number
+  created_at: string
+  conversation_id: number
+  role: string
+  content: string
+  model_name: string | null
+  message_created_at: string
+  conversation_title: string | null
 }
 
 export class UserService {
@@ -378,12 +412,75 @@ export class ConversationService {
   static deleteByUser(userId: number): void {
     statements.deleteConversationsByUser.run(userId)
   }
+
+  static clone(sourceConversationId: number): Conversation | undefined {
+    // Get the source conversation
+    const source = this.getById(sourceConversationId)
+    if (!source) return undefined
+
+    // Create new conversation with cloned title
+    const cloneTitle = `${source.title || 'Conversation'} (Clone)`
+    const newConv = statements.createConversation.run(
+      source.user_id,
+      cloneTitle,
+      source.model_name,
+      source.project_id
+    )
+    const newConvId = Number(newConv.lastInsertRowid)
+
+    // Copy system prompt and context if they exist
+    if (source.system_prompt) {
+      statements.updateConversationSystemPrompt.run(source.system_prompt, newConvId)
+    }
+    if (source.conversation_context) {
+      statements.updateConversationContext.run(source.conversation_context, newConvId)
+    }
+
+    // Get all messages from source conversation
+    const sourceMessages = MessageService.getByConversation(sourceConversationId)
+
+    // Map old message IDs to new message IDs
+    const idMap = new Map<number, number>()
+
+    // Clone messages in order, preserving tree structure
+    for (const msg of sourceMessages) {
+      const newParentId = msg.parent_id ? (idMap.get(Number(msg.parent_id)) ?? null) : null
+
+      const newMsg = MessageService.create(
+        newConvId,
+        newParentId,
+        msg.role,
+        msg.content,
+        msg.thinking_block || '',
+        msg.model_name,
+        msg.tool_calls || undefined,
+        msg.note || undefined
+      )
+
+      const newMsgId = Number(newMsg.id)
+      idMap.set(Number(msg.id), newMsgId)
+
+      // Clone attachments (images) by linking to existing attachment records
+      const attachments = AttachmentService.getByMessage(Number(msg.id))
+      for (const att of attachments) {
+        AttachmentService.linkToMessage(att.id, newMsgId)
+      }
+
+      // Clone file contents by linking to existing file content records
+      const fileContents = FileContentService.getByMessage(Number(msg.id))
+      for (const fc of fileContents) {
+        FileContentService.linkToMessage(fc.id, newMsgId)
+      }
+    }
+
+    return this.getById(newConvId)
+  }
 }
 
 export class MessageService {
   static create(
-    conversationId: number,
-    parentId: number | null = null,
+    conversationId: ConversationId,
+    parentId: MessageId | null = null,
     role: Message['role'],
     content: string,
     thinking_block: string,
@@ -393,8 +490,8 @@ export class MessageService {
     // children: []
   ): Message {
     const result = statements.createMessage.run(
-      conversationId,
-      parentId,
+      Number(conversationId),
+      parentId !== null ? Number(parentId) : null,
       role,
       content,
       thinking_block,
@@ -417,12 +514,12 @@ export class MessageService {
     } catch {
       // ignore background plain text update errors
     }
-    statements.updateConversationTimestamp.run(conversationId)
+    statements.updateConversationTimestamp.run(Number(conversationId))
     return statements.getMessageById.get(result.lastInsertRowid) as Message
   }
 
-  static getById(id: number): Message | undefined {
-    return statements.getMessageById.get(id) as Message | undefined
+  static getById(id: MessageId): Message | undefined {
+    return statements.getMessageById.get(Number(id)) as Message | undefined
   }
 
   static getByConversation(conversationId: number): Message[] {
@@ -486,30 +583,31 @@ export class MessageService {
   }
 
   static update(
-    id: number,
+    id: MessageId,
     content: string,
     thinking_block: string | null = null,
     tool_calls: string | null = null,
     note: string | null = null
   ): Message | undefined {
-    statements.updateMessage.run(content, thinking_block, tool_calls, note, id)
+    const numId = Number(id)
+    statements.updateMessage.run(content, thinking_block, tool_calls, note, numId)
     // Fire-and-forget: update plain text content
     try {
       stripMarkdownToText(content)
         .then(text => {
-          setPlainTextForMessage(text, id)
+          setPlainTextForMessage(text, numId)
         })
         .catch(() => {
-          setPlainTextForMessage(content, id)
+          setPlainTextForMessage(content, numId)
         })
     } catch {
       // ignore background plain text update errors
     }
-    return statements.getMessageById.get(id) as Message | undefined
+    return statements.getMessageById.get(numId) as Message | undefined
   }
 
-  static delete(id: number): boolean {
-    const result = statements.deleteMessage.run(id)
+  static delete(id: MessageId): boolean {
+    const result = statements.deleteMessage.run(Number(id))
     return result.changes > 0
   }
 
@@ -539,8 +637,8 @@ export class MessageService {
   }
 
   // File Content helpers
-  static getFileContents(messageId: number): FileContent[] {
-    return statements.getFileContentsByMessage.all(messageId) as FileContent[]
+  static getFileContents(messageId: MessageId): FileContent[] {
+    return statements.getFileContentsByMessage.all(Number(messageId)) as FileContent[]
   }
 
   static linkFileContents(messageId: number, fileContentIds: number[]): FileContent[] {
@@ -596,6 +694,80 @@ export class MessageService {
   }
 }
 
+export class ProviderCostService {
+  static create(params: {
+    userId: number
+    messageId: MessageId
+    promptTokens: number
+    completionTokens: number
+    reasoningTokens: number
+    approxCost: number
+    apiCreditCost: number
+  }): ProviderCost {
+    const { userId, messageId, promptTokens, completionTokens, reasoningTokens, approxCost, apiCreditCost } = params
+
+    const result = statements.createProviderCost.run(
+      userId,
+      Number(messageId),
+      promptTokens,
+      completionTokens,
+      reasoningTokens,
+      approxCost,
+      apiCreditCost
+    )
+
+    return {
+      id: result.lastInsertRowid as number,
+      user_id: userId,
+      message_id: Number(messageId),
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      reasoning_tokens: reasoningTokens,
+      approx_cost: approxCost,
+      api_credit_cost: apiCreditCost,
+      created_at: new Date().toISOString(),
+    }
+  }
+
+  static getByMessage(messageId: number): ProviderCost | undefined {
+    return statements.getProviderCostByMessage.get(messageId) as ProviderCost | undefined
+  }
+
+  static getByUser(userId: number): ProviderCost[] {
+    return statements.getProviderCostsByUser.all(userId) as ProviderCost[]
+  }
+
+  static getWithMessageByUser(userId: number): ProviderCostWithMessage[] {
+    return statements.getProviderCostWithMessageByUser.all(userId) as ProviderCostWithMessage[]
+  }
+
+  static getTotalsByUser(userId: number):
+    | {
+        total_prompt_tokens: number
+        total_completion_tokens: number
+        total_reasoning_tokens: number
+        total_cost_usd: number
+        total_api_credits: number
+      }
+    | undefined {
+    const result = statements.getTotalCostByUser.get(userId) as any
+    if (!result) return undefined
+
+    return {
+      total_prompt_tokens: result.total_prompt_tokens || 0,
+      total_completion_tokens: result.total_completion_tokens || 0,
+      total_reasoning_tokens: result.total_reasoning_tokens || 0,
+      total_cost_usd: result.total_cost_usd || 0,
+      total_api_credits: result.total_api_credits || 0,
+    }
+  }
+
+  static deleteByMessage(messageId: number): number {
+    const result = statements.deleteProviderCostByMessage.run(messageId)
+    return result.changes || 0
+  }
+}
+
 // Heimdall tree format
 export interface ChatNode {
   id: string
@@ -606,7 +778,7 @@ export interface ChatNode {
 
 // Build tree structure from flat message array with children_ids
 export function buildMessageTree(messages: Message[]): ChatNode | null {
-  const messageMap = new Map<number, ChatNode>()
+  const messageMap = new Map<MessageId, ChatNode>()
 
   // Create nodes
   messages.forEach(msg => {
@@ -629,7 +801,7 @@ export function buildMessageTree(messages: Message[]): ChatNode | null {
     }
 
     // Add children using children_ids array
-    const childIds: number[] = msg.children_ids
+    const childIds: MessageId[] = msg.children_ids
     childIds.forEach(childId => {
       const childNode = messageMap.get(childId)
       if (childNode) {

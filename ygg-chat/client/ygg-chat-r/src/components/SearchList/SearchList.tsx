@@ -78,9 +78,11 @@ const SearchList: React.FC<SearchListProps> = ({
         onSearchClick={handleSearchClick}
       />
 
-      {isOpen && (
-        loading ? (
-          <div className='absolute z-10 left-0 right-0 bg-indigo-50 p-4 text-sm'>Searching...</div>
+      {isOpen &&
+        (loading ? (
+          <div className='absolute z-10 left-0 right-0 bg-indigo-50 dark:bg-secondary-800 p-4 text-sm'>
+            Searching...
+          </div>
         ) : (
           results.length > 0 && (
             <ul
@@ -107,8 +109,7 @@ const SearchList: React.FC<SearchListProps> = ({
               ))}
             </ul>
           )
-        )
-      )}
+        ))}
     </div>
   )
 }
