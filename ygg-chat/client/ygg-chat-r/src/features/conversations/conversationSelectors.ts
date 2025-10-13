@@ -1,12 +1,13 @@
 import { createSelector } from '@reduxjs/toolkit'
-import { RootState } from '../../store/store'
 import { ConversationId, ProjectId } from '../../../../../shared/types'
+import { RootState } from '../../store/store'
 
 const selectConvState = (state: RootState) => state.conversations
 
 export const selectAllConversations = createSelector([selectConvState], state => state.items)
 export const selectConvLoading = createSelector([selectConvState], state => state.loading)
 export const selectConvError = createSelector([selectConvState], state => state.error)
+export const selectActiveConversationId = createSelector([selectConvState], state => state.activeConversationId)
 
 // Recent conversations selectors
 export const selectRecentConversations = createSelector([selectConvState], state => state.recent.items)
@@ -33,7 +34,7 @@ export const selectConversationsByProject = createSelector([selectAllConversatio
     if (!existing) {
       grouped.set(projectId, {
         latestConversation: conv.updated_at,
-        conversations: [conv]
+        conversations: [conv],
       })
     } else {
       existing.conversations.push(conv)

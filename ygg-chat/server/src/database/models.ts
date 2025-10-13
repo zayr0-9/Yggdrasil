@@ -1,4 +1,4 @@
-import { BaseMessage, Project, MessageId, ConversationId } from '../../../shared/types'
+import { BaseMessage, Project, ProjectWithLatestConversation, MessageId, ConversationId } from '../../../shared/types'
 import { stripMarkdownToText } from '../utils/markdownStripper'
 import { db, statements } from './db'
 
@@ -11,6 +11,32 @@ function sanitizeFTSQuery(query: string): string {
     .map(w => w.replace(/"/g, '""')) // escape quotes
     .map(w => `${w}*`) // prefix search
     .join(' OR ') // match any token
+}
+
+// Utility function to parse children_ids from SQLite (stored as JSON string)
+function parseChildrenIds(raw: any): MessageId[] {
+  if (Array.isArray(raw)) return raw // Already parsed
+  if (!raw) return []
+
+  const rawStr = typeof raw === 'string' ? raw : String(raw)
+
+  // Try JSON parse first (expected format like "[1,2,3]")
+  try {
+    const parsed = JSON.parse(rawStr)
+    if (Array.isArray(parsed)) {
+      return parsed.map(v => Number(v)).filter(n => Number.isFinite(n))
+    }
+  } catch {
+    // fall through to manual parsing
+  }
+
+  // Fallback: accept CSV with/without brackets
+  const cleaned = rawStr.replace(/^\[|\]$/g, '').trim()
+  if (!cleaned) return []
+  return cleaned
+    .split(',')
+    .map(s => parseInt(s.trim(), 10))
+    .filter(n => Number.isFinite(n))
 }
 
 // Lazy getter for prepared statement to set plain_text_content, since tables are created at runtime
@@ -30,6 +56,12 @@ export interface User {
   id: number
   username: string
   created_at: string
+  stripe_customer_id?: string | null
+  stripe_subscription_id?: string | null
+  subscription_tier?: 'high' | 'mid' | 'low' | null
+  subscription_status?: 'active' | 'canceled' | 'past_due' | null
+  credits_balance?: number
+  current_period_end?: string | null
 }
 
 export class FileContentService {
@@ -322,6 +354,10 @@ export class ProjectService {
     return statements.getAllProjects.all() as Project[]
   }
 
+  static getAllSortedByLatestConversation(): ProjectWithLatestConversation[] {
+    return statements.getProjectsSortedByLatestConversation.all() as ProjectWithLatestConversation[]
+  }
+
   static getById(id: number): Project | undefined {
     return statements.getProjectById.get(id) as Project | undefined
   }
@@ -519,7 +555,12 @@ export class MessageService {
   }
 
   static getById(id: MessageId): Message | undefined {
-    return statements.getMessageById.get(Number(id)) as Message | undefined
+    const msg = statements.getMessageById.get(Number(id)) as Message | undefined
+    if (!msg) return undefined
+    return {
+      ...msg,
+      children_ids: parseChildrenIds(msg.children_ids),
+    }
   }
 
   static getByConversation(conversationId: number): Message[] {
@@ -527,6 +568,7 @@ export class MessageService {
     // Normalize SQLite return types to match BaseMessage (boolean/number)
     return rows.map(r => ({
       ...r,
+      children_ids: parseChildrenIds(r.children_ids),
       has_attachments:
         typeof r.has_attachments === 'number'
           ? r.has_attachments > 0
@@ -550,11 +592,20 @@ export class MessageService {
 
   // Simple tree fetch - let frontend handle tree logic
   static getMessageTree(conversationId: number): Message[] {
-    return statements.getMessageTree.all(conversationId) as Message[]
+    const rows = statements.getMessageTree.all(conversationId) as any[]
+    return rows.map(r => ({
+      ...r,
+      children_ids: parseChildrenIds(r.children_ids),
+    })) as Message[]
   }
 
   static getLastMessage(conversationId: number): Message | undefined {
-    return statements.getLastMessage.get(conversationId) as Message | undefined
+    const msg = statements.getLastMessage.get(conversationId) as Message | undefined
+    if (!msg) return undefined
+    return {
+      ...msg,
+      children_ids: parseChildrenIds(msg.children_ids),
+    }
   }
 
   static getChildrenIds(id: number): number[] {
@@ -778,7 +829,10 @@ export interface ChatNode {
 
 // Build tree structure from flat message array with children_ids
 export function buildMessageTree(messages: Message[]): ChatNode | null {
+  if (!messages || messages.length === 0) return null
+
   const messageMap = new Map<MessageId, ChatNode>()
+  const rootNodes: ChatNode[] = []
 
   // Create nodes
   messages.forEach(msg => {
@@ -790,14 +844,12 @@ export function buildMessageTree(messages: Message[]): ChatNode | null {
     })
   })
 
-  let root: ChatNode | null = null
-
-  // Build tree using children_ids
+  // Build tree using children_ids and collect all root nodes
   messages.forEach(msg => {
     const node = messageMap.get(msg.id)!
 
     if (msg.parent_id === null) {
-      root = node
+      rootNodes.push(node)
     }
 
     // Add children using children_ids array
@@ -810,5 +862,19 @@ export function buildMessageTree(messages: Message[]): ChatNode | null {
     })
   })
 
-  return root
+  if (rootNodes.length === 0) return null
+
+  // If only one root message, return it directly
+  if (rootNodes.length === 1) {
+    return rootNodes[0]
+  }
+
+  // Multiple roots → create a synthetic root node containing all root branches
+  // This preserves all independent conversation trees
+  return {
+    id: 'root',
+    message: 'Conversation',
+    sender: 'assistant',
+    children: rootNodes,
+  }
 }

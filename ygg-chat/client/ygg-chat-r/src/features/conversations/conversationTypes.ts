@@ -7,7 +7,8 @@ export interface Conversation {
   project_id?: ProjectId | null
   created_at: string
   updated_at: string
-  systemPrompt: string | null
+  system_prompt: string | null
+  conversation_context: string | null
 }
 
 export interface ConversationsState {

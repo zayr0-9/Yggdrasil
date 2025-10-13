@@ -7,6 +7,7 @@ import path from 'path'
 import { MessageId } from '../../../shared/types'
 import {
   AttachmentService,
+  buildMessageTree,
   ConversationService,
   FileContentService,
   Message,
@@ -15,7 +16,6 @@ import {
   UserService,
 } from '../database/models'
 import { asyncHandler } from '../utils/asyncHandler'
-import { convertMessagesToHeimdall } from '../utils/heimdallConverter'
 import { modelService } from '../utils/modelService'
 // import { generateResponse } from '../utils/ollama'
 import { saveBase64ImageAttachmentsForMessage } from '../utils/attachments'
@@ -23,6 +23,8 @@ import { replaceFileMentionsWithContent, SelectedFileContent } from '../utils/fi
 import { abortGeneration, clearGeneration, createGeneration } from '../utils/generationManager'
 import { generateResponse } from '../utils/provider'
 import { getToolByName, updateToolEnabled } from '../utils/tools/index'
+import { checkCreditsAvailable, decrementCredits, estimateCreditsForGeneration } from '../utils/credits'
+import { hasActiveSubscription } from '../utils/stripe'
 
 const router = express.Router()
 
@@ -699,6 +701,15 @@ router.get(
   })
 )
 
+//get projects sorted by latest conversation
+router.get(
+  '/projects/sorted/latest-conversation',
+  asyncHandler(async (req, res) => {
+    const projects = ProjectService.getAllSortedByLatestConversation()
+    res.json(projects)
+  })
+)
+
 //get project by id
 router.get(
   '/projects/:id',
@@ -767,14 +778,8 @@ router.get(
     const conversationId = parseInt(req.params.id)
     const messages = MessageService.getByConversation(conversationId)
 
-    // Optional: Debug the tree structure in development
-    // if (process.env.NODE_ENV === 'development') {
-    //   debugMessageTree(messages)
-    // }
-    // console.log(`messages ${JSON.stringify(messages)} \n`)
-    const treeData = convertMessagesToHeimdall(messages)
-    // console.log(`treeserver data ${JSON.stringify(treeData)} \n`)
-    res.json(treeData)
+    const treeData = buildMessageTree(messages)
+    res.json({ messages, tree: treeData })
   })
 )
 
@@ -1005,8 +1010,7 @@ router.post(
       // Clear generation on successful completion
       clearGeneration(messageId)
 
-      const messages = MessageService.getByConversation(conversationId)
-      if (!conversation.title && messages.length === 1) {
+      if (!conversation.title && parentId === null) {
         const title = content.slice(0, 100) + (content.length > 100 ? '...' : '')
         ConversationService.updateTitle(conversationId, title)
       }
@@ -1296,6 +1300,33 @@ router.post(
       let assistantToolCalls = ''
       let lastChunkId = ''
 
+      // Check credits before generation
+      const userId = conversation.user_id
+
+      // Estimate credits needed (rough estimate based on message length)
+      const estimatedTokens = Math.ceil((processedContent.length + JSON.stringify(combinedMessages).length) / 4)
+      const estimatedCredits = estimateCreditsForGeneration(estimatedTokens, selectedModel)
+
+      // Check if user has active subscription
+      const hasSubscription = hasActiveSubscription(userId)
+
+      // Only check credits if user has a subscription, otherwise allow free usage
+      if (hasSubscription) {
+        const creditCheck = checkCreditsAvailable(userId, estimatedCredits)
+
+        if (!creditCheck.hasCredits) {
+          res.setHeader('Content-Type', 'application/json')
+          return res.status(402).json({
+            error: 'Insufficient credits',
+            message: `You need ${estimatedCredits} credits but only have ${creditCheck.currentBalance}`,
+            required: estimatedCredits,
+            current: creditCheck.currentBalance,
+          })
+        }
+
+        console.log(`[Credits] User ${userId} has sufficient credits: ${creditCheck.currentBalance} >= ${estimatedCredits}`)
+      }
+
       // Create assistant message placeholder for cost tracking
       const assistantMessage = MessageService.create(
         conversationId,
@@ -1307,11 +1338,13 @@ router.post(
         ''
       )
 
-      // Stream AI response with manual abort control
-      const { id: messageId, controller } = createGeneration(userMessage.id)
-      res.write(`data: ${JSON.stringify({ type: 'generation_started', messageId: userMessage.id })}\n\n`)
+      // Stream AI response with manual abort control - use ASSISTANT message ID since that's what's being generated
+      const { id: messageId, controller } = createGeneration(assistantMessage.id)
+      console.log(`🔴 [chat.ts] Controller created for assistantMessage.id: ${assistantMessage.id}, signal.aborted: ${controller.signal.aborted}`)
+      res.write(`data: ${JSON.stringify({ type: 'generation_started', messageId: assistantMessage.id })}\n\n`)
       // Don't clear on close - let it complete naturally or be aborted manually
       // req.on('close', () => clearGeneration(messageId))
+      console.log(`🔴 [chat.ts] About to call generateResponse with provider: ${provider}`)
       try {
         await generateResponse(
           combinedMessages,
@@ -1439,11 +1472,29 @@ router.post(
         )
 
         // Auto-generate title for new conversations (only if first message and no existing title)
-        const allMessages = MessageService.getByConversation(conversationId)
-        if (!conversation.title && allMessages.length >= 0) {
+        if (!conversation.title && parentId === null) {
           console.log('Auto-generating title for new conversation', conversationId)
           const title = content.slice(0, 100) + (content.length > 100 ? '...' : '')
           ConversationService.updateTitle(conversationId, title)
+        }
+
+        // Decrement credits after successful generation (only if user has subscription)
+        if (hasSubscription) {
+          const actualCredits = estimateCreditsForGeneration(
+            Math.ceil((assistantContent.length + assistantThinking.length) / 4),
+            selectedModel
+          )
+          const newBalance = decrementCredits(
+            userId,
+            actualCredits,
+            `AI generation - ${selectedModel} - conversation ${conversationId}`
+          )
+
+          if (newBalance === null) {
+            console.warn(`[Credits] Failed to decrement credits for user ${userId} after generation`)
+          } else {
+            console.log(`[Credits] Decremented ${actualCredits} credits for user ${userId}. New balance: ${newBalance}`)
+          }
         }
       } catch (error: any) {
         const isAbort =
@@ -1824,7 +1875,9 @@ router.post(
   '/messages/:id/abort',
   asyncHandler(async (req, res) => {
     const userMessageId = parseInt(req.params.id)
+    console.log(`🔴 [SERVER /abort] Abort endpoint called for messageId: ${userMessageId}`)
     const success = abortGeneration(userMessageId)
+    console.log(`🔴 [SERVER /abort] abortGeneration returned success: ${success}`)
 
     // Check if the aborted assistant message is empty and delete it
     let messageDeleted = false

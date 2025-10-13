@@ -64,7 +64,7 @@ export const Select: React.FC<SelectProps> = ({
         return 'px-4 py-3 text-lg leading-none'
       case 'medium':
       default:
-        return 'px-3 py-2.5 text-base leading-none'
+        return 'px-3 py-3 text-base leading-none'
     }
   }, [size])
 
@@ -169,7 +169,7 @@ export const Select: React.FC<SelectProps> = ({
       <button
         ref={btnRef}
         type='button'
-        className={`w-full inline-flex items-center justify-between gap-2 ${sizeClass} dark:bg-yBlack-900 rounded bg-neutral-50 text-stone-800 dark:text-stone-200 border dark:border-0 border-neutral-200/70  hover:bg-neutral-100 dark:hover:bg-yBlack-500 disabled:opacity-60 disabled:cursor-not-allowed`}
+        className={`w-full inline-flex items-center justify-between gap-2 ${sizeClass} dark:bg-yBlack-900 rounded-lg bg-neutral-50 text-stone-800 dark:text-stone-200 border dark:border-0 border-neutral-200/70  hover:bg-neutral-100 dark:hover:bg-yBlack-500 disabled:opacity-60 disabled:cursor-not-allowed`}
         aria-haspopup='listbox'
         aria-expanded={open}
         onClick={() => !disabled && setOpen(o => !o)}

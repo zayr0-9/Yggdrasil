@@ -10,7 +10,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true
+    // CRITICAL: autoRefreshToken MUST be false to prevent /auth/v1/user calls
+    // We handle token refresh manually to maintain full control
+    autoRefreshToken: false,
+    detectSessionInUrl: true,
+    // Asymmetric JWT verification settings
+    // Uses JWKS from /.well-known/jwks.json for local token verification
+    // IMPORTANT: With asymmetric JWTs, getClaims() performs LOCAL verification
+    // This eliminates ALL network calls to /auth/v1/user endpoint
+    storageKey: 'supabase-auth-token',
   }
 })

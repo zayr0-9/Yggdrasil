@@ -4,6 +4,7 @@ export {
   activeConversationIdSet,
   convContextSet,
   conversationsCleared,
+  conversationsLoaded,
   default as conversationsReducer,
   systemPromptSet,
 } from './conversationSlice'

@@ -55,7 +55,7 @@ export const TextField: React.FC<TextFieldProps> = ({
 
   // Base input styles that apply to all text fields
   const baseInputStyles =
-    'w-full px-4 py-3 rounded-xl transition-all duration-200 overflow-hidden bg-neutral-50 dark:bg-neutral-900 bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-1 border-gray-300 outline-none focus:border-gray-400 dark:border-secondary-500 dark:focus:border-secondary-300 '
+    'w-full px-4 py-3 rounded-xl transition-all duration-200 overflow-hidden bg-neutral-50 dark:bg-neutral-900 bg-gray-800 text-stone-800 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-1 border-gray-300 outline-none focus:border-gray-400 dark:border-neutral-600 dark:focus:border-neutral-500'
 
   // Size variants control padding and text size
   const sizeStyles = {
@@ -114,7 +114,7 @@ export const TextField: React.FC<TextFieldProps> = ({
             aria-label='Search'
             className='absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-300 dark:hover:text-neutral-100 focus:outline-none'
           >
-            <i className='bx bx-search text-xl' aria-hidden='true'></i>
+            <i className='bx bx-search text-xl pt-1.5' aria-hidden='true'></i>
           </button>
         )}
       </div>

@@ -29,6 +29,10 @@ const projectSlice = createSlice({
     setSelectedProject: (state, action: PayloadAction<Project>) => {
       state.selectedProject = action.payload
     },
+    // Sync projects from React Query to Redux
+    projectsLoaded: (state, action: PayloadAction<Project[]>) => {
+      state.projects = action.payload
+    },
   },
   extraReducers: (builder) => {
     // Fetch all projects
@@ -118,5 +122,5 @@ const projectSlice = createSlice({
   },
 })
 
-export const { clearError, clearSelectedProject, setSelectedProject } = projectSlice.actions
+export const { clearError, clearSelectedProject, setSelectedProject, projectsLoaded } = projectSlice.actions
 export default projectSlice.reducer

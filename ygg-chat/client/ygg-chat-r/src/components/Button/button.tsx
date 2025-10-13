@@ -38,8 +38,9 @@ export const Button: React.FC<ButtonProps> = ({
       'bg-indigo-300 hover:bg-indigo-400 dark:bg-secondary-500 text-neutral-50 dark:text-white dark:hover:bg-secondary-600 focus:ring-1 dark:focus:ring-secondary-400 dark:focus:secondary-500',
     tertiary:
       'bg-indigo-300 hover:bg-indigo-400 dark:bg-yBlack-900 text-neutral-50 dark:text-white dark:hover:bg-yBlack-500 focus:ring-1 dark:focus:ring-yBlack-500 dark:focus:yBlack-500',
-    outline: 'border-2 border-neutral-300 text-neutral-300 hover:bg-blue-50',
-    outline2: ' text-neutral-300 dark:hover:bg-neutral-700',
+    outline:
+      'border-2 border-neutral-400 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800',
+    outline2: 'text-neutral-700 dark:text-neutral-300 hover:bg-stone-200 dark:hover:bg-neutral-700',
     danger:
       'bg-rose-400 dark:bg-yPink-700 dark:border-2 dark:border-yPink-200 text-white dark:hover:bg-yPink-600 hover:bg-rose-500 focus:ring-red-500',
   }

@@ -47,6 +47,10 @@ export interface Project {
   system_prompt: string
 }
 
+export interface ProjectWithLatestConversation extends Project {
+  latest_conversation_updated_at: string | null
+}
+
 export interface ChatSession {
   id: string
   title: string

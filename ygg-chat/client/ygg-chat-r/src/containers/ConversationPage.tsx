@@ -1,31 +1,24 @@
+import { useQueryClient } from '@tanstack/react-query'
 import 'boxicons'
 import 'boxicons/css/boxicons.min.css'
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { ConversationId } from '../../../../shared/types'
 import { Button } from '../components'
-import SearchList from '../components/SearchList/SearchList'
 import { Select } from '../components/Select/Select'
 import { chatSliceActions } from '../features/chats'
 import {
   activeConversationIdSet,
   Conversation,
+  conversationsLoaded,
   createConversation,
   deleteConversation,
-  fetchConversations,
-  fetchConversationsByProjectId,
-  selectAllConversations,
   selectConvError,
-  selectConvLoading,
 } from '../features/conversations'
-import { fetchProjectById, selectSelectedProject } from '../features/projects'
-import {
-  searchActions,
-  selectSearchLoading as selectSearchLoading2,
-  selectSearchQuery,
-  selectSearchResults,
-} from '../features/search'
+import { clearSelectedProject, projectsLoaded, selectSelectedProject, setSelectedProject } from '../features/projects'
+
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
-import { ConversationId } from '../../../../shared/types'
+import { useConversations, useConversationsByProject, useProject, useProjects } from '../hooks/useQueries'
 import { parseId } from '../utils/helpers'
 import EditProject from './EditProject'
 import SideBar from './sideBar'
@@ -33,16 +26,55 @@ import SideBar from './sideBar'
 const ConversationPage: React.FC = () => {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
-  const projectId = searchParams.get('projectId')
+  const projectIdParam = searchParams.get('projectId')
+  const projectId = projectIdParam ? parseId(projectIdParam) : null
 
-  const allConversations = useAppSelector<Conversation[]>(selectAllConversations)
+  // Use React Query for data fetching
+  // Fetch project-specific conversations OR all conversations (not both)
+  // The enabled flags ensure only one query runs at a time
+  const { data: projectConversations = [], isLoading: projectConvsLoading } = useConversationsByProject(projectId)
+  // Only fetch all conversations when NOT viewing a specific project
+  const { data: allConversations = [], isLoading: allConvsLoading } = useConversations(!projectId)
+
+  // Project data is fetched but not directly used - populates React Query cache
+  useProject(projectId)
+  const { data: allProjects = [] } = useProjects()
+
+  // Use project conversations if we have a projectId, otherwise use all conversations
+  const conversations = projectId ? projectConversations : allConversations
+  const loading = projectId ? projectConvsLoading : allConvsLoading
+
+  // Sync React Query data to Redux
+  // Simple approach: just load the conversations from React Query
+  // The optimistic update in Chat.tsx handles both React Query AND Redux
+  useEffect(() => {
+    if (conversations.length > 0) {
+      dispatch(conversationsLoaded(conversations))
+    }
+  }, [conversations, dispatch])
+
+  useEffect(() => {
+    if (allProjects.length > 0) {
+      dispatch(projectsLoaded(allProjects))
+    }
+  }, [allProjects, dispatch])
+
+  // Set selected project based on URL parameter
+  useEffect(() => {
+    if (projectId && allProjects.length > 0) {
+      const project = allProjects.find(p => p.id === projectId)
+      if (project) {
+        dispatch(setSelectedProject(project))
+      }
+    } else if (!projectId) {
+      dispatch(clearSelectedProject())
+    }
+  }, [projectId, allProjects, dispatch])
+
   const selectedProject = useAppSelector(selectSelectedProject)
-  const loading = useAppSelector(selectConvLoading)
-  const searchLoading = useAppSelector(selectSearchLoading2)
   const error = useAppSelector(selectConvError)
-  const searchResults = useAppSelector(selectSearchResults)
-  const searchQuery = useAppSelector(selectSearchQuery)
 
   const [showEditProjectModal, setShowEditProjectModal] = useState(false)
   const [sortBy, setSortBy] = useState<'updated' | 'created' | 'name'>('updated')
@@ -81,24 +113,18 @@ const ConversationPage: React.FC = () => {
     return invert ? sorted.reverse() : sorted
   }
 
-  // Use conversations directly from Redux state (already filtered by project ID if applicable)
-  const conversations = sortConversations(allConversations, sortBy, sortOrder === 'asc')
+  // Sort conversations
+  const sortedConversations = sortConversations(conversations, sortBy, sortOrder === 'asc')
 
   // Search dropdown is handled inside SearchList component
 
   useEffect(() => {
     dispatch(chatSliceActions.stateReset())
-
-    // Fetch conversations by project ID if projectId is provided, otherwise fetch all
-    if (projectId) {
-      dispatch(fetchConversationsByProjectId(parseId(projectId)))
-      dispatch(fetchProjectById(parseId(projectId)))
-    } else {
-      dispatch(fetchConversations())
-    }
-
     dispatch(chatSliceActions.heimdallDataLoaded({ treeData: null }))
-  }, [dispatch, projectId])
+
+    // Conversations and project are now fetched via React Query hooks above
+    // No need to dispatch Redux actions - React Query handles caching and deduplication
+  }, [dispatch])
 
   // Dropdown open/close is managed internally by SearchList
 
@@ -108,8 +134,26 @@ const ConversationPage: React.FC = () => {
     dispatch(activeConversationIdSet(conv.id))
   }
 
-  const handleDelete = (id: ConversationId) => {
-    dispatch(deleteConversation({ id }))
+  const handleDelete = async (id: ConversationId) => {
+    await dispatch(deleteConversation({ id }))
+
+    // Optimistically update React Query caches to remove the deleted conversation
+    // Update all conversations cache
+    queryClient.setQueryData(['conversations'], (old: Conversation[] | undefined) => {
+      return old ? old.filter(c => c.id !== id) : []
+    })
+
+    // Update project-specific conversations cache
+    if (projectId) {
+      queryClient.setQueryData(['conversations', 'project', projectId], (old: Conversation[] | undefined) => {
+        return old ? old.filter(c => c.id !== id) : []
+      })
+    }
+
+    // Update recent conversations cache (used by SideBar)
+    queryClient.setQueryData(['conversations', 'recent'], (old: Conversation[] | undefined) => {
+      return old ? old.filter(c => c.id !== id) : []
+    })
   }
 
   const handleNewConversation = async () => {
@@ -121,22 +165,27 @@ const ConversationPage: React.FC = () => {
         }
       : {}
     const result = await dispatch(createConversation(payload)).unwrap()
-    handleSelect(result)
-  }
+    // dispatch(fetchProjectById(result.project_id))
 
-  const handleSearchChange = (value: string) => {
-    dispatch(searchActions.queryChanged(value))
-  }
+    // Optimistically update React Query cache to avoid refetch (scales better)
+    // Update all conversations cache - prepend new conversation (newest first)
+    queryClient.setQueryData(['conversations'], (old: Conversation[] | undefined) => {
+      return old ? [result, ...old] : [result]
+    })
 
-  const handleSearchSubmit = () => {
-    if (searchQuery.trim()) {
-      dispatch(searchActions.performProjectSearch({ query: searchQuery, projectId: selectedProject?.id }))
+    // Update project-specific conversations cache
+    if (result.project_id) {
+      queryClient.setQueryData(['conversations', 'project', result.project_id], (old: Conversation[] | undefined) => {
+        return old ? [result, ...old] : [result]
+      })
     }
-  }
 
-  const handleResultClick = (conversationId: number, messageId: string) => {
-    dispatch(chatSliceActions.conversationSet(conversationId))
-    navigate(`/chat/${conversationId}#${messageId}`)
+    // Update recent conversations cache (used by SideBar) - prepend new conversation
+    queryClient.setQueryData(['conversations', 'recent'], (old: Conversation[] | undefined) => {
+      return old ? [result, ...old] : [result]
+    })
+
+    handleSelect(result)
   }
 
   const handleEditProject = () => {
@@ -148,18 +197,23 @@ const ConversationPage: React.FC = () => {
   }
 
   return (
-    <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900 flex flex-col'>
-      {/* Recent conversations sidebar - fixed and above all content */}
-      <div className='flex fixed left-2 top-89 items-start'>
-        <SideBar limit={8} />
-      </div>
-      <div className='pl-20 md:pl-24'>
-        <div className='px-2 pt-10 max-w-[1440px] mx-auto'>
+    <div className='bg-zinc-50 min-h-screen dark:bg-zinc-900 flex'>
+      {/* Recent conversations sidebar */}
+      <SideBar limit={12} projects={allProjects} />
+      {/* Main content with flex layout */}
+      <div className='flex-1 mr-35 ml-15 transition-all py-6 duration-300'>
+        <div className='py-4  max-w-[1640px] mx-auto'>
           <div className='flex items-center justify-between mb-8'>
             <div className='flex items-center gap-2 pt-2 mb-2'>
-              <Button variant='secondary' rounded='full' size='circle' onClick={() => navigate('/')} className='group'>
+              <Button
+                variant='outline'
+                rounded='full'
+                size='circle'
+                onClick={() => navigate('/')}
+                className='group border-2 hover:bg-pureWhite-100 dark:hover:bg-neutral-900 border-pureWhite-200 dark:border-neutral-800 shadow-[0_0px_8px_-4px_rgba(0,0,0,0.5)] dark:shadow-[0_1px_22px_1px_rgba(0,0,0,0.45)]'
+              >
                 <i
-                  className='bx bx-home text-3xl pb-0.5 transition-transform duration-100 group-active:scale-90 pointer-events-none'
+                  className='bx bx-home text-3xl pb-0.75 transition-transform group-hover:scale-101 duration-100 group-active:scale-93 pointer-events-none'
                   aria-hidden='true'
                 ></i>
               </Button>
@@ -180,17 +234,17 @@ const ConversationPage: React.FC = () => {
           </div>
         </div>
         <div className='p-6 max-w-7xl mx-auto'>
-          <div className='mb-4 flex items-center justify-between'>
+          <div className='mb-4 flex items-center justify-between max-w-5xl'>
             <h2 className='text-3xl py-4 font-bold dark:text-neutral-100'>Conversations</h2>
-            <div className='flex items-center gap-2 pt-2'>
-              <Button variant='primary' size='medium' onClick={handleEditProject} className='group'>
+            <div className='flex items-center gap-2 pt-4 pr-4'>
+              <Button variant='outline' size='medium' onClick={handleEditProject} className='group'>
                 <p className='transition-transform duration-100 group-active:scale-95'>Project Settings</p>
               </Button>
             </div>
           </div>
           {/* New Conversation + Sort Controls + Search inline row */}
           <div className='mb-6 flex items-center gap-3'>
-            <Button variant='primary' size='large' onClick={handleNewConversation} className='group'>
+            <Button variant='outline' size='large' onClick={handleNewConversation} className='group'>
               <p className='transition-transform duration-100 group-active:scale-95'>New Conversation</p>
             </Button>
 
@@ -207,7 +261,7 @@ const ConversationPage: React.FC = () => {
                 className='w-32 transition-transform duration-70 active:scale-95'
               />
               <Button
-                variant='secondary'
+                variant='outline2'
                 size='medium'
                 onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
                 className='shrink-0 group'
@@ -222,20 +276,20 @@ const ConversationPage: React.FC = () => {
 
           {loading && <p>Loading...</p>}
           {error && <p className='text-red-500'>{error}</p>}
-          <div className='flex gap-4 items-start'>
-            <ul className='space-y-2 rounded flex-2'>
-              {conversations.map(conv => (
+          <div className='flex gap-4 pt-5 items-start max-w-5xl'>
+            <ul className='space-y-2 px-2 py-8 rounded flex-2 overflow-y-auto max-h-[65vh] pr-2 thin-scrollbar scroll-fade'>
+              {sortedConversations.map(conv => (
                 <li
                   key={conv.id}
-                  className='p-3 mb-4 bg-indigo-50 rounded-lg cursor-pointer dark:bg-secondary-700 hover:bg-indigo-100 dark:hover:bg-secondary-800 group'
+                  className='px-3 pb-4 pt-2 mb-6 bg-indigo-50 rounded-lg cursor-pointer dark:bg-yBlack-900 dark:outline-1 dark:outline-neutral-800 hover:bg-indigo-100 dark:hover:bg-yBlack-800 dark:hover:outline-neutral-600 group dark:shadow-[0px_6px_12px_-12px_rgba(0,0,0,0.45),0px_6px_12px_-8px_rgba(0,0,0,0.2)]'
                   onClick={() => handleSelect(conv)}
                 >
                   <div className='flex items-center justify-between'>
-                    <span className='font-semibold dark:text-neutral-100 transition-transform duration-100 group-active:scale-99'>
+                    <span className='font-semibold text-lg dark:text-neutral-300 transition-transform duration-100 group-active:scale-99'>
                       {conv.title || `Conversation ${conv.id}`}
                     </span>
                     <Button
-                      variant='secondary'
+                      variant='outline2'
                       size='smaller'
                       onClick={
                         (e => {
@@ -248,26 +302,16 @@ const ConversationPage: React.FC = () => {
                     </Button>
                   </div>
                   {conv.created_at && (
-                    <div className='text-xs text-neutral-900 dark:text-neutral-100 transition-transform duration-100 group-active:scale-99'>
+                    <div className='text-xs mt-2 text-neutral-900 dark:text-neutral-300 transition-transform duration-100 group-active:scale-99'>
                       {new Date(conv.created_at).toLocaleString()}
                     </div>
                   )}
                 </li>
               ))}
-              {conversations.length === 0 && !loading && <p className='dark:text-neutral-300'>No conversations yet.</p>}
+              {sortedConversations.length === 0 && !loading && (
+                <p className='dark:text-neutral-300'>No conversations yet.</p>
+              )}
             </ul>
-            <div className='flex-1'>
-              <SearchList
-                value={searchQuery}
-                onChange={handleSearchChange}
-                onSubmit={handleSearchSubmit}
-                results={searchResults}
-                loading={searchLoading}
-                onResultClick={handleResultClick}
-                placeholder='Search messages...'
-                dropdownVariant='secondary'
-              />
-            </div>
           </div>
         </div>
       </div>

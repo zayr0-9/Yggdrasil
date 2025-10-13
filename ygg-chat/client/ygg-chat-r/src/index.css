@@ -170,23 +170,59 @@ body.ygg-no-select * {
   animation: ygg-pulse 4s ease-in-out infinite;
 }
 
+/* Color cycling animation for Heimdall currentPath line */
+@keyframes ygg-color-cycle {
+  0%,
+  100% {
+    stroke: #ffffff;
+  }
+  50% {
+    stroke: #fafafa;
+  }
+}
+.animate-color-cycle {
+  animation: ygg-color-cycle 4s ease-in-out infinite;
+}
+
+/* Stroke color pulse for dark mode (neutral-50 to neutral-700) */
+@keyframes ygg-stroke-pulse-dark {
+  0%,
+  100% {
+    stroke: #fafafa; /* neutral-50 */
+  }
+  50% {
+    stroke: #404040; /* neutral-700 */
+  }
+}
+.dark .animate-stroke-pulse {
+  animation: ygg-stroke-pulse-dark 4s ease-in-out infinite;
+}
+@utility no-scrollbar {
+  @apply [scrollbar-width:none] [&::-webkit-scrollbar]:hidden;
+}
 /* Thin scrollbar utility */
 .thin-scrollbar {
   /* Firefox */
-  scrollbar-width: thin;
-  scrollbar-color: rgb(163, 163, 163) transparent; /* light: neutral-400 thumb on transparent track */
+  scroll-padding-top: 4px;
+  scroll-padding-bottom: 4px;
 }
 /* Chromium/WebKit */
 .thin-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
 }
 .thin-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #a3a3a3; /* light: neutral-400 */
-  border-radius: 9999px;
+  background-color: #cfcfcf; /* light: neutral-400 */
+  border-radius: 20px;
+  border: 0.5px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(90, 90, 90, 0.02);
+  /* background-clip: padding-box; */
 }
 .thin-scrollbar::-webkit-scrollbar-track {
   background: transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar-button {
+  width: 0px;
 }
 
 /* Dark mode overrides */
@@ -206,6 +242,13 @@ body.ygg-no-select * {
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Scroll fade effect - creates smooth fade at top/bottom of scrollable containers */
+.scroll-fade {
+  /* Use mask-image to fade content at the edges */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 95%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 95%, transparent 100%);
 }
 
 @theme {
@@ -240,5 +283,16 @@ body.ygg-no-select * {
   --color-yBrown-500: #5c4030;
   --color-yBlack-100: #4c394c;
   --color-yBlack-500: #1a1a1d;
+  --color-yBlack-600: #242424;
+  --color-yBlack-700: #1c1c1c;
+  --color-yBlack-800: #161616;
   --color-yBlack-900: #121111;
+  --color-fblue-100: #c5d0d8;
+  --color-fblue-200: #a5bfd7;
+  --color-fblue-300: #a1b6d2;
+  --color-vtesto-100: #ff5f05;
+  --color-vtestb-100: #a5bfd7;
+  --color-vtestb-200: #004479;
+  --color-pureWhite-100: #ffffff;
+  --color-pureWhite-200: #fafafa;
 }

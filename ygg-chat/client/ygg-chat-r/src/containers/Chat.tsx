@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import 'boxicons' // Types
 import 'boxicons/css/boxicons.min.css'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -9,8 +10,6 @@ import {
   chatSliceActions,
   deleteMessage,
   editMessageWithBranching,
-  fetchConversationMessages,
-  fetchMessageTree,
   fetchModelsForCurrentProvider,
   initializeUserAndConversation,
   Message,
@@ -39,13 +38,11 @@ import {
 } from '../features/chats'
 import { buildBranchPathForMessage } from '../features/chats/pathUtils'
 import {
-  fetchContext,
-  fetchConversations,
-  fetchConversationsByProjectId,
+  convContextSet,
+  Conversation,
+  conversationsLoaded,
   fetchRecentModels,
-  fetchSystemPrompt,
   makeSelectConversationById,
-  selectAllConversations,
   selectRecentModels,
   systemPromptSet,
 } from '../features/conversations'
@@ -53,17 +50,25 @@ import { removeSelectedFileForChat, updateIdeContext } from '../features/ideCont
 import { selectSelectedFilesForChat, selectWorkspace } from '../features/ideContext/ideContextSelectors'
 import { selectSelectedProject } from '../features/projects/projectSelectors'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
+import { useAuth } from '../hooks/useAuth'
 import { useIdeContext } from '../hooks/useIdeContext'
+import { useConversationMessages, useConversationsByProject } from '../hooks/useQueries'
 import { cloneConversation } from '../utils/api'
 import { parseId } from '../utils/helpers'
 
 function Chat() {
   const dispatch = useAppDispatch()
+  const { accessToken } = useAuth()
   const { ideContext } = useIdeContext()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   // Local state for input to completely avoid Redux dispatches during typing
   const [localInput, setLocalInput] = useState('')
+
+  // Get conversation ID from URL params FIRST (before any hooks that depend on it)
+  const { id: conversationIdParam } = useParams<{ id?: string }>()
+  const conversationIdFromUrl = conversationIdParam ? parseId(conversationIdParam) : null
 
   // Redux selectors
   const models = useAppSelector(selectModels)
@@ -76,6 +81,13 @@ function Chat() {
   const conversationMessages = useAppSelector(selectConversationMessages)
   const displayMessages = useAppSelector(selectDisplayMessages)
   const currentConversationId = useAppSelector(selectCurrentConversationId)
+
+  // React Query for message fetching (automatic deduplication and caching)
+  // Use URL-derived ID to ensure correct fetching even on page refresh
+  // Single request fetches both messages AND tree data to eliminate duplicate requests
+  const { data: conversationData } = useConversationMessages(conversationIdFromUrl)
+  const reactQueryMessages = conversationData?.messages || []
+  const treeData = conversationData?.tree
   const selectedPath = useAppSelector(selectCurrentPath)
   const multiReplyCount = useAppSelector(selectMultiReplyCount)
   const focusedChatMessageId = useAppSelector(selectFocusedChatMessageId)
@@ -241,10 +253,13 @@ function Chat() {
   const compactMode = useAppSelector(selectHeimdallCompactMode)
   const recentModels = useAppSelector(selectRecentModels)
   const selectedProject = useAppSelector(selectSelectedProject)
-  const allConversations = useAppSelector(selectAllConversations)
   // Conversation title editing
   const currentConversation = useAppSelector(
     currentConversationId ? makeSelectConversationById(currentConversationId) : () => null
+  )
+  // Fetch conversations for the current project using React Query
+  const { data: projectConversations = [] } = useConversationsByProject(
+    selectedProject?.id || currentConversation?.project_id || null
   )
   const [titleInput, setTitleInput] = useState(currentConversation?.title ?? '')
   const [editingTitle, setEditingTitle] = useState(false)
@@ -279,34 +294,78 @@ function Chat() {
     if (trimmed === currentTrimmed) return
     const handle = setTimeout(() => {
       dispatch(updateConversationTitle({ id: currentConversationId, title: trimmed }))
+        .unwrap()
+        .then(() => {
+          // Update React Query caches to reflect the new title
+          const projectId = selectedProject?.id || currentConversation?.project_id
+
+          // Update all conversations cache
+          const conversationsCache = queryClient.getQueryData<Conversation[]>(['conversations'])
+          if (conversationsCache) {
+            queryClient.setQueryData(
+              ['conversations'],
+              conversationsCache.map(conv => (conv.id === currentConversationId ? { ...conv, title: trimmed } : conv))
+            )
+          }
+
+          // Update project conversations cache if project exists
+          if (projectId) {
+            const projectConversationsCache = queryClient.getQueryData<Conversation[]>([
+              'conversations',
+              'project',
+              projectId,
+            ])
+            if (projectConversationsCache) {
+              queryClient.setQueryData(
+                ['conversations', 'project', projectId],
+                projectConversationsCache.map(conv =>
+                  conv.id === currentConversationId ? { ...conv, title: trimmed } : conv
+                )
+              )
+            }
+          }
+
+          // Update recent conversations cache
+          const recentCache = queryClient.getQueryData<Conversation[]>(['conversations', 'recent'])
+          if (recentCache) {
+            queryClient.setQueryData(
+              ['conversations', 'recent'],
+              recentCache.map(conv => (conv.id === currentConversationId ? { ...conv, title: trimmed } : conv))
+            )
+          }
+        })
+        .catch(error => {
+          console.error('Failed to update conversation title:', error)
+        })
     }, 1000)
     return () => clearTimeout(handle)
-  }, [titleInput, currentConversationId, currentConversation?.title, dispatch])
+  }, [titleInput, currentConversationId, currentConversation?.title, dispatch, queryClient, selectedProject?.id])
 
-  // Ensure we have the latest conversation titles on reload/switch
+  // Sync React Query messages to Redux when they arrive
+  // This keeps Redux state updated for components that still depend on it
   useEffect(() => {
-    if (currentConversationId && !currentConversation) {
-      dispatch(fetchConversations())
+    if (reactQueryMessages && reactQueryMessages.length > 0) {
+      dispatch(chatSliceActions.messagesLoaded(reactQueryMessages))
     }
-  }, [currentConversationId, currentConversation, dispatch])
+  }, [reactQueryMessages, dispatch])
 
-  // Fetch conversations for the selected project or current conversation's project
+  // Sync tree data to Redux when it arrives
+  // Always dispatch even when treeData is null/undefined to keep Redux in sync with React Query
   useEffect(() => {
-    const projectId = selectedProject?.id || currentConversation?.project_id
-    if (projectId) {
-      dispatch(fetchConversationsByProjectId(projectId))
-    }
-  }, [selectedProject?.id, currentConversation?.project_id, dispatch])
+    dispatch(chatSliceActions.heimdallDataLoaded({ treeData }))
+  }, [treeData, dispatch])
+
+  // Conversations are now fetched via React Query in Homepage/ConversationPage/SideBar
+  // No need to fetch here - React Query automatically shares cached data across all components
+  // This eliminates duplicate requests and rate limiting issues
 
   // Sort conversations by updated_at descending for the Select dropdown
   const sortedConversations = useMemo(() => {
     const projectId = selectedProject?.id || currentConversation?.project_id
     if (!projectId) return []
 
-    return allConversations
-      .filter(conv => conv.project_id === projectId)
-      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-  }, [allConversations, selectedProject?.id, currentConversation?.project_id])
+    return [...projectConversations].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+  }, [projectConversations, selectedProject?.id, currentConversation?.project_id])
 
   // Resizable split-pane state
   const containerRef = useRef<HTMLDivElement>(null)
@@ -370,41 +429,22 @@ function Chat() {
     }
   }, [isResizing])
 
-  // Fetch tree when conversation changes
+  // Sync system prompt and context from current conversation
+  // Conversation data (including system_prompt and conversation_context) is already loaded via React Query
   useEffect(() => {
     if (currentConversationId) {
-      // Clear previous tree to avoid stale display when switching conversations
-      dispatch(chatSliceActions.heimdallDataLoaded({ treeData: null }))
-      dispatch(fetchMessageTree(currentConversationId))
+      // Extract system_prompt and conversation_context from the already-loaded conversation object
+      dispatch(systemPromptSet(currentConversation?.system_prompt ?? null))
+      dispatch(convContextSet(currentConversation?.conversation_context ?? null))
     } else {
-      // If no conversation is selected, ensure the tree is cleared
-      dispatch(chatSliceActions.heimdallDataLoaded({ treeData: null }))
-    }
-  }, [currentConversationId, dispatch])
-
-  // Fetch conversation messages when conversation changes
-  useEffect(() => {
-    if (currentConversationId) {
-      dispatch(fetchConversationMessages(currentConversationId))
-    }
-  }, [currentConversationId, dispatch])
-
-  // Fetch system prompt when conversation changes; clear when none selected
-  useEffect(() => {
-    if (currentConversationId) {
-      dispatch(fetchSystemPrompt(currentConversationId))
-      dispatch(fetchContext(currentConversationId))
-    } else {
+      // If no conversation is selected, clear prompts and context
       dispatch(systemPromptSet(null))
+      dispatch(convContextSet(null))
     }
-  }, [currentConversationId, dispatch])
+  }, [currentConversationId, currentConversation?.system_prompt, currentConversation?.conversation_context, dispatch])
 
-  // Refresh tree when new message added
-  useEffect(() => {
-    if (currentConversationId) {
-      dispatch(fetchMessageTree(currentConversationId))
-    }
-  }, [conversationMessages, dispatch])
+  // Query invalidation is now handled directly in sendMessage and editMessageWithBranching success handlers
+  // This prevents aggressive refetching and duplicate API requests
 
   // Coalesced scroll-to-bottom using double rAF to wait for DOM/layout to settle
   const scheduleScrollToBottom = useCallback((behavior: ScrollBehavior) => {
@@ -718,20 +758,17 @@ function Chat() {
     }
   }, [conversationMessages, selectedPath, dispatch, hashMessageId])
 
-  // Load models on mount
+  // Load models on mount and when provider changes (consolidated to avoid duplicates)
   useEffect(() => {
-    dispatch(fetchModelsForCurrentProvider(true))
-    // Also fetch recent models (top 5)
-    dispatch(fetchRecentModels({ limit: 5 }))
-  }, [dispatch])
-
-  // Reload models when provider changes
-  useEffect(() => {
-    if (providers.currentProvider) {
-      dispatch(fetchModelsForCurrentProvider(true))
-      // Refresh recent models as well
+    const loadModels = async () => {
+      // Fetch models for current provider
+      await dispatch(fetchModelsForCurrentProvider(true))
+        .unwrap()
+        .catch(() => {})
+      // Then fetch recent models (only after provider models loaded)
       dispatch(fetchRecentModels({ limit: 5 }))
     }
+    loadModels()
   }, [providers.currentProvider, dispatch])
 
   // Keep a local copy of models to allow reordering with recent models
@@ -777,18 +814,18 @@ function Chat() {
   }, [messageInput.content, currentConversationId])
 
   // Initialize or set conversation based on route param
-  const { id: conversationIdParam } = useParams<{ id?: string }>()
-
   useEffect(() => {
-    if (conversationIdParam) {
-      const idNum = parseId(conversationIdParam)
-      if ((typeof idNum === 'number' && !isNaN(idNum)) || typeof idNum === 'string') {
-        dispatch(chatSliceActions.conversationSet(idNum))
+    if (conversationIdFromUrl) {
+      if (
+        (typeof conversationIdFromUrl === 'number' && !isNaN(conversationIdFromUrl)) ||
+        typeof conversationIdFromUrl === 'string'
+      ) {
+        dispatch(chatSliceActions.conversationSet(conversationIdFromUrl))
       }
     } else {
       dispatch(initializeUserAndConversation())
     }
-  }, [conversationIdParam, dispatch])
+  }, [conversationIdFromUrl, dispatch])
 
   // Handle input changes with pure local state - no Redux dispatches during typing
   const handleInputChange = useCallback((content: string) => {
@@ -857,6 +894,13 @@ function Chat() {
         if (isRetrigger) {
           // Retrigger: Use the last user message's content and parent
           const lastUserMessage = displayMessages[displayMessages.length - 1]
+
+          // Safety check: ensure lastUserMessage exists before accessing properties
+          if (!lastUserMessage) {
+            console.error('Cannot retrigger: No last user message found in displayMessages')
+            return
+          }
+
           const parent: MessageId = lastUserMessage.parent_id || 0
           const contentToRetrigger = lastUserMessage.content
 
@@ -881,6 +925,9 @@ function Chat() {
               if (!result?.userMessage) {
                 console.warn('Server did not confirm user message')
               }
+              // ✅ No refetch needed - messages already added to Redux via SSE stream
+              // Stream sends: user_message event + complete event with full message data
+              // Redux already updated via messageAdded() + messageBranchCreated() dispatches
             })
             .catch(error => {
               console.error('Failed to retrigger generation:', error)
@@ -893,7 +940,56 @@ function Chat() {
           // Update Redux state with processed content before sending
           dispatch(chatSliceActions.inputChanged({ content: processedContent }))
 
-          const parent: MessageId = selectedPath.length > 0 ? selectedPath[selectedPath.length - 1] : 0
+          const parent: MessageId | null = selectedPath.length > 0 ? selectedPath[selectedPath.length - 1] : null
+
+          // Optimistically update conversation title if this is the first message
+          if (parent === null) {
+            const generatedTitle = processedContent.slice(0, 100) + (processedContent.length > 100 ? '...' : '')
+            const projectId = selectedProject?.id || currentConversation?.project_id
+
+            // Update all relevant React Query caches
+            // Only update if cache exists to avoid creating invalid cache entries
+            const conversationsCache = queryClient.getQueryData<Conversation[]>(['conversations'])
+            if (conversationsCache) {
+              queryClient.setQueryData(
+                ['conversations'],
+                conversationsCache.map(conv =>
+                  conv.id === currentConversationId ? { ...conv, title: generatedTitle } : conv
+                )
+              )
+            }
+
+            if (projectId) {
+              const projectConversationsCache = queryClient.getQueryData<Conversation[]>([
+                'conversations',
+                'project',
+                projectId,
+              ])
+              if (projectConversationsCache) {
+                queryClient.setQueryData(
+                  ['conversations', 'project', projectId],
+                  projectConversationsCache.map(conv =>
+                    conv.id === currentConversationId ? { ...conv, title: generatedTitle } : conv
+                  )
+                )
+              }
+            }
+
+            // Update recent conversations cache
+            const recentCache = queryClient.getQueryData<Conversation[]>(['conversations', 'recent'])
+            if (recentCache) {
+              queryClient.setQueryData(
+                ['conversations', 'recent'],
+                recentCache.map(conv => (conv.id === currentConversationId ? { ...conv, title: generatedTitle } : conv))
+              )
+            }
+
+            // Also update Redux to ensure components using Redux see the change immediately
+            const updatedConversations = projectConversations.map(conv =>
+              conv.id === currentConversationId ? { ...conv, title: generatedTitle } : conv
+            )
+            dispatch(conversationsLoaded(updatedConversations))
+          }
 
           // Only create optimistic message in web mode for instant UI feedback
           if (isWebMode) {
@@ -938,6 +1034,9 @@ function Chat() {
               if (!result?.userMessage) {
                 console.warn('Server did not confirm user message')
               }
+              // ✅ No refetch needed - messages already added to Redux via SSE stream
+              // Stream sends: user_message event + complete event with full message data
+              // Redux already updated via messageAdded() + messageBranchCreated() dispatches
             })
             .catch(error => {
               // Clear optimistic message on error (web mode only)
@@ -975,7 +1074,8 @@ function Chat() {
   const handleMessageEdit = useCallback(
     (id: string, newContent: string) => {
       const parsedId = parseId(id)
-      dispatch(chatSliceActions.messageUpdated({ id: parsedId, content: newContent }))
+      // Only dispatch updateMessage thunk - it will dispatch messageUpdated internally on success
+      // This prevents double updates and race conditions
       dispatch(updateMessage({ id: parsedId, content: newContent }))
       // console.log(parsedId)
     },
@@ -987,8 +1087,7 @@ function Chat() {
       if (currentConversationId) {
         // Replace any @file mentions with actual file contents before branching
         const processed = replaceFileMentionsWithPath(newContent)
-        console.log('processed', processed)
-
+        console.log(processed)
         const isWebMode = import.meta.env.VITE_ENVIRONMENT === 'web'
 
         if (isWebMode) {
@@ -1026,6 +1125,14 @@ function Chat() {
           })
         )
           .unwrap()
+          .then(() => {
+            // Invalidate React Query cache after successful branch to fetch new messages
+            // Note: messages query now includes tree data, so only one invalidation needed
+            queryClient.invalidateQueries({
+              queryKey: ['conversations', currentConversationId, 'messages'],
+              refetchType: 'active',
+            })
+          })
           .catch(error => {
             // Clear optimistic branch message on error (web mode only)
             if (isWebMode) {
@@ -1035,14 +1142,7 @@ function Chat() {
           })
       }
     },
-    [
-      currentConversationId,
-      selectedModel?.name,
-      think,
-      dispatch,
-      replaceFileMentionsWithPath,
-      conversationMessages,
-    ]
+    [currentConversationId, selectedModel?.name, think, dispatch, replaceFileMentionsWithPath, conversationMessages]
   )
 
   const handleResend = useCallback(
@@ -1165,13 +1265,10 @@ function Chat() {
     setOptionsOpen(false)
 
     try {
-      const result = await cloneConversation(currentConversationId)
-      // Refresh conversations list
-      if (selectedProject?.id) {
-        dispatch(fetchConversationsByProjectId(selectedProject.id))
-      } else {
-        dispatch(fetchConversations())
-      }
+      const result = await cloneConversation(currentConversationId, accessToken)
+      // Invalidate React Query cache to refetch conversations list
+      // This updates the dropdown and sidebar without duplicate API calls
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
       // Navigate to the cloned conversation
       navigate(`/chat/${result.id}`)
     } catch (error) {
@@ -1180,7 +1277,7 @@ function Chat() {
     } finally {
       setCloningConversation(false)
     }
-  }, [currentConversationId, selectedProject, dispatch, navigate])
+  }, [currentConversationId, accessToken, navigate, queryClient])
 
   // Refresh models
   const handleRefreshModels = useCallback(() => {
@@ -1223,22 +1320,19 @@ function Chat() {
         className='relative flex flex-col flex-none min-w-[280px] h-screen overflow-hidden'
         style={{ width: `${leftWidthPct}%` }}
       >
-        {/* <h1 className='text-3xl font-bold text-stone-800 dark:text-stone-200 mb-6'>
-          {titleInput} {currentConversationId}
-        </h1> */}
-        {/* <h1 className='text-lg font-bold text-stone-800 dark:text-stone-200'>Title</h1> */}
-
-        {/* {activeFile && <div className='active-file'>📁 {activeFile.name}</div>} */}
         {/* Conversation Title Editor */}
         {currentConversationId && (
-          <div className='flex flex-col gap-2 mb-2 mt-2 px-2'>
-            <div className='flex items-center gap-2'>
+          <div className='flex flex-col gap-2 mb-2 mt-2 mx-2 rounded-xl pr-2 shadow-[0_0px_12px_6px_rgba(0,0,0,0.06),0_0px_12px_-4px_rgba(0,0,0,0.02)] dark:shadow-[0_12px_12px_-6px_rgba(0,0,0,0.65),0_6px_12px_-4px_rgba(0,0,0,0.02)]'>
+            <div className='flex items-center gap-2 p-1 '>
               <Button
-                variant='tertiary'
+                variant='outline2'
                 size='medium'
                 className='transition-transform duration-100 active:scale-95'
                 aria-label='Conversations'
-                onClick={() => navigate('/conversationPage')}
+                onClick={() => {
+                  const projectId = selectedProject?.id || currentConversation?.project_id
+                  navigate(projectId ? `/conversationPage?projectId=${projectId}` : '/conversationPage')
+                }}
               >
                 <i className='bx bx-chat text-2xl' aria-hidden='true'></i>
               </Button>
@@ -1277,12 +1371,12 @@ function Chat() {
                     }))}
                     placeholder='Select conversation...'
                     disabled={sortedConversations.length === 0}
-                    className='flex-1 transition-transform duration-60 active:scale-97'
+                    className='flex-1 transition-transform min-w-0 duration-60 active:scale-97 outline-1 outline-neutral-200 dark:outline-neutral-700 rounded-lg'
                     searchBarVisible={true}
                   />
                   <div ref={optionsRef} className='relative'>
                     <Button
-                      variant='tertiary'
+                      variant='outline2'
                       size='small'
                       className='transition-transform duration-100 active:scale-95'
                       aria-label='Options'
@@ -1324,7 +1418,7 @@ function Chat() {
         >
           <div
             ref={messagesContainerRef}
-            className='px-2 dark:border-neutral-700 border-stone-200 rounded-lg py-4 overflow-y-auto overscroll-y-contain touch-pan-y p-3 bg-neutral-50 dark:bg-neutral-900 flex-1 min-h-0'
+            className='px-2 dark:border-neutral-700 border-stone-200 rounded-lg py-4 overflow-y-auto thin-scrollbar overscroll-y-contain touch-pan-y p-3 bg-neutral-50 dark:bg-neutral-900 flex-1 min-h-0'
             style={{ ['overflowAnchor' as any]: 'none' }}
           >
             {displayMessages.length === 0 ? (
@@ -1418,7 +1512,7 @@ function Chat() {
                   return (
                     <div
                       key={file.path}
-                      className='relative group inline-flex items-center gap-2 max-w-full rounded-md border border-neutral-500 dark:bg-neutral-700 dark:text-neutral-200 text-neutral-800 px-2 py-1 text-sm'
+                      className='relative group inline-flex items-center gap-2 max-w-full rounded-md border border-neutral-500 dark:bg-yBlack-900 dark:text-neutral-200 text-neutral-800 px-2 py-1 text-sm'
                       title={file.relativePath || file.path}
                       onClick={e => {
                         if (!isExpanded) {
@@ -1487,7 +1581,7 @@ function Chat() {
                   </div>
 
                   <Button
-                    variant='tertiary'
+                    variant='outline2'
                     className='rounded-full'
                     size='medium'
                     onClick={() => {
@@ -1523,7 +1617,7 @@ function Chat() {
                     searchBarVisible={true}
                   />
                   <Button
-                    variant='tertiary'
+                    variant='outline2'
                     className='rounded-full'
                     size='medium'
                     onClick={() => {
@@ -1538,7 +1632,7 @@ function Chat() {
                     ></i>
                   </Button>
                   {selectedModel?.thinking && (
-                    <Button variant='tertiary' className='rounded-full' size='medium' onClick={() => setThink(t => !t)}>
+                    <Button variant='outline2' className='rounded-full' size='medium' onClick={() => setThink(t => !t)}>
                       {think ? (
                         <i className='bx bxs-bulb text-xl text-yellow-400' aria-hidden='true'></i>
                       ) : (
@@ -1552,7 +1646,7 @@ function Chat() {
                     'Creating...'
                   ) : sendingState.streaming ? (
                     <Button
-                      variant='secondary'
+                      variant='outline2'
                       onClick={handleStopGeneration}
                       disabled={!streamState.streamingMessageId}
                     >
@@ -1562,12 +1656,12 @@ function Chat() {
                     'Sending...'
                   ) : (
                     <Button
-                      variant={canSendLocal && currentConversationId ? 'secondary' : 'tertiary'}
+                      variant={canSendLocal && currentConversationId ? 'outline2' : 'outline2'}
                       size='medium'
                       disabled={!canSendLocal || !currentConversationId}
                       onClick={() => handleSend(multiReplyCount)}
                     >
-                      <i className='bx bx-send text-xl' aria-hidden='true'></i>
+                      <i className='bx bx-send text-2xl' aria-hidden='true'></i>
                     </Button>
                   )}
                 </div>
@@ -1592,7 +1686,8 @@ function Chat() {
 
       {/* SEPARATOR */}
       <div
-        className='w-2 bg-neutral-300 dark:bg-secondary-700 hover:bg-secondary-500 cursor-col-resize select-none'
+        className='w-2 dark:bg-transparent bg-transparent hover:dark:bg-neutral-800 hover:bg-neutral-200 cursor-col-resize select-none'
+        style={{ border: 'none', outline: 'none', margin: 0, padding: 0 }}
         role='separator'
         aria-orientation='vertical'
         onMouseDown={() => setIsResizing(true)}

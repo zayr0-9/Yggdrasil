@@ -1,22 +1,31 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
 import { Project } from '../../../../../shared/types'
 import { apiCall } from '../../utils/api'
+import { ThunkExtraArgument } from '../../store/thunkExtra'
 
 // Fetch all projects
-export const fetchProjects = createAsyncThunk('projects/fetchProjects', async () => {
-  const response = await apiCall('/projects', {
-    method: 'GET',
-  })
-  return response as Project[]
-})
+export const fetchProjects = createAsyncThunk<Project[], void, { extra: ThunkExtraArgument }>(
+  'projects/fetchProjects',
+  async (_, { extra }) => {
+    const { auth } = extra
+    const response = await apiCall('/projects', auth.accessToken, {
+      method: 'GET',
+    })
+    return response as Project[]
+  }
+)
 
 // Fetch project by ID
-export const fetchProjectById = createAsyncThunk('projects/fetchProjectById', async (projectId: number | string) => {
-  const response = await apiCall(`/projects/${projectId}`, {
-    method: 'GET',
-  })
-  return response as Project
-})
+export const fetchProjectById = createAsyncThunk<Project, number | string, { extra: ThunkExtraArgument }>(
+  'projects/fetchProjectById',
+  async (projectId, { extra }) => {
+    const { auth } = extra
+    const response = await apiCall(`/projects/${projectId}`, auth.accessToken, {
+      method: 'GET',
+    })
+    return response as Project
+  }
+)
 
 // Create project
 export interface CreateProjectPayload {
@@ -26,13 +35,17 @@ export interface CreateProjectPayload {
   system_prompt?: string
 }
 
-export const createProject = createAsyncThunk('projects/createProject', async (payload: CreateProjectPayload) => {
-  const response = await apiCall('/projects', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
-  return response as Project
-})
+export const createProject = createAsyncThunk<Project, CreateProjectPayload, { extra: ThunkExtraArgument }>(
+  'projects/createProject',
+  async (payload, { extra }) => {
+    const { auth } = extra
+    const response = await apiCall('/projects', auth.accessToken, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+    return response as Project
+  }
+)
 
 // Update project
 export interface UpdateProjectPayload {
@@ -42,19 +55,27 @@ export interface UpdateProjectPayload {
   system_prompt?: string
 }
 
-export const updateProject = createAsyncThunk('projects/updateProject', async (payload: UpdateProjectPayload) => {
-  const { id, ...updateData } = payload
-  const response = await apiCall(`/projects/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(updateData),
-  })
-  return response as Project
-})
+export const updateProject = createAsyncThunk<Project, UpdateProjectPayload, { extra: ThunkExtraArgument }>(
+  'projects/updateProject',
+  async (payload, { extra }) => {
+    const { auth } = extra
+    const { id, ...updateData } = payload
+    const response = await apiCall(`/projects/${id}`, auth.accessToken, {
+      method: 'PUT',
+      body: JSON.stringify(updateData),
+    })
+    return response as Project
+  }
+)
 
 // Delete project
-export const deleteProject = createAsyncThunk('projects/deleteProject', async (projectId: number | string) => {
-  await apiCall(`/projects/${projectId}`, {
-    method: 'DELETE',
-  })
-  return projectId
-})
+export const deleteProject = createAsyncThunk<number | string, number | string, { extra: ThunkExtraArgument }>(
+  'projects/deleteProject',
+  async (projectId, { extra }) => {
+    const { auth } = extra
+    await apiCall(`/projects/${projectId}`, auth.accessToken, {
+      method: 'DELETE',
+    })
+    return projectId
+  }
+)

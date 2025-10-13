@@ -255,8 +255,16 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
     }
 
     const handleSave = () => {
-      if (onEdit && editContent.trim() !== content) {
-        onEdit(id, editContent.trim())
+      const trimmedContent = editContent.trim()
+
+      // Prevent saving empty messages
+      if (!trimmedContent) {
+        console.warn('Cannot save empty message')
+        return
+      }
+
+      if (onEdit && trimmedContent !== content) {
+        onEdit(id, trimmedContent)
       }
       dispatch(chatSliceActions.editingBranchSet(false))
       setEditingState(false)
@@ -388,7 +396,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
         case 'user':
           return {
             container: useColored
-              ? 'bg-gray-800 border-l-4 border-l-yellow-500 dark:border-l-yPurple-400 bg-neutral-50 dark:bg-neutral-900'
+              ? 'bg-gray-800 border-l-1 border-l-yellow-500 dark:border-l-yPurple-400 bg-neutral-50 dark:bg-neutral-900'
               : transparentContainer,
             role: 'text-indigo-800 dark:text-yPurple-50',
             roleText: 'User',
@@ -396,7 +404,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
         case 'assistant':
           return {
             container: useColored
-              ? 'bg-gray-850 border-l-4 border-l-blue-500  dark:border-l-yBrown-400 bg-neutral-50  dark:bg-neutral-900'
+              ? 'bg-gray-850 border-l-1 border-l-blue-500  dark:border-l-yBrown-400 bg-neutral-50  dark:bg-neutral-900'
               : transparentContainer,
             role: 'text-lime-800 dark:text-yBrown-50',
             roleText: 'Assistant',
@@ -404,7 +412,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
         case 'system':
           return {
             container: useColored
-              ? 'bg-gray-800 border-l-4 border-l-purple-500 bg-purple-50 dark:bg-neutral-800'
+              ? 'bg-gray-800 border-l-1 border-l-purple-500 bg-purple-50 dark:bg-neutral-800'
               : transparentContainer,
             role: 'text-purple-400',
             roleText: 'System',
@@ -473,7 +481,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
     return (
       <div
         id={`message-${id}`}
-        className={`group p-4 mb-4 ${styles.container} ${width} transition-all duration-200 hover:bg-opacity-80 ${className ?? ''}`}
+        className={`group p-4 mb-4 ${styles.container} ${width} transition-all duration-200 rounded-xl hover:bg-opacity-80  ${className ?? ''}`}
       >
         {/* Header with role and actions */}
         <div className='flex items-center justify-between mb-3'>
@@ -635,6 +643,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
               onChange={setEditContent}
               placeholder='Edit your message...'
               minRows={2}
+              maxRows={40}
               maxLength={20000}
               autoFocus
               width='w-full'

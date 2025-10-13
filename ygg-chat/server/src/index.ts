@@ -1,19 +1,22 @@
 import cors from 'cors'
 import dotenv from 'dotenv'
+import path from 'path'
+
+// Load environment variables FIRST, before any other imports
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') })
+
 import express from 'express'
 import fs from 'fs'
 import { createServer } from 'http'
-import path from 'path'
 import { env } from 'process'
 import { WebSocket, WebSocketServer } from 'ws'
-import { db, initializeDatabase, initializeStatements, rebuildFTSIndex } from './database/db'
+import { db, initializeDatabase, initializeStatements } from './database/db'
 import chatRoutes from './routes/chat'
 import settingsRoutes from './routes/settings'
+import stripeRoutes from './routes/stripe'
 import { stripMarkdownToText } from './utils/markdownStripper'
 import { preloadModelPricing } from './utils/openrouter'
 import tools from './utils/tools/index'
-
-dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') })
 
 const app = express()
 const server = createServer(app)
@@ -141,6 +144,11 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization'], // Accept JWT Authorization header from client
   })
 )
+
+// IMPORTANT: Register Stripe webhook BEFORE express.json() middleware
+// Webhook signature verification requires raw body, but express.json() parses it
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeRoutes)
+
 app.use(express.json({ limit: '25mb' }))
 app.use(express.urlencoded({ extended: true, limit: '25mb' }))
 
@@ -159,6 +167,7 @@ if (env.VITE_ENVIRONMENT === 'web') {
   app.use('/api', chatRoutes)
 }
 app.use('/api/settings', settingsRoutes)
+app.use('/api/stripe', stripeRoutes)
 app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')))
 
 // Tools endpoint
@@ -188,7 +197,7 @@ if (!fs.existsSync(dbPath)) {
 
 initializeDatabase()
 console.log('Rebuilding FTS index on startup...')
-rebuildFTSIndex()
+// rebuildFTSIndex()
 console.log('FTS index rebuilt.')
 initializeStatements()
 

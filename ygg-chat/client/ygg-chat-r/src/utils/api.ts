@@ -33,8 +33,14 @@ export const apiCall = async <T>(endpoint: string, accessToken: string | null, o
 
 // Convenience methods for common HTTP operations
 export const api = {
-  get: <T>(endpoint: string, accessToken: string | null, options?: RequestInit) =>
-    apiCall<T>(endpoint, accessToken, { ...options, method: 'GET' }),
+  get: <T>(endpoint: string, accessToken: string | null, options?: RequestInit) => {
+    // Log all conversation endpoint calls to track duplicate requests
+    if (endpoint.includes('/conversations') && !endpoint.includes('/messages')) {
+      console.log(`[api.get] 🔴 CONVERSATION API CALL: ${endpoint}`)
+      console.log('[api.get] Stack trace:', new Error().stack)
+    }
+    return apiCall<T>(endpoint, accessToken, { ...options, method: 'GET' })
+  },
 
   post: <T>(endpoint: string, accessToken: string | null, data?: any, options?: RequestInit) =>
     apiCall<T>(endpoint, accessToken, {
@@ -104,3 +110,131 @@ export const patchConversationContext = (conversationId: ConversationId, context
 
 export const cloneConversation = (conversationId: ConversationId, accessToken: string | null) =>
   api.post<{ id: ConversationId; title: string; project_id: ConversationId | null }>(`/conversations/${conversationId}/clone`, accessToken)
+
+// Stripe Payment API functions
+export interface SubscriptionStatus {
+  tier: 'high' | 'mid' | 'low' | null
+  status: 'active' | 'canceled' | 'past_due' | null
+  currentPeriodEnd: string | null
+  creditsBalance: number
+  stripeCustomerId: string | null
+  stripeSubscriptionId: string | null
+}
+
+export interface TierInfo {
+  name: string
+  price: number
+  priceId: string
+  credits: number
+  features: string[]
+}
+
+export interface PricingInfo {
+  tiers: {
+    high: TierInfo
+    mid: TierInfo
+    low: TierInfo
+  }
+}
+
+export interface CheckoutSessionResponse {
+  sessionId: string
+  url: string
+}
+
+export interface CreditTransaction {
+  userId: number
+  amount: number
+  reason: string
+  balanceAfter: number
+  createdAt: string
+}
+
+/**
+ * Create a Stripe Checkout Session for subscription
+ */
+export const createCheckoutSession = async (
+  userId: number,
+  tier: 'high' | 'mid' | 'low',
+  email?: string
+): Promise<CheckoutSessionResponse> => {
+  const response = await fetch(`${API_BASE}/stripe/create-checkout-session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userId, tier, email }),
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to create checkout session' }))
+    throw new Error(errorData.error || 'Failed to create checkout session')
+  }
+
+  return response.json()
+}
+
+/**
+ * Get user's subscription status and credit balance
+ */
+export const getSubscriptionStatus = async (userId: number): Promise<SubscriptionStatus> => {
+  const response = await fetch(`${API_BASE}/stripe/subscription-status?userId=${userId}`)
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to get subscription status' }))
+    throw new Error(errorData.error || 'Failed to get subscription status')
+  }
+
+  return response.json()
+}
+
+/**
+ * Cancel user's subscription (at period end)
+ */
+export const cancelSubscription = async (userId: number): Promise<{ success: boolean; message: string }> => {
+  const response = await fetch(`${API_BASE}/stripe/cancel-subscription`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userId }),
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to cancel subscription' }))
+    throw new Error(errorData.error || 'Failed to cancel subscription')
+  }
+
+  return response.json()
+}
+
+/**
+ * Get user's credit transaction history
+ */
+export const getCreditHistory = async (
+  userId: number,
+  limit: number = 100
+): Promise<{ history: CreditTransaction[] }> => {
+  const response = await fetch(`${API_BASE}/stripe/credit-history?userId=${userId}&limit=${limit}`)
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to get credit history' }))
+    throw new Error(errorData.error || 'Failed to get credit history')
+  }
+
+  return response.json()
+}
+
+/**
+ * Get pricing information for all subscription tiers
+ */
+export const getPricingInfo = async (): Promise<PricingInfo> => {
+  const response = await fetch(`${API_BASE}/stripe/pricing-info`)
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to get pricing info' }))
+    throw new Error(errorData.error || 'Failed to get pricing info')
+  }
+
+  return response.json()
+}

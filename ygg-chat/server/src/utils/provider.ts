@@ -136,6 +136,9 @@ export async function generateResponse(
     case 'openai':
       return openaiGenerate(aiSdkForOpenAI, onChunk, providerModel)
     case 'openrouter': {
+      console.log(`🔴 [provider.ts] Calling openrouterGenerate with model: ${providerModel}`)
+      console.log(`🔴 [provider.ts] abortSignal present: ${!!abortSignal}, aborted: ${abortSignal?.aborted}`)
+      console.log(`🔴 [provider.ts] messageId: ${messageId}`)
       // Forward attachments for OpenRouter (AI SDK OpenAI adapter will translate file parts)
       const orAttachments = (attachments || []).map(a => ({ mimeType: a.mimeType, filePath: a.filePath }))
       return openrouterGenerate(

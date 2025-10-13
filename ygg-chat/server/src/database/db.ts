@@ -375,6 +375,68 @@ export function initializeDatabase() {
     // Column already exists, ignore the error
   }
 
+  // Stripe subscription and credits schema extensions
+  // Add Stripe customer ID column
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN stripe_customer_id TEXT`)
+  } catch (error) {
+    // Column already exists, ignore the error
+  }
+
+  // Add Stripe subscription ID column
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT`)
+  } catch (error) {
+    // Column already exists, ignore the error
+  }
+
+  // Add subscription tier column
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN subscription_tier TEXT CHECK (subscription_tier IN ('high', 'mid', 'low', NULL))`)
+  } catch (error) {
+    // Column already exists, ignore the error
+  }
+
+  // Add subscription status column
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN subscription_status TEXT CHECK (subscription_status IN ('active', 'canceled', 'past_due', NULL))`)
+  } catch (error) {
+    // Column already exists, ignore the error
+  }
+
+  // Add credits balance column
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN credits_balance INTEGER DEFAULT 0`)
+  } catch (error) {
+    // Column already exists, ignore the error
+  }
+
+  // Add current period end column
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN current_period_end DATETIME`)
+  } catch (error) {
+    // Column already exists, ignore the error
+  }
+
+  // Credit ledger table for audit trail
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS credit_ledger (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      amount INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      balance_after INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `)
+
+  // Create index for credit ledger
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_credit_ledger_user_id ON credit_ledger(user_id);
+    CREATE INDEX IF NOT EXISTS idx_credit_ledger_created_at ON credit_ledger(created_at);
+  `)
+
   // Initialize prepared statements after tables exist
   initializeStatements()
 
@@ -398,11 +460,51 @@ export function initializeStatements() {
     updateUser: db.prepare('UPDATE users SET username = ? WHERE id = ?'),
     deleteUser: db.prepare('DELETE FROM users WHERE id = ?'),
 
+    // User subscription and credits operations
+    updateUserSubscription: db.prepare(`
+      UPDATE users
+      SET stripe_customer_id = ?,
+          stripe_subscription_id = ?,
+          subscription_tier = ?,
+          subscription_status = ?,
+          current_period_end = ?
+      WHERE id = ?
+    `),
+    updateUserCredits: db.prepare('UPDATE users SET credits_balance = ? WHERE id = ?'),
+    getUserCredits: db.prepare('SELECT credits_balance FROM users WHERE id = ?'),
+
+    // Credit ledger operations
+    createCreditLedgerEntry: db.prepare(`
+      INSERT INTO credit_ledger (user_id, amount, reason, balance_after)
+      VALUES (?, ?, ?, ?)
+    `),
+    getCreditLedgerByUser: db.prepare(`
+      SELECT * FROM credit_ledger
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `),
+    getTotalCreditsUsedByUser: db.prepare(`
+      SELECT SUM(ABS(amount)) as total_credits_used
+      FROM credit_ledger
+      WHERE user_id = ? AND amount < 0
+    `),
+
     //Projects
     createProject: db.prepare(
       'INSERT INTO projects (name, created_at, updated_at, context, system_prompt) VALUES (?, ?, ?, ?, ?)'
     ),
     getAllProjects: db.prepare('SELECT * FROM projects ORDER BY created_at DESC'),
+    getProjectsSortedByLatestConversation: db.prepare(`
+      SELECT
+        p.*,
+        MAX(c.updated_at) as latest_conversation_updated_at
+      FROM projects p
+      LEFT JOIN conversations c ON c.project_id = p.id
+      GROUP BY p.id
+      ORDER BY
+        COALESCE(MAX(c.updated_at), p.updated_at, p.created_at) DESC
+    `),
     getProjectById: db.prepare('SELECT * FROM projects WHERE id = ?'),
     updateProject: db.prepare(
       'UPDATE projects SET name = ?, updated_at = ?, context = ?, system_prompt = ? WHERE id = ?'

@@ -39,6 +39,10 @@ const conversationSlice = createSlice({
       state.items = []
       state.error = null
     },
+    // Sync conversations from React Query to Redux
+    conversationsLoaded: (state, action: PayloadAction<Conversation[]>) => {
+      state.items = action.payload
+    },
     activeConversationIdSet: (state, action: PayloadAction<ConversationId | null>) => {
       state.activeConversationId = action.payload
     },
@@ -158,6 +162,6 @@ const conversationSlice = createSlice({
   },
 })
 
-export const { conversationsCleared, activeConversationIdSet, systemPromptSet, updateSystemPrompt, convContextSet } =
+export const { conversationsCleared, conversationsLoaded, activeConversationIdSet, systemPromptSet, updateSystemPrompt, convContextSet } =
   conversationSlice.actions
 export default conversationSlice.reducer

@@ -345,6 +345,11 @@ export async function generateResponse(
   userId?: number,
   tool_detail: boolean = false
 ): Promise<void> {
+  console.log(`🔴 [openrouter.ts] generateResponse called`)
+  console.log(`🔴 [openrouter.ts] model: ${model}, messageId: ${messageId}`)
+  console.log(`🔴 [openrouter.ts] abortSignal present: ${!!abortSignal}, aborted: ${abortSignal?.aborted}`)
+  console.log(`🔴 [openrouter.ts] think: ${think}, userId: ${userId}`)
+
   const MAX_STEPS = 400 // Reduced to prevent infinite loops with problematic models
   let stepCount = 0
   let conversationMessages = [...messages]
@@ -355,6 +360,12 @@ export async function generateResponse(
   let totalReasoningTokens = 0
   let totalCostUSD = 0
   let totalOpenRouterCredits = 0
+
+  // Move these outside the loop to persist across iterations and during abort
+  let finalUsage: any = null
+  let openrouterCreditsUsed = 0
+  let assistantContent = ''
+  let costAlreadyLogged = false // Prevent double-logging when aborted
 
   // Convert tools to OpenAI format
   const openaiTools = tools
@@ -390,12 +401,34 @@ export async function generateResponse(
   while (stepCount < MAX_STEPS) {
     stepCount++
 
+    // Reset assistant content for this step (but keep finalUsage to track across steps)
+    assistantContent = ''
+
     if (abortSignal?.aborted) {
+      console.log(`🛑 Generation aborted detected at start of step ${stepCount}. Signal aborted: ${abortSignal.aborted}`)
+      // Log partial usage if available before returning (only if not already logged)
+      if (finalUsage && !costAlreadyLogged) {
+        try {
+          const totals = {
+            totalPromptTokens,
+            totalCompletionTokens,
+            totalReasoningTokens,
+            totalCostUSD,
+            totalOpenRouterCredits,
+          }
+          await logGenerationCost(model, stepCount, finalUsage, totals)
+          totalPromptTokens = totals.totalPromptTokens
+          totalCompletionTokens = totals.totalCompletionTokens
+          totalReasoningTokens = totals.totalReasoningTokens
+          totalCostUSD = totals.totalCostUSD
+          totalOpenRouterCredits = totals.totalOpenRouterCredits
+          console.log(`📊 Logged partial cost on abort: $${totals.totalCostUSD.toFixed(6)}`)
+        } catch (logError) {
+          console.error('Error logging partial usage on abort:', logError)
+        }
+      }
       return
     }
-
-    let finalUsage: any = null
-    let openrouterCreditsUsed = 0
 
     // Prepare messages for this step
     let formattedMessages: any[] = conversationMessages.map(msg => ({
@@ -408,8 +441,22 @@ export async function generateResponse(
       formattedMessages = await handleImageAttachments(formattedMessages, attachments)
     }
 
+    // Create synchronous abort flag that will be set via event listener (outside try block for catch access)
+    let abortRequested = false
+
+    // Listen for abort event to set flag synchronously
+    if (abortSignal) {
+      abortSignal.addEventListener('abort', () => {
+        console.log(`🔴 [openrouter.ts] Abort event fired, setting abortRequested flag`)
+        abortRequested = true
+      })
+    }
+
     try {
       const openrouterClient = await getOpenRouterClient()
+
+      console.log(`🔴 [openrouter.ts] Step ${stepCount}: About to create stream`)
+      console.log(`🔴 [openrouter.ts] abortSignal before stream create: present=${!!abortSignal}, aborted=${abortSignal?.aborted}`)
 
       const stream: any = await openrouterClient.chat.completions.create(
         {
@@ -426,20 +473,25 @@ export async function generateResponse(
         }
       )
 
-      let assistantContent = ''
+      console.log(`🔴 [openrouter.ts] Stream created, entering stream loop`)
+
       let toolCalls: Array<{ id: string; name: string; arguments: string }> = []
       let currentToolCall: any = null
       let toolCallBuffer = ''
 
       // Process the stream
       for await (const chunk of stream) {
-        if (abortSignal?.aborted) break
-
-        // console.log('chunk id #######', chunk.id)
+        // Check for abort FIRST - throw immediately to force exit the for-await loop
+        if (abortRequested) {
+          console.log(`🛑 Generation aborted detected via flag, throwing to exit loop`)
+          const error: any = new Error('Generation aborted by user')
+          error.name = 'AbortError'
+          throw error
+        }
 
         // Handle usage information - this contains the cost according to OpenRouter docs
         if (chunk.usage) {
-          finalUsage = chunk.usage.cost + finalUsage // Store for final calculation
+          finalUsage = chunk.usage // Store/update usage incrementally
           // OpenRouter provides cost in credits via chunk.usage.cost
           if (chunk.usage.cost !== undefined) {
             openrouterCreditsUsed = parseFloat(chunk.usage.cost) || 0
@@ -447,6 +499,8 @@ export async function generateResponse(
             console.log(`📊 Full usage object:`, JSON.stringify(chunk.usage, null, 2))
           }
         }
+
+        // console.log('chunk id #######', chunk.id)
 
         const choice = chunk.choices?.[0]
         if (!choice) continue
@@ -605,7 +659,43 @@ export async function generateResponse(
         break
       }
     } catch (error: any) {
-      if (abortSignal?.aborted || error?.name === 'AbortError') {
+      const isAbort =
+        abortRequested ||
+        abortSignal?.aborted ||
+        error?.name === 'AbortError' ||
+        error?.name === 'APIUserAbortError' ||
+        String(error || '')
+          .toLowerCase()
+          .includes('abort')
+
+      if (isAbort) {
+        console.log(`🛑 Generation aborted detected in catch block. Flag: ${abortRequested}, Error: ${error?.name || error?.message || error}`)
+        // Log partial usage or estimate before returning on abort
+        if (!finalUsage) {
+          finalUsage = createEstimatedUsage(formattedMessages, assistantContent)
+          console.log('⚠️ Generation aborted - using estimated usage for cost calculation')
+        }
+        if (finalUsage && !costAlreadyLogged) {
+          try {
+            const totals = {
+              totalPromptTokens,
+              totalCompletionTokens,
+              totalReasoningTokens,
+              totalCostUSD,
+              totalOpenRouterCredits,
+            }
+            await logGenerationCost(model, stepCount, finalUsage, totals)
+            totalPromptTokens = totals.totalPromptTokens
+            totalCompletionTokens = totals.totalCompletionTokens
+            totalReasoningTokens = totals.totalReasoningTokens
+            totalCostUSD = totals.totalCostUSD
+            totalOpenRouterCredits = totals.totalOpenRouterCredits
+            costAlreadyLogged = true
+            console.log(`📊 Logged partial cost on abort (error): $${totals.totalCostUSD.toFixed(6)}`)
+          } catch (logError) {
+            console.error('Error logging usage on abort error:', logError)
+          }
+        }
         return
       }
 
@@ -634,22 +724,52 @@ export async function generateResponse(
           )
 
           // Process the stream without tools (simplified version)
-          let assistantContent = ''
+          assistantContent = '' // Reset for retry
           let chunkCount = 0
 
           for await (const chunk of stream) {
             chunkCount++
-            if (abortSignal?.aborted) break
 
             if (chunk.usage) {
-              finalUsage = chunk.usage.cost + finalUsage
-              console.log('------------- chunk usage wihotut tool ', chunk.usage.cost)
+              finalUsage = chunk.usage // Store/update usage incrementally
+              console.log('------------- chunk usage without tool ', chunk.usage.cost)
 
               // Capture cost from retry attempt as well
               if (chunk.usage.cost !== undefined) {
                 openrouterCreditsUsed = parseFloat(chunk.usage.cost) || 0
                 console.log(`💰 OpenRouter cost found in retry chunk: ${chunk.usage.cost} credits`)
               }
+            }
+
+            // Check for abort after capturing usage
+            if (abortSignal?.aborted) {
+              console.log(`🛑 Abort signal detected in retry stream loop`)
+              // Log partial usage before breaking, or estimate if no usage received
+              if (!finalUsage) {
+                finalUsage = createEstimatedUsage(formattedMessages, assistantContent)
+                console.log('⚠️ Generation aborted (retry) - using estimated usage for cost calculation')
+              } else {
+                console.log('✓ Partial usage data captured before abort (retry)')
+              }
+              try {
+                const totals = {
+                  totalPromptTokens,
+                  totalCompletionTokens,
+                  totalReasoningTokens,
+                  totalCostUSD,
+                  totalOpenRouterCredits,
+                }
+                await logGenerationCost(model, stepCount, finalUsage, totals)
+                totalPromptTokens = totals.totalPromptTokens
+                totalCompletionTokens = totals.totalCompletionTokens
+                totalReasoningTokens = totals.totalReasoningTokens
+                totalCostUSD = totals.totalCostUSD
+                totalOpenRouterCredits = totals.totalOpenRouterCredits
+                costAlreadyLogged = true // Mark as logged to prevent double-logging in finally
+              } catch (logError) {
+                console.error('Error logging partial usage on abort in retry stream:', logError)
+              }
+              break
             }
 
             const choice = chunk.choices?.[0]
@@ -695,27 +815,38 @@ export async function generateResponse(
       }
     } finally {
       // Log final generation cost summary for this step (runs regardless of success/error)
-      if (finalUsage) {
-        try {
-          const totals = {
-            totalPromptTokens,
-            totalCompletionTokens,
-            totalReasoningTokens,
-            totalCostUSD,
-            totalOpenRouterCredits,
-          }
-          await logGenerationCost(model, stepCount, finalUsage, totals)
+      // Skip if already logged during abort handling
+      if (!costAlreadyLogged) {
+        // If no usage data received but we have content, create estimate
+        if (!finalUsage && assistantContent) {
+          finalUsage = createEstimatedUsage(formattedMessages, assistantContent)
+          console.log('⚠️ No usage data received - using estimated usage for cost calculation')
+        }
 
-          // Update the totals back to the outer scope
-          totalPromptTokens = totals.totalPromptTokens
-          totalCompletionTokens = totals.totalCompletionTokens
-          totalReasoningTokens = totals.totalReasoningTokens
-          totalCostUSD = totals.totalCostUSD
-          totalOpenRouterCredits = totals.totalOpenRouterCredits
-        } catch (logError) {
-          console.error('Error logging generation cost:', logError)
+        if (finalUsage) {
+          try {
+            const totals = {
+              totalPromptTokens,
+              totalCompletionTokens,
+              totalReasoningTokens,
+              totalCostUSD,
+              totalOpenRouterCredits,
+            }
+            await logGenerationCost(model, stepCount, finalUsage, totals)
+
+            // Update the totals back to the outer scope
+            totalPromptTokens = totals.totalPromptTokens
+            totalCompletionTokens = totals.totalCompletionTokens
+            totalReasoningTokens = totals.totalReasoningTokens
+            totalCostUSD = totals.totalCostUSD
+            totalOpenRouterCredits = totals.totalOpenRouterCredits
+          } catch (logError) {
+            console.error('Error logging generation cost:', logError)
+          }
         }
       }
+      // Reset the flag for next iteration
+      costAlreadyLogged = false
     }
   }
 

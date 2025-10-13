@@ -1,15 +1,18 @@
-import React, { createContext, useEffect, useState } from 'react'
+import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { updateThunkExtraAuth } from '../store/thunkExtra'
+import { getCachedClaims, clearClaimsCache, isTokenValid, refreshTokenIfNeeded, getSessionFromStorage } from '../lib/jwtUtils'
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null
   session: Session | null
   accessToken: string | null
   userId: string | null
   loading: boolean
   signOut: () => Promise<void>
+  getClaims: () => Promise<Record<string, unknown> | null>
+  isTokenValid: () => Promise<boolean>
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -18,73 +21,162 @@ interface AuthProviderProps {
   children: React.ReactNode
 }
 
+interface AuthState {
+  user: User | null
+  session: Session | null
+  accessToken: string | null
+  userId: string | null
+  loading: boolean
+}
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
-  const [accessToken, setAccessToken] = useState<string | null>(null)
-  const [userId, setUserId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Use single state object to batch updates and prevent multiple re-renders
+  const [authState, setAuthState] = useState<AuthState>({
+    user: null,
+    session: null,
+    accessToken: null,
+    userId: null,
+    loading: true,
+  })
+
+  // JWT Verification Strategy (ASYMMETRIC):
+  // 1. getSession() reads from localStorage ONLY (no network calls)
+  // 2. getClaims() verifies JWT locally using JWKS public keys (no /auth/v1/user calls)
+  // 3. Manual token refresh via refreshSession() when needed (calls /auth/v1/token only)
+  // 4. onAuthStateChange listener for reactivity (enables navigation updates without validation network calls)
+
+  // Update auth state helper
+  const updateAuthState = useCallback((newSession: Session | null) => {
+    const newAccessToken = newSession?.access_token ?? null
+    const newUserId = newSession?.user?.id ?? null
+
+    setAuthState({
+      user: newSession?.user ?? null,
+      session: newSession,
+      accessToken: newAccessToken,
+      userId: newUserId,
+      loading: false,
+    })
+
+    updateThunkExtraAuth(newAccessToken, newUserId)
+
+    console.log('[AuthContext] Session updated:', newUserId ?? 'none')
+  }, [])
 
   useEffect(() => {
-    // Get initial session
+    // STEP 1: Read initial session from localStorage ONLY (ZERO network calls)
     const initializeAuth = async () => {
       try {
-        const { data: { session: initialSession } } = await supabase.auth.getSession()
-        const newAccessToken = initialSession?.access_token ?? null
-        const newUserId = initialSession?.user?.id ?? null
+        console.log('[AuthContext] Initializing - reading from localStorage...')
+        const initialSession = getSessionFromStorage()
 
-        setSession(initialSession)
-        setUser(initialSession?.user ?? null)
-        setAccessToken(newAccessToken)
-        setUserId(newUserId)
+        if (initialSession) {
+          // STEP 2: Check if token needs refresh (but don't validate yet)
+          // This checks expiry time locally without network calls
+          const needsRefresh = await refreshTokenIfNeeded()
 
-        // Update Redux thunk extra argument
-        updateThunkExtraAuth(newAccessToken, newUserId)
-
-        console.log('[AuthContext] Initial session loaded:', newUserId ?? 'none')
+          if (needsRefresh) {
+            console.log('[AuthContext] Token was refreshed during init')
+            // Re-read session after refresh (from localStorage)
+            const refreshedSession = getSessionFromStorage()
+            updateAuthState(refreshedSession)
+          } else {
+            updateAuthState(initialSession)
+          }
+        } else {
+          console.log('[AuthContext] No session found in localStorage')
+          updateAuthState(null)
+        }
       } catch (error) {
-        console.error('[AuthContext] Failed to get initial session:', error)
-      } finally {
-        setLoading(false)
+        console.error('[AuthContext] Failed to initialize auth:', error)
+        setAuthState(prev => ({ ...prev, loading: false }))
       }
     }
 
     initializeAuth()
 
-    // Listen for auth changes (single listener for entire app)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      const newAccessToken = newSession?.access_token ?? null
-      const newUserId = newSession?.user?.id ?? null
+    // STEP 3: Set up onAuthStateChange listener to detect auth changes
+    // This listener enables navigation updates without triggering network calls for validation
+    // JWT validation remains local via getCachedClaims()
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[AuthContext] Auth state changed:', event)
 
-      setSession(newSession)
-      setUser(newSession?.user ?? null)
-      setAccessToken(newAccessToken)
-      setUserId(newUserId)
+      // Update state for SIGNED_IN and SIGNED_OUT events
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        updateAuthState(session)
 
-      // Update Redux thunk extra argument whenever auth changes
-      updateThunkExtraAuth(newAccessToken, newUserId)
-
-      console.log('[AuthContext] Auth state changed:', newUserId ?? 'signed out')
+        // Clear claims cache on sign out
+        if (event === 'SIGNED_OUT') {
+          clearClaimsCache()
+        }
+      }
     })
 
-    // Cleanup subscription on unmount
+    // STEP 4: Set up periodic token refresh check (every 30 seconds)
+    // This ensures we refresh before expiry without relying on onAuthStateChange
+    const refreshInterval = setInterval(async () => {
+      try {
+        const needsRefresh = await refreshTokenIfNeeded()
+        if (needsRefresh) {
+          console.log('[AuthContext] Token refreshed by interval')
+          const refreshedSession = getSessionFromStorage()
+          updateAuthState(refreshedSession)
+        }
+      } catch (error) {
+        console.error('[AuthContext] Refresh interval error:', error)
+      }
+    }, 30000) // Check every 30 seconds
+
+    // Cleanup interval and listener on unmount
     return () => {
+      console.log('[AuthContext] Cleaning up refresh interval and auth listener')
+      clearInterval(refreshInterval)
       subscription.unsubscribe()
     }
-  }, [])
+  }, [updateAuthState])
 
-  const signOut = async () => {
+  // Listen for storage events (for multi-tab synchronization)
+  // This handles sign-in/sign-out in other tabs
+  useEffect(() => {
+    const handleStorageChange = async (e: StorageEvent) => {
+      if (e.key === 'supabase-auth-token' || e.key === 'supabase.auth.token') {
+        console.log('[AuthContext] Storage changed - reloading session from localStorage')
+        const session = getSessionFromStorage()
+        updateAuthState(session)
+        if (!session) {
+          clearClaimsCache()
+        }
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [updateAuthState])
+
+  // Memoize signOut to prevent recreating on every render
+  const signOut = useCallback(async () => {
+    clearClaimsCache()
     await supabase.auth.signOut()
-  }
+    updateAuthState(null)
+  }, [updateAuthState])
 
-  const value: AuthContextType = {
-    user,
-    session,
-    accessToken,
-    userId,
-    loading,
-    signOut,
-  }
+  // Memoize context value to prevent re-render cascades
+  // Only updates when authState or signOut actually changes
+  const value: AuthContextType = useMemo(
+    () => ({
+      user: authState.user,
+      session: authState.session,
+      accessToken: authState.accessToken,
+      userId: authState.userId,
+      loading: authState.loading,
+      signOut,
+      getClaims: getCachedClaims,
+      isTokenValid,
+    }),
+    [authState, signOut]
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

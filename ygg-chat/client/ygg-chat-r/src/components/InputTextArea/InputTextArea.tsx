@@ -27,6 +27,7 @@ interface TextAreaProps {
   showCharCount?: boolean
   outline?: boolean
   onProcessMessage?: (processMessage: (message: string) => string) => void
+  variant?: 'primary' | 'outline'
 }
 
 export const InputTextArea: React.FC<TextAreaProps> = ({
@@ -47,6 +48,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
   showCharCount = false,
   outline = false,
   onProcessMessage,
+  variant = 'primary',
   ...rest
 }) => {
   const dispatch = useDispatch()
@@ -430,14 +432,21 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
   //   }
   // }, [onProcessMessage, selectedFilesForChat])
 
+  const variantStyles = {
+    primary:
+      'text-stone-900 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-secondary-600 outline-none focus:border-secondary-600 focus:ring-1 focus:ring-opacity-50 dark:focus:ring-secondary-600',
+    outline:
+      'px-4 py-3 rounded-3xl overflow-hidden bg-transparent text-neutral-900 dark:text-neutral-300 border border-neutral-300 focus:border-neutral-400 dark:border-neutral-700 outline-none  dark:border-neutral-700 dark:focus:border-neutral-600 ',
+  }
+
   const baseStyles = outline
-    ? `${width} px-4 py-3 rounded-xl transition-all duration-200 overflow-hidden bg-transparent border-2`
+    ? `${width} px-4 py-3 overflow-hidden bg-transparent ${variantStyles[variant]}`
     : `${width} px-4 py-3 rounded-xl transition-all duration-200 overflow-hidden bg-neutral-50 dark:bg-yBlack-900`
   const labelClasses = state === 'disabled' ? 'opacity-40' : ''
 
   const stateStyles = outline
     ? {
-        default: `${baseStyles} text-stone-900 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-secondary-600 outline-none focus:border-secondary-600 focus:ring-1 focus:ring-opacity-50 dark:focus:ring-secondary-600`,
+        default: `${baseStyles}`,
         error: `${baseStyles} text-stone-800 dark:text-stone-200 placeholder-neutral-700 dark:placeholder-neutral-200 border-red-500 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500 focus:ring-opacity-50`,
         disabled: `${baseStyles} text-stone-800 dark:text-stone-200 border-gray-700 placeholder-neutral-700 dark:placeholder-neutral-200 cursor-not-allowed`,
       }
@@ -448,7 +457,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
       }
 
   return (
-    <div className={`flex flex-col gap-1 ${className}`}>
+    <div className={`flex flex-col gap-3`}>
       {label && (
         <label
           htmlFor={id}
@@ -458,7 +467,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
         </label>
       )}
 
-      <div className='relative'>
+      <div className={`relative`}>
         <textarea
           ref={textareaRef}
           id={id}
@@ -474,7 +483,7 @@ export const InputTextArea: React.FC<TextAreaProps> = ({
           onPaste={handlePaste}
           disabled={state === 'disabled'}
           // maxLength={maxLength}
-          className={`${stateStyles[state]} thin-scrollbar resize-none ${dragOver ? 'border-blue-500 ring-2 ring-blue-500' : ''} ${className}`}
+          className={`${stateStyles[state]}  thin-scrollbar resize-none ${dragOver ? 'border-blue-500 ring-2 ring-blue-500' : ''} ${className}`}
           aria-invalid={state === 'error'}
           aria-describedby={state === 'error' && errorMessage ? errorId : undefined}
           autoFocus={autoFocus}
