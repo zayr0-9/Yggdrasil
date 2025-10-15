@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "migrate": "ts-node src/database/runMigration.ts",
+    "update-projects": "ts-node src/database/updateProjectsUserId.ts",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "dev:migrate": "npm run migrate && npm run dev",
     "build": "tsc",

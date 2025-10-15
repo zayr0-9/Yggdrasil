@@ -1,8 +1,8 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
-import { apiCall } from '../../utils/api'
-import { SearchResult } from './searchTypes'
 import { ProjectId } from '../../../../../shared/types'
 import { ThunkExtraArgument } from '../../store/thunkExtra'
+import { apiCall } from '../../utils/api'
+import { SearchResult } from './searchTypes'
 
 // Async thunk to perform search against server API
 export const performSearch = createAsyncThunk<
@@ -12,7 +12,10 @@ export const performSearch = createAsyncThunk<
 >('search/perform', async (query, { extra, rejectWithValue }) => {
   try {
     const { auth } = extra
-    const raw: any[] = await apiCall<any[]>(`/search?q=${encodeURIComponent(query)}`, auth.accessToken)
+    const raw: any[] = await apiCall<any[]>(
+      `/search?q=${encodeURIComponent(query)}&userId=${auth.userId}`,
+      auth.accessToken
+    )
     const data: SearchResult[] = raw.map(r => ({
       conversationId: r.conversation_id ?? r.conversationId,
       messageId: r.messageId ?? r.id?.toString(),

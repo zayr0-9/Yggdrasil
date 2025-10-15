@@ -34,6 +34,7 @@ export function initializeDatabase() {
     name TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
     context TEXT,
     system_prompt TEXT
   )`)

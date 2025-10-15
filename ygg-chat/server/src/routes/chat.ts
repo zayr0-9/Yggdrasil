@@ -26,7 +26,7 @@ import { getToolByName, updateToolEnabled } from '../utils/tools/index'
 
 const router = express.Router()
 
-// Global search endpoint (temporary: userId query param optional, default 1)
+// Global search endpoint (userId query param required for proper scoping)
 router.get(
   '/search',
   asyncHandler(async (req, res) => {
@@ -34,7 +34,8 @@ router.get(
     if (!q.trim()) {
       return res.status(400).json({ error: 'Missing q parameter' })
     }
-    const userId = (req.query.userId as string | undefined) || '1'
+    // Default to local user UUID for local mode compatibility
+    const userId = (req.query.userId as string | undefined) || 'a7c485cb-99e7-4cf2-82a9-6e23b55cdfc3'
     const results = MessageService.searchAllUserMessages(q, userId, 50)
     res.json(results)
   })
