@@ -231,7 +231,7 @@ function ensureDefaultLocalUser() {
       if (existingUser.username !== defaultUsername) {
         console.log(`⚠️  User exists with different username: ${existingUser.username}`)
         console.log(`📝 Updating username to: ${defaultUsername}`)
-        statements.updateUser.run(defaultUserId, defaultUsername)
+        statements.updateUser.run(defaultUsername, defaultUserId)
         console.log(`✅ Updated user to: ${defaultUsername} (${defaultUserId})`)
       } else {
         console.log(`✅ Default local user already exists: ${existingUser.username} (${defaultUserId})`)
