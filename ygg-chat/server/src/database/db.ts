@@ -374,6 +374,13 @@ export function initializeDatabase() {
     // Column already exists, ignore the error
   }
 
+  // Add migration for user_id on projects if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE projects ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE`)
+  } catch (error) {
+    // Column already exists, ignore the error
+  }
+
   // Stripe subscription and credits schema extensions
   // Add Stripe customer ID column
   try {
@@ -495,7 +502,7 @@ export function initializeStatements() {
 
     //Projects
     createProject: db.prepare(
-      'INSERT INTO projects (id, name, created_at, updated_at, context, system_prompt) VALUES (?, ?, ?, ?, ?, ?)'
+      'INSERT INTO projects (id, name, created_at, updated_at, context, system_prompt, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ),
     getAllProjects: db.prepare('SELECT * FROM projects ORDER BY created_at DESC'),
     getProjectsSortedByLatestConversation: db.prepare(`
@@ -503,8 +510,8 @@ export function initializeStatements() {
         p.*,
         MAX(c.updated_at) as latest_conversation_updated_at
       FROM projects p
-      LEFT JOIN conversations c ON c.project_id = p.id
-      WHERE c.user_id = ?
+      LEFT JOIN conversations c ON c.project_id = p.id AND c.user_id = ?
+      WHERE p.user_id = ?
       GROUP BY p.id
       ORDER BY
         COALESCE(MAX(c.updated_at), p.updated_at, p.created_at) DESC

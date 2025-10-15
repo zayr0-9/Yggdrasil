@@ -725,7 +725,12 @@ router.get(
 router.post(
   '/projects',
   asyncHandler(async (req, res) => {
-    const { name, conversation_id, context, system_prompt } = req.body
+    const { name, conversation_id, context, system_prompt, userId } = req.body
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId required' })
+    }
+
     const now = new Date().toISOString()
     const project = await ProjectService.create(
       name,
@@ -733,7 +738,8 @@ router.post(
       now, // updated_at - server generated
       conversation_id || null,
       context || null,
-      system_prompt || null
+      system_prompt || null,
+      userId
     )
     res.json(project)
   })

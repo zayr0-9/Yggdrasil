@@ -19,6 +19,7 @@ const Homepage: React.FC = () => {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { userId } = useAuth()
 
   // Use React Query for data fetching (with automatic caching and deduplication)
   // Projects now include latest_conversation_updated_at, eliminating need to fetch all conversations
@@ -58,7 +59,7 @@ const Homepage: React.FC = () => {
 
   const handleProjectCreated = (project: Project) => {
     // Optimistically update React Query cache to avoid refetch (scales better)
-    queryClient.setQueryData(['projects'], (old: ProjectWithLatestConversation[] | undefined) => {
+    queryClient.setQueryData(['projects', userId], (old: ProjectWithLatestConversation[] | undefined) => {
       // Convert Project to ProjectWithLatestConversation by adding the required field
       const projectWithLatest: ProjectWithLatestConversation = {
         ...project,

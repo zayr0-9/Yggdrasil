@@ -349,10 +349,11 @@ export class ProjectService {
     updated_at: string,
     conversation_id: string,
     context: string,
-    system_prompt: string
+    system_prompt: string,
+    user_id: string
   ): Promise<Project> {
     const id = generateId()
-    statements.createProject.run(id, name, created_at, updated_at, context, system_prompt)
+    statements.createProject.run(id, name, created_at, updated_at, context, system_prompt, user_id)
     return statements.getProjectById.get(id) as Project
   }
 
@@ -361,7 +362,7 @@ export class ProjectService {
   }
 
   static getAllSortedByLatestConversation(userId: string): ProjectWithLatestConversation[] {
-    return statements.getProjectsSortedByLatestConversation.all(userId) as ProjectWithLatestConversation[]
+    return statements.getProjectsSortedByLatestConversation.all(userId, userId) as ProjectWithLatestConversation[]
   }
 
   static getById(id: string): Project | undefined {

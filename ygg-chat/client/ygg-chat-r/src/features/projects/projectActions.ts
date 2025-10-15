@@ -2,6 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit'
 import { Project } from '../../../../../shared/types'
 import { apiCall } from '../../utils/api'
 import { ThunkExtraArgument } from '../../store/thunkExtra'
+import { RootState } from '../../store/store'
 
 // Fetch all projects
 export const fetchProjects = createAsyncThunk<Project[], void, { extra: ThunkExtraArgument }>(
@@ -35,13 +36,16 @@ export interface CreateProjectPayload {
   system_prompt?: string
 }
 
-export const createProject = createAsyncThunk<Project, CreateProjectPayload, { extra: ThunkExtraArgument }>(
+export const createProject = createAsyncThunk<Project, CreateProjectPayload, { extra: ThunkExtraArgument; state: RootState }>(
   'projects/createProject',
   async (payload, { extra }) => {
     const { auth } = extra
     const response = await apiCall('/projects', auth.accessToken, {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        userId: auth.userId,
+      }),
     })
     return response as Project
   }
