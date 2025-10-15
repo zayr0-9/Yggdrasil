@@ -58,7 +58,7 @@ export async function generateResponse(
           const found = candidates.find(p => fs.existsSync(p))
           if (found) {
             abs = found
-            console.log(`Resolved attachment path: ${abs}`)
+            // console.log(`Resolved attachment path: ${abs}`)
           }
         }
         const buf = fs.readFileSync(abs)
