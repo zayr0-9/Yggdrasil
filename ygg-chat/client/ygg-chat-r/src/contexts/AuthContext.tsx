@@ -116,9 +116,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // STEP 3: Set up onAuthStateChange listener to detect auth changes
     // This listener enables navigation updates without triggering network calls for validation
     // JWT validation remains local via getCachedClaims()
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    // Skip if supabase client is not initialized (missing env vars)
+    const subscription = supabase?.auth.onAuthStateChange((event, session) => {
       console.log('[AuthContext] Auth state changed:', event)
 
       // Update state for SIGNED_IN and SIGNED_OUT events
@@ -151,7 +150,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => {
       console.log('[AuthContext] Cleaning up refresh interval and auth listener')
       clearInterval(refreshInterval)
-      subscription.unsubscribe()
+      subscription?.data.subscription.unsubscribe()
     }
   }, [updateAuthState])
 
@@ -176,7 +175,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Memoize signOut to prevent recreating on every render
   const signOut = useCallback(async () => {
     clearClaimsCache()
-    await supabase.auth.signOut()
+    if (supabase) {
+      await supabase.auth.signOut()
+    }
     updateAuthState(null)
   }, [updateAuthState])
 

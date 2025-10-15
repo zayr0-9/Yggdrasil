@@ -22,6 +22,10 @@ const Login: React.FC = () => {
     setError(null)
 
     try {
+      if (!supabase) {
+        throw new Error('Supabase client not available. Please check your environment configuration.')
+      }
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {

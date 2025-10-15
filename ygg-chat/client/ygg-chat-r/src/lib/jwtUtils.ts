@@ -211,6 +211,12 @@ export async function refreshTokenIfNeeded(): Promise<boolean> {
     if (expiresIn < 300) {
       console.log('[jwtUtils] 🔄 Refreshing token (expires soon)...')
 
+      // Check if supabase client is available
+      if (!supabase) {
+        console.warn('[jwtUtils] ⚠️  Supabase client not available - cannot refresh token')
+        return false
+      }
+
       // This will call /auth/v1/token endpoint (NOT /auth/v1/user!)
       const { data, error } = await supabase.auth.refreshSession()
 
