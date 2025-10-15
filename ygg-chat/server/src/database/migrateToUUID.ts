@@ -444,143 +444,197 @@ function migrateDatabase() {
   }
   console.log(`  ✅ Updated message relationships`)
 
-  // Migrate File Content
+  // Migrate File Content (only if table exists in old database)
   console.log('  📄 Migrating file content...')
-  const fileContents = oldDb.prepare('SELECT * FROM message_file_content').all() as any[]
-  const insertFileContent = newDb.prepare(`
-    INSERT INTO message_file_content (id, file_name, absolute_path, relative_path, file_content, size_bytes, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `)
+  const fileContentTableExists = oldDb
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='message_file_content'")
+    .get()
 
-  for (const fc of fileContents) {
-    const newId = generateId()
-    fileContentIdMap[fc.id] = newId
-    insertFileContent.run(
-      newId,
-      fc.file_name,
-      fc.absolute_path,
-      fc.relative_path,
-      fc.file_content || null,
-      fc.size_bytes || null,
-      fc.created_at
-    )
+  let fileContents: any[] = []
+  if (fileContentTableExists) {
+    fileContents = oldDb.prepare('SELECT * FROM message_file_content').all() as any[]
+    const insertFileContent = newDb.prepare(`
+      INSERT INTO message_file_content (id, file_name, absolute_path, relative_path, file_content, size_bytes, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    for (const fc of fileContents) {
+      const newId = generateId()
+      fileContentIdMap[fc.id] = newId
+      insertFileContent.run(
+        newId,
+        fc.file_name,
+        fc.absolute_path,
+        fc.relative_path,
+        fc.file_content || null,
+        fc.size_bytes || null,
+        fc.created_at
+      )
+    }
+    console.log(`  ✅ Migrated ${fileContents.length} file contents`)
+  } else {
+    console.log(`  ⚠️  message_file_content table does not exist in old database - skipping`)
   }
-  console.log(`  ✅ Migrated ${fileContents.length} file contents`)
 
-  // Migrate Attachments
+  // Migrate Attachments (only if table exists in old database)
   console.log('  🖼️  Migrating attachments...')
-  const attachments = oldDb.prepare('SELECT * FROM message_attachments').all() as any[]
-  const insertAttachment = newDb.prepare(`
-    INSERT INTO message_attachments (id, message_id, kind, mime_type, storage, url, file_path,
-                                     width, height, size_bytes, sha256, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  const attachmentsTableExists = oldDb
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='message_attachments'")
+    .get()
 
-  for (const att of attachments) {
-    const newId = generateId()
-    attachmentIdMap[att.id] = newId
-    insertAttachment.run(
-      newId,
-      att.message_id ? messageIdMap[att.message_id] : null,
-      att.kind,
-      att.mime_type,
-      att.storage,
-      att.url || null,
-      att.file_path || null,
-      att.width || null,
-      att.height || null,
-      att.size_bytes || null,
-      att.sha256 || null,
-      att.created_at
-    )
+  let attachments: any[] = []
+  if (attachmentsTableExists) {
+    attachments = oldDb.prepare('SELECT * FROM message_attachments').all() as any[]
+    const insertAttachment = newDb.prepare(`
+      INSERT INTO message_attachments (id, message_id, kind, mime_type, storage, url, file_path,
+                                       width, height, size_bytes, sha256, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    for (const att of attachments) {
+      const newId = generateId()
+      attachmentIdMap[att.id] = newId
+      insertAttachment.run(
+        newId,
+        att.message_id ? messageIdMap[att.message_id] : null,
+        att.kind,
+        att.mime_type,
+        att.storage,
+        att.url || null,
+        att.file_path || null,
+        att.width || null,
+        att.height || null,
+        att.size_bytes || null,
+        att.sha256 || null,
+        att.created_at
+      )
+    }
+    console.log(`  ✅ Migrated ${attachments.length} attachments`)
+  } else {
+    console.log(`  ⚠️  message_attachments table does not exist in old database - skipping`)
   }
-  console.log(`  ✅ Migrated ${attachments.length} attachments`)
 
-  // Migrate Attachment Links
+  // Migrate Attachment Links (only if table exists in old database)
   console.log('  🔗 Migrating attachment links...')
-  const attachmentLinks = oldDb.prepare('SELECT * FROM message_attachment_links').all() as any[]
-  const insertAttachmentLink = newDb.prepare(`
-    INSERT INTO message_attachment_links (id, message_id, attachment_id, created_at)
-    VALUES (?, ?, ?, ?)
-  `)
+  const attachmentLinksTableExists = oldDb
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='message_attachment_links'")
+    .get()
 
-  for (const link of attachmentLinks) {
-    const newId = generateId()
-    insertAttachmentLink.run(
-      newId,
-      messageIdMap[link.message_id],
-      attachmentIdMap[link.attachment_id],
-      link.created_at
-    )
+  let attachmentLinks: any[] = []
+  if (attachmentLinksTableExists && attachmentsTableExists) {
+    attachmentLinks = oldDb.prepare('SELECT * FROM message_attachment_links').all() as any[]
+    const insertAttachmentLink = newDb.prepare(`
+      INSERT INTO message_attachment_links (id, message_id, attachment_id, created_at)
+      VALUES (?, ?, ?, ?)
+    `)
+
+    for (const link of attachmentLinks) {
+      const newId = generateId()
+      insertAttachmentLink.run(
+        newId,
+        messageIdMap[link.message_id],
+        attachmentIdMap[link.attachment_id],
+        link.created_at
+      )
+    }
+    console.log(`  ✅ Migrated ${attachmentLinks.length} attachment links`)
+  } else {
+    console.log(`  ⚠️  message_attachment_links table does not exist in old database - skipping`)
   }
-  console.log(`  ✅ Migrated ${attachmentLinks.length} attachment links`)
 
-  // Migrate File Content Links
+  // Migrate File Content Links (only if table exists in old database)
   console.log('  🔗 Migrating file content links...')
-  const fileContentLinks = oldDb.prepare('SELECT * FROM message_file_content_links').all() as any[]
-  const insertFileContentLink = newDb.prepare(`
-    INSERT INTO message_file_content_links (id, message_id, file_content_id, created_at)
-    VALUES (?, ?, ?, ?)
-  `)
+  const fileContentLinksTableExists = oldDb
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='message_file_content_links'")
+    .get()
 
-  for (const link of fileContentLinks) {
-    const newId = generateId()
-    insertFileContentLink.run(
-      newId,
-      messageIdMap[link.message_id],
-      fileContentIdMap[link.file_content_id],
-      link.created_at
-    )
+  let fileContentLinks: any[] = []
+  if (fileContentLinksTableExists && fileContentTableExists) {
+    fileContentLinks = oldDb.prepare('SELECT * FROM message_file_content_links').all() as any[]
+    const insertFileContentLink = newDb.prepare(`
+      INSERT INTO message_file_content_links (id, message_id, file_content_id, created_at)
+      VALUES (?, ?, ?, ?)
+    `)
+
+    for (const link of fileContentLinks) {
+      const newId = generateId()
+      insertFileContentLink.run(
+        newId,
+        messageIdMap[link.message_id],
+        fileContentIdMap[link.file_content_id],
+        link.created_at
+      )
+    }
+    console.log(`  ✅ Migrated ${fileContentLinks.length} file content links`)
+  } else {
+    console.log(`  ⚠️  message_file_content_links table does not exist in old database - skipping`)
   }
-  console.log(`  ✅ Migrated ${fileContentLinks.length} file content links`)
 
-  // Migrate Provider Costs
+  // Migrate Provider Costs (only if table exists in old database)
   console.log('  💰 Migrating provider costs...')
-  const providerCosts = oldDb.prepare('SELECT * FROM provider_cost').all() as any[]
-  const insertProviderCost = newDb.prepare(`
-    INSERT INTO provider_cost (id, user_id, message_id, prompt_tokens, completion_tokens,
-                                reasoning_tokens, approx_cost, api_credit_cost, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  const providerCostTableExists = oldDb
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='provider_cost'")
+    .get()
 
-  for (const pc of providerCosts) {
-    const newId = generateId()
-    providerCostIdMap[pc.id] = newId
-    insertProviderCost.run(
-      newId,
-      userIdMap[pc.user_id],
-      messageIdMap[pc.message_id],
-      pc.prompt_tokens || 0,
-      pc.completion_tokens || 0,
-      pc.reasoning_tokens || 0,
-      pc.approx_cost || 0.0,
-      pc.api_credit_cost || 0.0,
-      pc.created_at
-    )
+  let providerCosts: any[] = []
+  if (providerCostTableExists) {
+    providerCosts = oldDb.prepare('SELECT * FROM provider_cost').all() as any[]
+    const insertProviderCost = newDb.prepare(`
+      INSERT INTO provider_cost (id, user_id, message_id, prompt_tokens, completion_tokens,
+                                  reasoning_tokens, approx_cost, api_credit_cost, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    for (const pc of providerCosts) {
+      const newId = generateId()
+      providerCostIdMap[pc.id] = newId
+      insertProviderCost.run(
+        newId,
+        userIdMap[pc.user_id],
+        messageIdMap[pc.message_id],
+        pc.prompt_tokens || 0,
+        pc.completion_tokens || 0,
+        pc.reasoning_tokens || 0,
+        pc.approx_cost || 0.0,
+        pc.api_credit_cost || 0.0,
+        pc.created_at
+      )
+    }
+    console.log(`  ✅ Migrated ${providerCosts.length} provider costs`)
+  } else {
+    console.log(`  ⚠️  provider_cost table does not exist in old database - skipping`)
   }
-  console.log(`  ✅ Migrated ${providerCosts.length} provider costs`)
 
-  // Migrate Credit Ledger
+  // Migrate Credit Ledger (only if table exists in old database)
   console.log('  💳 Migrating credit ledger...')
-  const creditLedger = oldDb.prepare('SELECT * FROM credit_ledger').all() as any[]
-  const insertCreditLedger = newDb.prepare(`
-    INSERT INTO credit_ledger (id, user_id, amount, reason, balance_after, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `)
+  const creditLedgerTableExists = oldDb
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='credit_ledger'")
+    .get()
 
-  for (const entry of creditLedger) {
-    const newId = generateId()
-    creditLedgerIdMap[entry.id] = newId
-    insertCreditLedger.run(
-      newId,
-      userIdMap[entry.user_id],
-      entry.amount,
-      entry.reason,
-      entry.balance_after,
-      entry.created_at
-    )
+  let creditLedger: any[] = []
+  if (creditLedgerTableExists) {
+    creditLedger = oldDb.prepare('SELECT * FROM credit_ledger').all() as any[]
+    const insertCreditLedger = newDb.prepare(`
+      INSERT INTO credit_ledger (id, user_id, amount, reason, balance_after, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `)
+
+    for (const entry of creditLedger) {
+      const newId = generateId()
+      creditLedgerIdMap[entry.id] = newId
+      insertCreditLedger.run(
+        newId,
+        userIdMap[entry.user_id],
+        entry.amount,
+        entry.reason,
+        entry.balance_after,
+        entry.created_at
+      )
+    }
+    console.log(`  ✅ Migrated ${creditLedger.length} credit ledger entries`)
+  } else {
+    console.log(`  ⚠️  credit_ledger table does not exist in old database - skipping`)
   }
-  console.log(`  ✅ Migrated ${creditLedger.length} credit ledger entries`)
 
   // Create indexes
   console.log('\n📊 Creating indexes...')
