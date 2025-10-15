@@ -4,7 +4,6 @@ import { RootState } from '../../store/store'
 import { ThunkExtraArgument } from '../../store/thunkExtra'
 import {
   api,
-  environment,
   getConversationContext,
   getConversationSystemPrompt,
   patchConversationContext,
@@ -14,17 +13,7 @@ import {
 import { convContextSet, systemPromptSet } from './conversationSlice'
 import { Conversation } from './conversationTypes'
 
-// Helper for local mode only - gets/creates demo user
-const getDemoUserId = async (state: RootState, accessToken: string | null): Promise<number> => {
-  let userId = state.users.currentUser?.id
-  if (!userId) {
-    const user = await api.post<{ id: number }>('/users', accessToken, { username: 'homepage-user' })
-    userId = user.id
-  }
-  return userId
-}
-
-// Fetch conversations for current user (creates demo user if none)
+// Fetch conversations for current user
 
 // Fetch recently used models based on recent messages (server returns names)
 export const fetchRecentModels = createAsyncThunk<
@@ -58,19 +47,15 @@ export const fetchConversations = createAsyncThunk<
   Conversation[],
   void,
   { state: RootState; extra: ThunkExtraArgument }
->('conversations/fetchAll', async (_: void, { getState, extra, rejectWithValue }) => {
+>('conversations/fetchAll', async (_: void, { extra, rejectWithValue }) => {
   try {
     const { auth } = extra
 
-    // In web mode, use auth.userId from context
-    // In local mode, get/create demo user
-    const userId = environment === 'web' ? auth.userId : await getDemoUserId(getState(), auth.accessToken)
-
-    if (!userId) {
+    if (!auth.userId) {
       throw new Error('User not authenticated')
     }
 
-    return await api.get<Conversation[]>(`/users/${userId}/conversations`, auth.accessToken)
+    return await api.get<Conversation[]>(`/users/${auth.userId}/conversations`, auth.accessToken)
   } catch (err) {
     return rejectWithValue(err instanceof Error ? err.message : 'Failed to fetch conversations')
   }
@@ -81,18 +66,16 @@ export const fetchRecentConversations = createAsyncThunk<
   Conversation[],
   { limit?: number },
   { state: RootState; extra: ThunkExtraArgument }
->('conversations/fetchRecent', async ({ limit = 10 } = {}, { getState, extra, rejectWithValue }) => {
+>('conversations/fetchRecent', async ({ limit = 10 } = {}, { extra, rejectWithValue }) => {
   try {
     const { auth } = extra
 
-    const userId = environment === 'web' ? auth.userId : await getDemoUserId(getState(), auth.accessToken)
-
-    if (!userId) {
+    if (!auth.userId) {
       throw new Error('User not authenticated')
     }
 
     const query = new URLSearchParams({ limit: String(limit) }).toString()
-    return await api.get<Conversation[]>(`/users/${userId}/conversations/recent?${query}`, auth.accessToken)
+    return await api.get<Conversation[]>(`/users/${auth.userId}/conversations/recent?${query}`, auth.accessToken)
   } catch (err) {
     return rejectWithValue(err instanceof Error ? err.message : 'Failed to fetch recent conversations')
   }
@@ -120,9 +103,7 @@ export const createConversation = createAsyncThunk<
   try {
     const { auth } = extra
 
-    const userId = environment === 'web' ? auth.userId : await getDemoUserId(getState(), auth.accessToken)
-
-    if (!userId) {
+    if (!auth.userId) {
       throw new Error('User not authenticated')
     }
 
@@ -131,7 +112,7 @@ export const createConversation = createAsyncThunk<
     const projectId = selectedProject?.id || null
 
     return await api.post<Conversation>('/conversations', auth.accessToken, {
-      userId,
+      userId: auth.userId,
       title: title || null,
       projectId,
     })
