@@ -43,7 +43,7 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
   const [themeMode, setThemeMode] = useState<'Light' | 'Dark' | 'System'>(() => {
     if (typeof window === 'undefined') return 'Light'
     const saved = localStorage.getItem('theme')
-    return saved === 'dark' ? 'Dark' : saved === 'light' ? 'Light' : 'System'
+    return saved === 'dark' ? 'Dark' : saved === 'light' ? 'Light' : saved === 'system' ? 'System' : 'System'
   })
 
   // Persist collapse state
@@ -64,11 +64,7 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
   // Persist theme preference
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (themeMode === 'System') {
-      localStorage.removeItem('theme')
-    } else {
-      localStorage.setItem('theme', themeMode)
-    }
+    localStorage.setItem('theme', themeMode === 'Dark' ? 'dark' : themeMode === 'Light' ? 'light' : 'system')
   }, [themeMode])
 
   const cycleTheme = () => {

@@ -49,7 +49,10 @@ router.get(
     if (!q.trim()) {
       return res.status(400).json({ error: 'Missing q parameter' })
     }
-    const projectId = (req.query.projectId as string | undefined) || '1'
+    const projectId = req.query.projectId as string | undefined
+    if (!projectId) {
+      return res.status(400).json({ error: 'Missing projectId parameter' })
+    }
     const results = MessageService.searchMessagesByProject(q, projectId)
     res.json(results)
   })
