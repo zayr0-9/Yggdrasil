@@ -191,7 +191,7 @@ const Homepage: React.FC = () => {
           {loading && <p>Loading...</p>}
           {/* {error && <p className='text-red-500'>{error}</p>} */}
 
-          <div className='flex gap-4  items-start max-w-5xl '>
+          <div className='gap-4 items-start max-w-5xl '>
             <ul className='scroll-fade space-y-2 px-2 py-8 rounded flex-wrap overflow-y-auto max-h-[65vh] pr-2 thin-scrollbar'>
               {projects.map(project => (
                 <li

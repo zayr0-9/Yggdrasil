@@ -901,7 +901,7 @@ function Chat() {
             return
           }
 
-          const parent: MessageId = lastUserMessage.parent_id || 0
+          const parent: MessageId | null = lastUserMessage.parent_id || null
           const contentToRetrigger = lastUserMessage.content
 
           console.log('Retriggering generation from last user message:', lastUserMessage.id)

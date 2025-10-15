@@ -182,7 +182,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
         return typeof plain === 'string' && plain.includes(q)
       })
       .slice(0, 12)
-      .map(m => ({ id: m.id, content: m.content }))
+      .map(m => ({ id: m.id, content: m.content, role: m.role }))
     return res
   }, [searchQuery, plainMessages])
   const lastCenteredIdRef = useRef<string | null>(null)
@@ -938,7 +938,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
     // Check if the node is already selected
     const isAlreadySelected = selectedNodes.includes(nodeIdParsed)
 
-    let newSelectedNodes: (number | string)[]
+    let newSelectedNodes: string[]
 
     if (e.ctrlKey || e.metaKey) {
       // Multi-select: toggle the node in the selection
@@ -1645,7 +1645,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
               className={`${node.sender === 'user' ? 'stroke-neutral-200 dark:stroke-yPurple-400' : 'stroke-neutral-200 dark:stroke-yBrown-400'}`}
             /> */}
             <foreignObject width={nodeWidth} height={nodeHeight} style={{ pointerEvents: 'none', userSelect: 'none' }}>
-              <div className='p-3 text-stone-800 dark:text-stone-200 text-sm h-full flex items-center'>
+              <div className='p-3 text-stone-800 dark:text-stone-300 text-sm h-full flex items-center'>
                 <p className='line-clamp-3 '>{node.message}</p>
               </div>
             </foreignObject>
@@ -1680,7 +1680,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
             transition={{ duration: 0.15, ease: 'easeOut' }}
           >
             {/* Current path highlight for compact mode */}
-            {isOnCurrentPath && (
+            {/* {isOnCurrentPath && (
               <circle
                 cx={x}
                 cy={y + circleRadius}
@@ -1688,11 +1688,13 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 fill='none'
                 // stroke='rgba(16, 185, 129, 0.9)'
                 strokeWidth='3'
-                className='animate-pulse-slow stroke-vtestb-300 dark:stroke-slate-100'
+                className={`animate-pulse-slow transition-colors duration-200 ${
+                  isVisible ? 'stroke-rose-300' : 'stroke-indigo-200 dark:stroke-yPurple-50'
+                }`}
               />
-            )}
+            )} */}
             {/* Visible message highlight for compact mode */}
-            {isVisible && (
+            {/* {isVisible && (
               <circle
                 cx={x}
                 cy={y + circleRadius}
@@ -1700,9 +1702,9 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 fill='none'
                 stroke='currentColor'
                 strokeWidth='2'
-                className='stroke-cyan-400 dark:stroke-cyan-300'
+                className='stroke-cyan-400 dark:stroke-amber-300'
               />
-            )}
+            )} */}
             {/* Selection highlight for compact mode */}
             {isNodeSelected && (
               <circle
@@ -1712,26 +1714,21 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                 fill='none'
                 stroke='currentColor'
                 strokeWidth='3'
-                strokeDasharray='5,5'
-                className='animate-pulse stroke-blue-500 dark:stroke-blue-300'
+                className='animate-pulse stroke-blue-500 dark:stroke-stone-400'
               />
             )}
             <circle
               cx={x}
               cy={y + circleRadius}
               r={circleRadius}
-              fill={node.sender === 'user' ? '#64748b' : '#1e293b'}
-              className={`cursor-pointer transition-transform duration-150 ${
-                node.sender === 'user'
-                  ? 'fill-yellow-100 dark:fill-yPurple-500'
-                  : 'fill-indigo-300 dark:fill-yBrown-500'
-              }`}
+              className={`cursor-pointer transition-transform duration-150 ${isVisible ? ' fill-rose-300 dark:fill-yPurple-500' : 'fill-yBlack-900 dark:fill-yBlack-900'} ${
+                node.sender === 'user' ? 'fill-yellow-100 stroke-yBrown-500' : 'fill-indigo-50 stroke-yPurple-500'
+              } `}
               style={{
                 transform: selectedNode?.id === node.id ? 'scale(1.1)' : 'scale(1)',
                 transformOrigin: `${x}px ${y + circleRadius}px`,
                 filter: `drop-shadow(0 12px 28px rgba(0,0,0,${isDarkMode ? '0.45' : '0.05'})) drop-shadow(0 6px 18px rgba(0,0,0,0.02))`,
               }}
-              stroke={node.sender === 'user' ? 'oklch(70.5% 0.015 286.067)' : ''}
               onMouseEnter={e => {
                 setSelectedNode(node)
                 const containerRect = containerRef.current?.getBoundingClientRect()
@@ -1963,13 +1960,13 @@ export const Heimdall: React.FC<HeimdallProps> = ({
           />
           {searchOpen && searchQuery.trim() && (
             <div
-              className='absolute right-0 mt-1 w-full max-h-72 overflow-auto rounded-md border border-stone-200 bg-white dark:bg-neutral-900 dark:border-secondary-500 z-20 thin-scrollbar shadow-[0_12px_12px_-12px_rgba(0,0,0,0.1)] dark:shadow-[0_0px_24px_2px_rgba(0,0,0,0.2)]'
+              className='absolute right-0 mt-1 w-full max-h-72 overflow-auto rounded-md border border-stone-200 bg-white dark:bg-neutral-900 dark:border-stone-700 z-20 thin-scrollbar shadow-[0_12px_12px_-12px_rgba(0,0,0,0.1)] dark:shadow-[0_0px_24px_2px_rgba(0,0,0,0.2)]'
               data-heimdall-wheel-exempt='true'
             >
               {filteredResults.length === 0 ? (
-                <div className='px-3 py-2 text-sm text-neutral-500 dark:text-neutral-300 '>No matches</div>
+                <div className='px-3 py-2 text-sm text-neutral-500 dark:text-stone-300 '>No matches</div>
               ) : (
-                <ul className='py-1 text-sm text-stone-800 dark:text-stone-100'>
+                <ul className='py-1 text-sm text-stone-800 dark:text-stone-300'>
                   {filteredResults.map((item, idx) => {
                     const content = (item.content || '').replace(/\s+/g, ' ').trim()
                     const snippet = content.length > 160 ? content.slice(0, 160) + '…' : content
@@ -1989,15 +1986,18 @@ export const Heimdall: React.FC<HeimdallProps> = ({
                             setSearchQuery('')
                           }}
                           onMouseEnter={() => setSearchHoverIndex(idx)}
-                          className={`w-full text-left px-3 py-2 hover:bg-stone-100 dark:hover:bg-neutral-800 ${
+                          className={`w-full text-left px-3 py-4 hover:bg-stone-100 dark:hover:bg-neutral-800 ${
                             idx === searchHoverIndex ? 'bg-stone-100 dark:bg-neutral-800' : ''
                           }`}
                         >
-                          <div className='flex items-start gap-2'>
-                            <span className='shrink-0 text-xs text-neutral-500 dark:text-neutral-400 mt-0.5'>
-                              #{item.id}
-                            </span>
+                          <div className='items-start gap-2'>
                             <span className='line-clamp-2'>{snippet || '(empty message)'}</span>
+                            <span
+                              className={`shrink-0 text-xs my-2 py-2 text-neutral-500 dark:text-neutral-400 ${item.role === 'user' ? 'text-neutral-500 dark:text-stone-200' : 'text-neutral-500 dark:text-yBrown-0'}`}
+                            >
+                              {' '}
+                              {item.role}
+                            </span>
                           </div>
                         </button>
                       </li>

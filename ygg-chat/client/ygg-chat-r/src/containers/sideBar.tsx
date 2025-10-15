@@ -40,10 +40,10 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
   })
 
   // Theme state
-  const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>(() => {
-    if (typeof window === 'undefined') return 'light'
+  const [themeMode, setThemeMode] = useState<'Light' | 'Dark' | 'System'>(() => {
+    if (typeof window === 'undefined') return 'Light'
     const saved = localStorage.getItem('theme')
-    return saved === 'dark' ? 'dark' : saved === 'light' ? 'light' : 'system'
+    return saved === 'dark' ? 'Dark' : saved === 'light' ? 'Light' : 'System'
   })
 
   // Persist collapse state
@@ -57,14 +57,14 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
   useEffect(() => {
     if (typeof window === 'undefined') return
     const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const isDark = themeMode === 'dark' || (themeMode === 'system' && media.matches)
+    const isDark = themeMode === 'Dark' || (themeMode === 'System' && media.matches)
     document.documentElement.classList.toggle('dark', isDark)
   }, [themeMode])
 
   // Persist theme preference
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (themeMode === 'system') {
+    if (themeMode === 'System') {
       localStorage.removeItem('theme')
     } else {
       localStorage.setItem('theme', themeMode)
@@ -72,7 +72,7 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
   }, [themeMode])
 
   const cycleTheme = () => {
-    setThemeMode(prev => (prev === 'light' ? 'dark' : prev === 'dark' ? 'system' : 'light'))
+    setThemeMode(prev => (prev === 'Light' ? 'Dark' : prev === 'Dark' ? 'System' : 'Light'))
   }
 
   const handleSelect = (id: ConversationId) => {
@@ -95,7 +95,7 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
     }
   }
 
-  const handleResultClick = (conversationId: number, messageId: string) => {
+  const handleResultClick = (conversationId: string, messageId: string) => {
     dispatch(chatSliceActions.conversationSet(conversationId))
     navigate(`/chat/${conversationId}#${messageId}`)
   }
@@ -141,7 +141,7 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
       )}
 
       {/* Conversations List */}
-      <div className='flex-1 overflow-y-auto overflow-x-hidden p-2'>
+      <div className='flex-1 overflow-y-auto overflow-x-hidden p-2 thin-scrollbar'>
         {loading && (
           <div
             className={`text-xs text-gray-500 dark:text-gray-300 px-2 py-1 ${isCollapsed ? 'text-center' : ''}`}
@@ -178,7 +178,7 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
                 className={`w-full text-left rounded-lg transition-all duration-200 cursor-pointer ${
                   isCollapsed
                     ? 'py-2 flex items-center hover:scale-90 justify-center'
-                    : 'hover:bg-stone-100 hover:ring-neutral-100 hover:ring-2  dark:hover:bg-neutral-700'
+                    : 'hover:bg-stone-100 hover:ring-neutral-100 hover:ring-2 dark:hover:ring-neutral-800  dark:hover:ring-0 dark:hover:bg-neutral-800'
                 } ${isActive ? 'bg-indigo-100 dark:bg-indigo-900/40 border-l-4 border-indigo-500' : ''}`}
                 title={isCollapsed ? conv.title || `Conversation ${conv.id}` : undefined}
               >
@@ -188,16 +188,16 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
                   </Button>
                 ) : (
                   <div className='flex flex-col gap-2 py-2 mx-2'>
-                    <span className='text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate'>
+                    <span className='text-sm font-medium text-neutral-900 dark:text-stone-200 truncate'>
                       {conv.title || `Conversation ${conv.id}`}
                     </span>
                     {projectName && (
-                      <span className='text-xs text-neutral-600 dark:text-neutral-400 truncate'>
+                      <span className='text-xs text-neutral-600 dark:text-stone-300 truncate'>
                         Project: {projectName}
                       </span>
                     )}
                     {conv.updated_at && (
-                      <span className='text-xs text-neutral-500 dark:text-neutral-500'>
+                      <span className='text-xs text-neutral-500 dark:text-neutral-400 text-right'>
                         {new Date(conv.updated_at).toLocaleDateString()}
                       </span>
                     )}
@@ -234,14 +234,14 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
           className='group'
         >
           <i
-            className={`bx ${themeMode === 'system' ? 'bx-desktop' : themeMode === 'dark' ? 'bx-moon' : 'bx-sun'} text-3xl p-1 transition-transform duration-100 group-active:scale-90 pointer-events-none`}
+            className={`bx ${themeMode === 'System' ? 'bx-desktop' : themeMode === 'Dark' ? 'bx-moon' : 'bx-sun'} text-3xl p-1 transition-transform duration-100 group-active:scale-90 pointer-events-none`}
             aria-hidden='true'
           ></i>
         </Button>
         <div className='flex flex-4 items-center justify-start text-lg dark:text-stone-300'>{themeMode}</div>
       </div>
       <div className='flex items-center justify-start py-2 px-2'>
-        <div className='flex items-center justify-center gap-2'>
+        {/* <div className='flex items-center justify-center gap-2'>
           <div className='flex flex-1 items-center justify-center text-lg dark:text-stone-300'>
             <Button
               variant='outline2'
@@ -256,7 +256,7 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
           <div className='flex flex-4 items-center justify-start text-lg dark:text-stone-300'>
             {!isCollapsed && <h3> User Name </h3>}
           </div>
-        </div>
+        </div> */}
       </div>
     </aside>
   )

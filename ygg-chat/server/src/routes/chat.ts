@@ -23,8 +23,6 @@ import { replaceFileMentionsWithContent, SelectedFileContent } from '../utils/fi
 import { abortGeneration, clearGeneration, createGeneration } from '../utils/generationManager'
 import { generateResponse } from '../utils/provider'
 import { getToolByName, updateToolEnabled } from '../utils/tools/index'
-import { checkCreditsAvailable, decrementCredits, estimateCreditsForGeneration } from '../utils/credits'
-import { hasActiveSubscription } from '../utils/stripe'
 
 const router = express.Router()
 
@@ -36,7 +34,7 @@ router.get(
     if (!q.trim()) {
       return res.status(400).json({ error: 'Missing q parameter' })
     }
-    const userId = req.query.userId ? parseInt(req.query.userId as string) : 1
+    const userId = (req.query.userId as string | undefined) || '1'
     const results = MessageService.searchAllUserMessages(q, userId, 50)
     res.json(results)
   })
@@ -50,7 +48,7 @@ router.get(
     if (!q.trim()) {
       return res.status(400).json({ error: 'Missing q parameter' })
     }
-    const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : 1
+    const projectId = (req.query.projectId as string | undefined) || '1'
     const results = MessageService.searchMessagesByProject(q, projectId)
     res.json(results)
   })
@@ -421,7 +419,7 @@ router.post(
 router.get(
   '/users/:userId/conversations',
   asyncHandler(async (req, res) => {
-    const userId = parseInt(req.params.userId)
+    const userId = req.params.userId
     const conversations = ConversationService.getByUser(userId)
     res.json(conversations)
   })
@@ -431,7 +429,7 @@ router.get(
 router.get(
   '/users/:userId/conversations/recent',
   asyncHandler(async (req, res) => {
-    const userId = parseInt(req.params.userId)
+    const userId = req.params.userId
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10
     const conversations = ConversationService.getRecentByUser(userId, limit)
     res.json(conversations)
@@ -442,7 +440,7 @@ router.get(
 router.get(
   '/conversations/project/:projectId',
   asyncHandler(async (req, res) => {
-    const projectId = parseInt(req.params.projectId)
+    const projectId = req.params.projectId
     const conversations = ConversationService.getByProjectId(projectId)
     res.json(conversations)
   })
@@ -461,7 +459,7 @@ router.get(
 router.get(
   '/users/:id',
   asyncHandler(async (req, res) => {
-    const userId = parseInt(req.params.id)
+    const userId = req.params.id
     const user = UserService.getById(userId)
 
     if (!user) {
@@ -476,7 +474,7 @@ router.get(
 router.put(
   '/users/:id',
   asyncHandler(async (req, res) => {
-    const userId = parseInt(req.params.id)
+    const userId = req.params.id
     const { username } = req.body
 
     if (!username) {
@@ -496,7 +494,7 @@ router.put(
 router.delete(
   '/users/:id',
   asyncHandler(async (req, res) => {
-    const userId = parseInt(req.params.id)
+    const userId = req.params.id
 
     const user = UserService.getById(userId)
     if (!user) {
@@ -540,7 +538,7 @@ router.post(
 router.patch(
   '/conversations/:id/',
   asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
+    const conversationId = req.params.id
     const { title } = req.body
 
     if (!title) {
@@ -561,7 +559,7 @@ router.patch(
 router.get(
   '/conversations/:id/system-prompt',
   asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
+    const conversationId = req.params.id
     const conversation = ConversationService.getById(conversationId)
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' })
@@ -575,7 +573,7 @@ router.get(
 router.get(
   '/conversations/:id/context',
   asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
+    const conversationId = req.params.id
     const conversation = ConversationService.getById(conversationId)
 
     if (!conversation) {
@@ -592,7 +590,7 @@ router.get(
 router.patch(
   '/conversations/:id/system-prompt',
   asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
+    const conversationId = req.params.id
     const { systemPrompt } = req.body as { systemPrompt?: string | null }
 
     // Validate existence
@@ -615,7 +613,7 @@ router.patch(
 router.patch(
   '/conversations/:id/context',
   asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
+    const conversationId = req.params.id
     const { context } = req.body as { context?: string | null }
 
     const existing = ConversationService.getById(conversationId)
@@ -639,7 +637,7 @@ router.patch(
 router.post(
   '/conversations/:id/clone',
   asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
+    const conversationId = req.params.id
 
     const existing = ConversationService.getById(conversationId)
     if (!existing) {
@@ -659,7 +657,7 @@ router.post(
 router.delete(
   '/conversations/:id/',
   asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
+    const conversationId = req.params.id
     const conversation = ConversationService.getById(conversationId)
     if (conversation) {
       ConversationService.delete(conversationId)
@@ -674,7 +672,7 @@ router.delete(
 router.get(
   '/conversations/:id/messages',
   asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
+    const conversationId = req.params.id
     const messages = MessageService.getByConversation(conversationId)
     res.json(messages)
   })
@@ -685,7 +683,7 @@ router.get(
   '/conversations/:conversationId/messages/:messageId/children',
   asyncHandler(async (req, res) => {
     const { conversationId, messageId } = req.params
-    const childrenIds = MessageService.getChildrenIds(parseInt(messageId))
+    const childrenIds = MessageService.getChildrenIds(messageId)
     res.json(childrenIds)
   })
 )
@@ -705,7 +703,8 @@ router.get(
 router.get(
   '/projects/sorted/latest-conversation',
   asyncHandler(async (req, res) => {
-    const projects = ProjectService.getAllSortedByLatestConversation()
+    const userId = (req.query.userId as string | undefined) || 'a7c485cb-99e7-4cf2-82a9-6e23b55cdfc3'
+    const projects = ProjectService.getAllSortedByLatestConversation(userId)
     res.json(projects)
   })
 )
@@ -714,7 +713,7 @@ router.get(
 router.get(
   '/projects/:id',
   asyncHandler(async (req, res) => {
-    const projectId = parseInt(req.params.id)
+    const projectId = req.params.id
     const project = ProjectService.getById(projectId)
     if (!project) {
       return res.status(404).json({ error: 'Project not found' })
@@ -745,7 +744,7 @@ router.post(
 router.put(
   '/projects/:id',
   asyncHandler(async (req, res) => {
-    const projectId = parseInt(req.params.id)
+    const projectId = req.params.id
     const now = new Date().toISOString()
     const { name, context, system_prompt } = req.body
     const project = ProjectService.update(projectId, name, now, context, system_prompt)
@@ -760,7 +759,7 @@ router.put(
 router.delete(
   '/projects/:id',
   asyncHandler(async (req, res) => {
-    const projectId = parseInt(req.params.id)
+    const projectId = req.params.id
     const project = ProjectService.getById(projectId)
     if (project) {
       ProjectService.delete(projectId)
@@ -775,7 +774,7 @@ router.delete(
 router.get(
   '/conversations/:id/messages/tree',
   asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
+    const conversationId = req.params.id
     const messages = MessageService.getByConversation(conversationId)
 
     const treeData = buildMessageTree(messages)
@@ -787,7 +786,7 @@ router.get(
 router.post(
   '/conversations/:id/messages/repeat',
   asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
+    const conversationId = req.params.id
     const {
       content,
       modelName,
@@ -1036,7 +1035,7 @@ router.post(
 router.post(
   '/conversations/:id/messages/bulk',
   asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
+    const conversationId = req.params.id
     const { messages } = req.body as {
       messages: Array<{
         role: 'user' | 'assistant'
@@ -1095,7 +1094,7 @@ router.post(
 router.post(
   '/conversations/:id/messages',
   asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
+    const conversationId = req.params.id
     const {
       content,
       messages,
@@ -1110,7 +1109,7 @@ router.post(
       content: string
       messages?: any[]
       modelName?: string
-      parentId?: number
+      parentId?: MessageId
       provider?: string
       systemPrompt?: string
       think?: boolean
@@ -1300,32 +1299,8 @@ router.post(
       let assistantToolCalls = ''
       let lastChunkId = ''
 
-      // Check credits before generation
+      // Credit checking removed for local environment
       const userId = conversation.user_id
-
-      // Estimate credits needed (rough estimate based on message length)
-      const estimatedTokens = Math.ceil((processedContent.length + JSON.stringify(combinedMessages).length) / 4)
-      const estimatedCredits = estimateCreditsForGeneration(estimatedTokens, selectedModel)
-
-      // Check if user has active subscription
-      const hasSubscription = hasActiveSubscription(userId)
-
-      // Only check credits if user has a subscription, otherwise allow free usage
-      if (hasSubscription) {
-        const creditCheck = checkCreditsAvailable(userId, estimatedCredits)
-
-        if (!creditCheck.hasCredits) {
-          res.setHeader('Content-Type', 'application/json')
-          return res.status(402).json({
-            error: 'Insufficient credits',
-            message: `You need ${estimatedCredits} credits but only have ${creditCheck.currentBalance}`,
-            required: estimatedCredits,
-            current: creditCheck.currentBalance,
-          })
-        }
-
-        console.log(`[Credits] User ${userId} has sufficient credits: ${creditCheck.currentBalance} >= ${estimatedCredits}`)
-      }
 
       // Create assistant message placeholder for cost tracking
       const assistantMessage = MessageService.create(
@@ -1340,7 +1315,9 @@ router.post(
 
       // Stream AI response with manual abort control - use ASSISTANT message ID since that's what's being generated
       const { id: messageId, controller } = createGeneration(assistantMessage.id)
-      console.log(`🔴 [chat.ts] Controller created for assistantMessage.id: ${assistantMessage.id}, signal.aborted: ${controller.signal.aborted}`)
+      console.log(
+        `🔴 [chat.ts] Controller created for assistantMessage.id: ${assistantMessage.id}, signal.aborted: ${controller.signal.aborted}`
+      )
       res.write(`data: ${JSON.stringify({ type: 'generation_started', messageId: assistantMessage.id })}\n\n`)
       // Don't clear on close - let it complete naturally or be aborted manually
       // req.on('close', () => clearGeneration(messageId))
@@ -1479,23 +1456,23 @@ router.post(
         }
 
         // Decrement credits after successful generation (only if user has subscription)
-        if (hasSubscription) {
-          const actualCredits = estimateCreditsForGeneration(
-            Math.ceil((assistantContent.length + assistantThinking.length) / 4),
-            selectedModel
-          )
-          const newBalance = decrementCredits(
-            userId,
-            actualCredits,
-            `AI generation - ${selectedModel} - conversation ${conversationId}`
-          )
+        // if (hasSubscription) {
+        //   const actualCredits = estimateCreditsForGeneration(
+        //     Math.ceil((assistantContent.length + assistantThinking.length) / 4),
+        //     selectedModel
+        //   )
+        //   const newBalance = decrementCredits(
+        //     userId,
+        //     actualCredits,
+        //     `AI generation - ${selectedModel} - conversation ${conversationId}`
+        //   )
 
-          if (newBalance === null) {
-            console.warn(`[Credits] Failed to decrement credits for user ${userId} after generation`)
-          } else {
-            console.log(`[Credits] Decremented ${actualCredits} credits for user ${userId}. New balance: ${newBalance}`)
-          }
-        }
+        //   if (newBalance === null) {
+        //     console.warn(`[Credits] Failed to decrement credits for user ${userId} after generation`)
+        //   } else {
+        //     console.log(`[Credits] Decremented ${actualCredits} credits for user ${userId}. New balance: ${newBalance}`)
+        //   }
+        // }
       } catch (error: any) {
         const isAbort =
           error?.name === 'AbortError' ||
@@ -1562,7 +1539,7 @@ router.post(
 router.put(
   '/messages/:id',
   asyncHandler(async (req, res) => {
-    const messageId = parseInt(req.params.id)
+    const messageId = req.params.id
     const { content, note } = req.body
 
     if (!content) return res.status(400).json({ error: 'Content required' })
@@ -1577,7 +1554,7 @@ router.put(
 router.delete(
   '/messages/:id',
   asyncHandler(async (req, res) => {
-    const messageId = parseInt(req.params.id)
+    const messageId = req.params.id
 
     const deleted = MessageService.delete(messageId)
     if (!deleted) return res.status(404).json({ error: 'Message not found' })
@@ -1589,12 +1566,14 @@ router.delete(
 router.post(
   '/messages/deleteMany',
   asyncHandler(async (req, res) => {
-    const { ids } = req.body as { ids?: Array<number | string> }
+    const { ids } = req.body as { ids?: Array<MessageId | string> }
     if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: 'ids (number[]) is required' })
+      return res.status(400).json({ error: 'ids (string[]) is required' })
     }
 
-    const normalized = Array.from(new Set(ids.map(n => Number(n)).filter(n => Number.isFinite(n) && n > 0))) as number[]
+    const normalized = Array.from(
+      new Set(ids.filter(id => typeof id === 'string' && id.trim().length > 0))
+    ) as MessageId[]
 
     if (normalized.length === 0) {
       return res.status(400).json({ error: 'No valid ids provided' })
@@ -1609,7 +1588,7 @@ router.post(
 router.delete(
   '/conversations/:id',
   asyncHandler(async (req, res) => {
-    const conversationId = parseInt(req.params.id)
+    const conversationId = req.params.id
 
     const conversation = ConversationService.getById(conversationId)
     if (!conversation) {
@@ -1649,7 +1628,7 @@ router.post(
     if (uploaded) {
       const file = uploaded
       const messageIdRaw = req.body?.messageId
-      const messageId = messageIdRaw ? parseInt(messageIdRaw) : null
+      const messageId = messageIdRaw || null
       const absolutePath = file.path
       const filename = path.basename(absolutePath)
       const filePathRel = path.relative(__dirname, absolutePath) // e.g. data/uploads/...
@@ -1689,7 +1668,7 @@ router.post(
       sizeBytes,
       sha256,
     } = req.body as {
-      messageId?: number | null
+      messageId?: MessageId | null
       kind?: 'image'
       mimeType?: string
       storage?: 'file' | 'url'
@@ -1726,7 +1705,7 @@ router.post(
 router.get(
   '/attachments/:id',
   asyncHandler(async (req, res) => {
-    const id = parseInt(req.params.id)
+    const id = req.params.id
     const found = AttachmentService.getById(id)
     if (!found) return res.status(404).json({ error: 'Attachment not found' })
     res.json(found)
@@ -1737,7 +1716,7 @@ router.get(
 router.get(
   '/messages/:id/attachments',
   asyncHandler(async (req, res) => {
-    const messageId = parseInt(req.params.id)
+    const messageId = req.params.id
     const attachments = MessageService.getAttachments(messageId)
     res.json(attachments)
   })
@@ -1747,8 +1726,8 @@ router.get(
 router.post(
   '/messages/:id/attachments',
   asyncHandler(async (req, res) => {
-    const messageId = parseInt(req.params.id)
-    const { attachmentIds } = req.body as { attachmentIds?: number[] }
+    const messageId = req.params.id
+    const { attachmentIds } = req.body as { attachmentIds?: string[] }
     if (!Array.isArray(attachmentIds) || attachmentIds.length === 0) {
       return res.status(400).json({ error: 'attachmentIds must be a non-empty array' })
     }
@@ -1761,7 +1740,7 @@ router.post(
 router.delete(
   '/messages/:id/attachments',
   asyncHandler(async (req, res) => {
-    const messageId = parseInt(req.params.id)
+    const messageId = req.params.id
     const deleted = AttachmentService.deleteByMessage(messageId)
     res.json({ deleted })
   })
@@ -1771,9 +1750,9 @@ router.delete(
 router.delete(
   '/messages/:id/attachments/:attachmentId',
   asyncHandler(async (req, res) => {
-    const messageId = parseInt(req.params.id)
-    const attachmentId = parseInt(req.params.attachmentId)
-    if (!Number.isFinite(messageId) || !Number.isFinite(attachmentId)) {
+    const messageId = req.params.id
+    const attachmentId = req.params.attachmentId
+    if (!messageId || !attachmentId || !messageId.trim() || !attachmentId.trim()) {
       return res.status(400).json({ error: 'Invalid ids' })
     }
     const updated = MessageService.unlinkAttachment(messageId, attachmentId)
@@ -1792,7 +1771,7 @@ router.post(
       absolutePath: string
       relativePath: string
       sizeBytes?: number | null
-      messageId?: number | null
+      messageId?: MessageId | null
     }
 
     if (!fileName) return res.status(400).json({ error: 'fileName is required' })
@@ -1815,7 +1794,7 @@ router.post(
 router.get(
   '/file-content/:id',
   asyncHandler(async (req, res) => {
-    const id = parseInt(req.params.id)
+    const id = req.params.id
     const found = FileContentService.getById(id)
     if (!found) return res.status(404).json({ error: 'File content not found' })
     res.json(found)
@@ -1826,7 +1805,7 @@ router.get(
 router.get(
   '/messages/:id/file-content',
   asyncHandler(async (req, res) => {
-    const messageId = parseInt(req.params.id)
+    const messageId = req.params.id
     const fileContents = MessageService.getFileContents(messageId)
     res.json(fileContents)
   })
@@ -1836,8 +1815,8 @@ router.get(
 router.post(
   '/messages/:id/file-content',
   asyncHandler(async (req, res) => {
-    const messageId = parseInt(req.params.id)
-    const { fileContentIds } = req.body as { fileContentIds?: number[] }
+    const messageId = req.params.id
+    const { fileContentIds } = req.body as { fileContentIds?: string[] }
     if (!Array.isArray(fileContentIds) || fileContentIds.length === 0) {
       return res.status(400).json({ error: 'fileContentIds must be a non-empty array' })
     }
@@ -1850,7 +1829,7 @@ router.post(
 router.delete(
   '/messages/:id/file-content',
   asyncHandler(async (req, res) => {
-    const messageId = parseInt(req.params.id)
+    const messageId = req.params.id
     const deleted = FileContentService.deleteByMessage(messageId)
     res.json({ deleted })
   })
@@ -1860,9 +1839,9 @@ router.delete(
 router.delete(
   '/messages/:id/file-content/:fileContentId',
   asyncHandler(async (req, res) => {
-    const messageId = parseInt(req.params.id)
-    const fileContentId = parseInt(req.params.fileContentId)
-    if (!Number.isFinite(messageId) || !Number.isFinite(fileContentId)) {
+    const messageId = req.params.id
+    const fileContentId = req.params.fileContentId
+    if (!messageId || !fileContentId || !messageId.trim() || !fileContentId.trim()) {
       return res.status(400).json({ error: 'Invalid ids' })
     }
     const updated = MessageService.unlinkFileContent(messageId, fileContentId)
@@ -1874,7 +1853,7 @@ router.delete(
 router.post(
   '/messages/:id/abort',
   asyncHandler(async (req, res) => {
-    const userMessageId = parseInt(req.params.id)
+    const userMessageId = req.params.id
     console.log(`🔴 [SERVER /abort] Abort endpoint called for messageId: ${userMessageId}`)
     const success = abortGeneration(userMessageId)
     console.log(`🔴 [SERVER /abort] abortGeneration returned success: ${success}`)

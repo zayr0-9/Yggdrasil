@@ -47,6 +47,17 @@ const PaymentPage: React.FC = () => {
     fetchData()
   }, [userId])
 
+  // Refetch data when returning from successful checkout
+  useEffect(() => {
+    if (success && userId) {
+      // Small delay to ensure webhook has processed
+      const timer = setTimeout(() => {
+        fetchData()
+      }, 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [success, userId])
+
   const fetchData = async () => {
     if (!userId) return
 

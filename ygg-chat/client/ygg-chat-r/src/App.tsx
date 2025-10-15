@@ -1,8 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
-import { Chat, ConversationPage, Homepage, Login, Settings, PaymentPage } from './containers'
-import IdeContextBootstrap from './IdeContextBootstrap'
 import ProtectedRoute from './components/ProtectedRoute'
+import { Chat, ConversationPage, Homepage, Login, PaymentPage, Settings } from './containers'
+import IdeContextBootstrap from './IdeContextBootstrap'
 
 function App() {
   return (
@@ -24,6 +24,14 @@ function App() {
         />
         <Route
           path='/'
+          element={
+            <ProtectedRoute>
+              <Homepage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/homepage'
           element={
             <ProtectedRoute>
               <Homepage />

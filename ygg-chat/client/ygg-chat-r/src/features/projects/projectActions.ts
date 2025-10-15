@@ -30,7 +30,7 @@ export const fetchProjectById = createAsyncThunk<Project, number | string, { ext
 // Create project
 export interface CreateProjectPayload {
   name: string
-  conversation_id?: number
+  conversation_id?: number | string
   context?: string
   system_prompt?: string
 }

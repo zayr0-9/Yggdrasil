@@ -504,7 +504,7 @@ export const selectModel = createAsyncThunk<Model, Model, { state: RootState; ex
 
 // Streaming message sending with proper error handling
 export const sendMessage = createAsyncThunk<
-  { messageId: number | null; userMessage: any },
+  { messageId: MessageId | null; userMessage: any },
   SendMessagePayload,
   { state: RootState; extra: ThunkExtraArgument }
 >(
@@ -621,7 +621,7 @@ export const sendMessage = createAsyncThunk<
       if (!reader) throw new Error('No stream reader available')
 
       const decoder = new TextDecoder()
-      let messageId: number | null = null
+      let messageId: MessageId | null = null
       let userMessage: any = null
       // Guard to ensure we only try to update the title once per send
       let titleUpdated = false
@@ -829,7 +829,7 @@ export const deleteMessage = createAsyncThunk<
 
 // Branch message when editing - creates new branch while preserving original
 export const editMessageWithBranching = createAsyncThunk<
-  { messageId: number | null; userMessage: any; originalMessageId: MessageId },
+  { messageId: MessageId | null; userMessage: any; originalMessageId: MessageId },
   EditMessagePayload,
   { state: RootState; extra: ThunkExtraArgument }
 >(
@@ -931,7 +931,7 @@ export const editMessageWithBranching = createAsyncThunk<
       if (!reader) throw new Error('No stream reader available')
 
       const decoder = new TextDecoder()
-      let messageId: number | null = null
+      let messageId: MessageId | null = null
       let userMessage: any = null
       // Buffer for incomplete lines across chunks
       let buffer = ''
@@ -1040,7 +1040,7 @@ export const editMessageWithBranching = createAsyncThunk<
 
 // Send message to specific branch
 export const sendMessageToBranch = createAsyncThunk<
-  { messageId: number | null; userMessage: any },
+  { messageId: MessageId | null; userMessage: any },
   BranchMessagePayload,
   { state: RootState; extra: ThunkExtraArgument }
 >(
@@ -1097,7 +1097,7 @@ export const sendMessageToBranch = createAsyncThunk<
       if (!reader) throw new Error('No stream reader available')
 
       const decoder = new TextDecoder()
-      let messageId: number | null = null
+      let messageId: MessageId | null = null
       let userMessage: any = null
       // Buffer for incomplete lines across chunks
       let buffer = ''
@@ -1356,7 +1356,7 @@ export const refreshCurrentPathAfterDelete = createAsyncThunk<
 
 // Initialize user and conversation
 export const initializeUserAndConversation = createAsyncThunk<
-  { userId: number; conversationId: number },
+  { userId: number; conversationId: ConversationId },
   void,
   { extra: ThunkExtraArgument }
 >('chat/initializeUserAndConversation', async (_arg, { dispatch, extra, rejectWithValue }) => {
@@ -1370,7 +1370,7 @@ export const initializeUserAndConversation = createAsyncThunk<
     })
 
     // Create new conversation
-    const conversation = await apiCall<{ id: number }>(`/conversations`, auth.accessToken, {
+    const conversation = await apiCall<{ id: ConversationId }>(`/conversations`, auth.accessToken, {
       method: 'POST',
       body: JSON.stringify({ userId: user.id }),
     })
@@ -1461,7 +1461,7 @@ export const uploadAttachment = createAsyncThunk<
 // Link existing attachments to a message
 export const linkAttachmentsToMessage = createAsyncThunk<
   Attachment[],
-  { messageId: number; attachmentIds: number[] },
+  { messageId: MessageId; attachmentIds: string[] },
   { extra: ThunkExtraArgument }
 >('chat/linkAttachmentsToMessage', async ({ messageId, attachmentIds }, { dispatch, extra, rejectWithValue }) => {
   const { auth } = extra
@@ -1519,7 +1519,7 @@ export const fetchAttachmentsByMessage = createAsyncThunk<
 // Delete all attachments for a message
 export const deleteAttachmentsByMessage = createAsyncThunk<
   { deleted: number },
-  { messageId: number },
+  { messageId: MessageId },
   { extra: ThunkExtraArgument }
 >('chat/deleteAttachmentsByMessage', async ({ messageId }, { dispatch, extra, rejectWithValue }) => {
   const { auth } = extra

@@ -67,6 +67,12 @@ export async function getApiKey(keyName: string): Promise<string | undefined> {
     return undefined
   }
 
+  // If ENCRYPTION_MASTER_KEY is not set, skip encryption (local dev mode)
+  if (!process.env.ENCRYPTION_MASTER_KEY) {
+    setCachedKey(keyName, envKey)
+    return envKey
+  }
+
   try {
     // For prototype: encrypt then decrypt to test the flow
     // This simulates what will happen with Supabase stored encrypted keys

@@ -88,9 +88,9 @@ export const createStreamingRequest = async (endpoint: string, accessToken: stri
 
 // Specific helpers for conversation system prompt endpoints
 export type SystemPromptGetResponse = { systemPrompt: string | null }
-export type SystemPromptPatchResponse = { id: number; system_prompt: string | null }
+export type SystemPromptPatchResponse = { id: ConversationId; system_prompt: string | null }
 export type ConversationPatchResponse = {
-  id: number
+  id: ConversationId
   system_prompt?: string | null
   conversation_context?: string | null
 }

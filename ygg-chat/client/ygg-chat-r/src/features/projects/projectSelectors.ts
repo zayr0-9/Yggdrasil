@@ -1,6 +1,7 @@
 import { createSelector } from '@reduxjs/toolkit'
 import { RootState } from '../../store/store'
 import { ProjectState } from './projectTypes'
+import { ProjectId } from '../../../../../shared/types'
 
 // Base selector
 const selectProjectsState = (state: RootState): ProjectState => state.projects
@@ -28,7 +29,7 @@ export const selectSelectedProject = createSelector(
 
 // Derived selectors
 export const selectProjectById = createSelector(
-  [selectAllProjects, (_state: RootState, projectId: number) => projectId],
+  [selectAllProjects, (_state: RootState, projectId: ProjectId) => projectId],
   (projects, projectId) => projects.find(project => project.id === projectId)
 )
 

@@ -209,7 +209,7 @@ const ConversationPage: React.FC = () => {
                 variant='outline'
                 rounded='full'
                 size='circle'
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/homepage')}
                 className='group border-2 hover:bg-pureWhite-100 dark:hover:bg-neutral-900 border-pureWhite-200 dark:border-neutral-800 shadow-[0_0px_8px_-4px_rgba(0,0,0,0.5)] dark:shadow-[0_1px_22px_1px_rgba(0,0,0,0.45)]'
               >
                 <i

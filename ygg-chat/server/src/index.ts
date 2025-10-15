@@ -13,7 +13,6 @@ import { WebSocket, WebSocketServer } from 'ws'
 import { db, initializeDatabase, initializeStatements } from './database/db'
 import chatRoutes from './routes/chat'
 import settingsRoutes from './routes/settings'
-import stripeRoutes from './routes/stripe'
 import { stripMarkdownToText } from './utils/markdownStripper'
 import { preloadModelPricing } from './utils/openrouter'
 import tools from './utils/tools/index'
@@ -147,7 +146,10 @@ app.use(
 
 // IMPORTANT: Register Stripe webhook BEFORE express.json() middleware
 // Webhook signature verification requires raw body, but express.json() parses it
-app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeRoutes)
+if (env.VITE_ENVIRONMENT !== 'local') {
+  const stripeRoutes = require('./routes/stripe').default
+  app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeRoutes)
+}
 
 app.use(express.json({ limit: '25mb' }))
 app.use(express.urlencoded({ extended: true, limit: '25mb' }))
@@ -167,7 +169,10 @@ if (env.VITE_ENVIRONMENT === 'web') {
   app.use('/api', chatRoutes)
 }
 app.use('/api/settings', settingsRoutes)
-app.use('/api/stripe', stripeRoutes)
+if (env.VITE_ENVIRONMENT !== 'local') {
+  const stripeRoutes = require('./routes/stripe').default
+  app.use('/api/stripe', stripeRoutes)
+}
 app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')))
 
 // Tools endpoint
@@ -190,16 +195,52 @@ app.get('/api/debug/ide-clients', (req, res) => {
   res.json(clientList)
 })
 
+// Initialize database
+// NOTE: If migrating from INTEGER PKs to UUID PKs, run `npm run migrate` first!
+// The migration script (src/database/runMigration.ts) will handle the migration automatically.
 const dbPath = path.join(__dirname, 'data', 'yggdrasil.db')
 if (!fs.existsSync(dbPath)) {
-  console.log('Database file not found, creating new database...')
+  console.log('📝 Database file not found, creating new UUID-based database...')
 }
 
+console.log('🔧 Initializing database...')
 initializeDatabase()
-console.log('Rebuilding FTS index on startup...')
+console.log('📊 Rebuilding FTS index on startup...')
 // rebuildFTSIndex()
-console.log('FTS index rebuilt.')
+console.log('✅ FTS index rebuilt.')
 initializeStatements()
+
+// Create default local user for local mode
+function ensureDefaultLocalUser() {
+  if (env.VITE_ENVIRONMENT !== 'local') {
+    console.log('Skipping default user creation (not in local mode)')
+    return
+  }
+
+  try {
+    // Use a fixed UUID for the local user (matches Supabase-generated UUID)
+    const defaultUserId = 'a7c485cb-99e7-4cf2-82a9-6e23b55cdfc3'
+    const defaultUsername = 'local-user'
+
+    // Import statements from db module
+    const { statements } = require('./database/db')
+
+    // Check if user already exists
+    const existingUser = statements.getUserById.get(defaultUserId)
+
+    if (existingUser) {
+      console.log(`✅ Default local user already exists: ${existingUser.username} (${defaultUserId})`)
+    } else {
+      // Create the default user
+      statements.createUser.run(defaultUserId, defaultUsername)
+      console.log(`✅ Created default local user: ${defaultUsername} (${defaultUserId})`)
+    }
+  } catch (error) {
+    console.error('❌ Error creating default local user:', error)
+  }
+}
+
+ensureDefaultLocalUser()
 
 // Preload model pricing on startup
 preloadModelPricing().catch(error => {

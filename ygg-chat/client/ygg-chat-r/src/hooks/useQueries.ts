@@ -5,7 +5,7 @@ import type { Project } from '../../../../shared/types'
 import { ConversationId, ProjectId, ProjectWithLatestConversation } from '../../../../shared/types'
 import type { Message } from '../features/chats/chatTypes'
 import type { Conversation } from '../features/conversations/conversationTypes'
-import { api, environment } from '../utils/api'
+import { api } from '../utils/api'
 import { useAuth } from './useAuth'
 
 /**
@@ -19,18 +19,21 @@ import { useAuth } from './useAuth'
  * - Chat.tsx: Never refetch (uses persisted cache for instant UI)
  */
 export function useProjects() {
-  const { accessToken } = useAuth()
+  const { accessToken, userId } = useAuth()
   const location = useLocation()
 
   // Always refetch on Homepage, never on Chat.tsx
   const isHomePage = location.pathname === '/'
 
   return useQuery({
-    queryKey: ['projects'],
+    queryKey: ['projects', userId],
     queryFn: async () => {
-      return api.get<ProjectWithLatestConversation[]>(`/projects/sorted/latest-conversation`, accessToken)
+      return api.get<ProjectWithLatestConversation[]>(
+        `/projects/sorted/latest-conversation?userId=${userId}`,
+        accessToken
+      )
     },
-    enabled: !!accessToken,
+    enabled: !!accessToken && !!userId,
     staleTime: 10 * 60 * 1000, // Projects don't change often, 10 minute cache
     refetchOnMount: isHomePage ? 'always' : false, // Force fresh data on Homepage
     refetchOnReconnect: false,
@@ -70,8 +73,8 @@ export function useConversations(enabled: boolean = true) {
   const { accessToken, userId: authUserId } = useAuth()
   // const location = useLocation()
 
-  // Local mode always uses userId = 1 (SQLite), web mode uses Supabase UUID
-  const userId = environment === 'local' ? 1 : authUserId
+  // Use userId from AuthContext (works for both local mode with UUID and web mode)
+  const userId = authUserId
 
   // Always refetch on ConversationPage, never on Chat.tsx
   // const isConversationPage = location.pathname.includes('/conversationPage')
@@ -133,8 +136,8 @@ export function useConversationsByProject(projectId: ProjectId | null) {
 export function useRecentConversations(limit: number = 8) {
   const { accessToken, userId: authUserId } = useAuth()
 
-  // Local mode always uses userId = 1 (SQLite), web mode uses Supabase UUID
-  const userId = environment === 'local' ? 1 : authUserId
+  // Use userId from AuthContext (works for both local mode with UUID and web mode)
+  const userId = authUserId
 
   return useQuery({
     queryKey: ['conversations', 'recent'],

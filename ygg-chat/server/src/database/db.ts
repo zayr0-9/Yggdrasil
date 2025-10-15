@@ -21,7 +21,7 @@ export function initializeDatabase() {
   // Users table
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -30,7 +30,7 @@ export function initializeDatabase() {
   // Projects table
   db.exec(`
   CREATE TABLE IF NOT EXISTS projects (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -41,9 +41,9 @@ export function initializeDatabase() {
   // Conversations table
   db.exec(`
   CREATE TABLE IF NOT EXISTS conversations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_id INTEGER, -- Add this line
-    user_id INTEGER NOT NULL,
+    id TEXT PRIMARY KEY,
+    project_id TEXT, -- Add this line
+    user_id TEXT NOT NULL,
     title TEXT,
     model_name TEXT DEFAULT 'gemma3:4b',
     system_prompt TEXT,
@@ -57,9 +57,9 @@ export function initializeDatabase() {
   // Messages table with hybrid parent_id + children_ids design
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      conversation_id INTEGER NOT NULL,
-      parent_id INTEGER,
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      parent_id TEXT,
       children_ids TEXT DEFAULT '[]',
       role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
       content TEXT NOT NULL,
@@ -76,8 +76,8 @@ export function initializeDatabase() {
   // Message attachments table (images stored locally with optional CDN URL)
   db.exec(`
     CREATE TABLE IF NOT EXISTS message_attachments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      message_id INTEGER,
+      id TEXT PRIMARY KEY,
+      message_id TEXT,
       kind TEXT NOT NULL CHECK (kind IN ('image')),
       mime_type TEXT NOT NULL,
       storage TEXT NOT NULL CHECK (storage IN ('file','url')) DEFAULT 'file',
@@ -95,9 +95,9 @@ export function initializeDatabase() {
   // Provider cost tracking table
   db.exec(`
     CREATE TABLE IF NOT EXISTS provider_cost (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      message_id INTEGER NOT NULL,
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      message_id TEXT NOT NULL,
       prompt_tokens INTEGER DEFAULT 0,
       completion_tokens INTEGER DEFAULT 0,
       reasoning_tokens INTEGER DEFAULT 0,
@@ -112,9 +112,9 @@ export function initializeDatabase() {
   // Join table to support many-to-many links between messages and attachments
   db.exec(`
     CREATE TABLE IF NOT EXISTS message_attachment_links (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      message_id INTEGER NOT NULL,
-      attachment_id INTEGER NOT NULL,
+      id TEXT PRIMARY KEY,
+      message_id TEXT NOT NULL,
+      attachment_id TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
       FOREIGN KEY (attachment_id) REFERENCES message_attachments(id) ON DELETE CASCADE,
@@ -125,7 +125,7 @@ export function initializeDatabase() {
   // Message file content table (files with name and paths)
   db.exec(`
     CREATE TABLE IF NOT EXISTS message_file_content (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT PRIMARY KEY,
       file_name TEXT NOT NULL,
       absolute_path TEXT NOT NULL,
       relative_path TEXT NOT NULL,
@@ -138,9 +138,9 @@ export function initializeDatabase() {
   // Join table to support many-to-many links between messages and file content
   db.exec(`
     CREATE TABLE IF NOT EXISTS message_file_content_links (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      message_id INTEGER NOT NULL,
-      file_content_id INTEGER NOT NULL,
+      id TEXT PRIMARY KEY,
+      message_id TEXT NOT NULL,
+      file_content_id TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
       FOREIGN KEY (file_content_id) REFERENCES message_file_content(id) ON DELETE CASCADE,
@@ -189,7 +189,7 @@ export function initializeDatabase() {
 
   // Migration for existing provider_cost table - add user_id column if it doesn't exist
   try {
-    db.exec(`ALTER TABLE provider_cost ADD COLUMN user_id INTEGER`)
+    db.exec(`ALTER TABLE provider_cost ADD COLUMN user_id TEXT`)
     console.log('Added user_id column to provider_cost table')
   } catch (error) {
     // Column already exists, ignore the error
@@ -228,9 +228,9 @@ export function initializeDatabase() {
       // Create new table with correct schema
       db.exec(`
         CREATE TABLE IF NOT EXISTS provider_cost_new (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_id INTEGER NOT NULL,
-          message_id INTEGER NOT NULL,
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          message_id TEXT NOT NULL,
           prompt_tokens INTEGER DEFAULT 0,
           completion_tokens INTEGER DEFAULT 0,
           reasoning_tokens INTEGER DEFAULT 0,
@@ -306,14 +306,14 @@ export function initializeDatabase() {
 
   // Triggers to maintain children_ids integrity
   db.exec(`
-    CREATE TRIGGER IF NOT EXISTS messages_children_insert AFTER INSERT ON messages 
+    CREATE TRIGGER IF NOT EXISTS messages_children_insert AFTER INSERT ON messages
     WHEN NEW.parent_id IS NOT NULL
     BEGIN
-      UPDATE messages 
+      UPDATE messages
       SET children_ids = (
-        SELECT CASE 
-          WHEN children_ids = '[]' OR children_ids = '' THEN '[' || NEW.id || ']'
-          ELSE SUBSTR(children_ids, 1, LENGTH(children_ids)-1) || ',' || NEW.id || ']'
+        SELECT CASE
+          WHEN children_ids = '[]' OR children_ids = '' THEN '["' || NEW.id || '"]'
+          ELSE SUBSTR(children_ids, 1, LENGTH(children_ids)-1) || ',"' || NEW.id || '"]'
         END
         FROM messages WHERE id = NEW.parent_id
       )
@@ -349,7 +349,7 @@ export function initializeDatabase() {
 
   // Add migration for project_id column if it doesn't exist
   try {
-    db.exec(`ALTER TABLE conversations ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE`)
+    db.exec(`ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE CASCADE`)
   } catch (error) {
     // Column already exists, ignore the error
   }
@@ -421,8 +421,8 @@ export function initializeDatabase() {
   // Credit ledger table for audit trail
   db.exec(`
     CREATE TABLE IF NOT EXISTS credit_ledger (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
       amount INTEGER NOT NULL,
       reason TEXT NOT NULL,
       balance_after INTEGER NOT NULL,
@@ -453,7 +453,7 @@ export let statements: any = {}
 export function initializeStatements() {
   statements = {
     // Users
-    createUser: db.prepare('INSERT INTO users (username) VALUES (?)'),
+    createUser: db.prepare('INSERT INTO users (id, username) VALUES (?, ?)'),
     getAllUsers: db.prepare('SELECT * FROM users ORDER BY created_at DESC'),
     getUserById: db.prepare('SELECT * FROM users WHERE id = ?'),
     getUserByUsername: db.prepare('SELECT * FROM users WHERE username = ?'),
@@ -475,8 +475,8 @@ export function initializeStatements() {
 
     // Credit ledger operations
     createCreditLedgerEntry: db.prepare(`
-      INSERT INTO credit_ledger (user_id, amount, reason, balance_after)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO credit_ledger (id, user_id, amount, reason, balance_after)
+      VALUES (?, ?, ?, ?, ?)
     `),
     getCreditLedgerByUser: db.prepare(`
       SELECT * FROM credit_ledger
@@ -492,7 +492,7 @@ export function initializeStatements() {
 
     //Projects
     createProject: db.prepare(
-      'INSERT INTO projects (name, created_at, updated_at, context, system_prompt) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO projects (id, name, created_at, updated_at, context, system_prompt) VALUES (?, ?, ?, ?, ?, ?)'
     ),
     getAllProjects: db.prepare('SELECT * FROM projects ORDER BY created_at DESC'),
     getProjectsSortedByLatestConversation: db.prepare(`
@@ -501,6 +501,7 @@ export function initializeStatements() {
         MAX(c.updated_at) as latest_conversation_updated_at
       FROM projects p
       LEFT JOIN conversations c ON c.project_id = p.id
+      WHERE c.user_id = ?
       GROUP BY p.id
       ORDER BY
         COALESCE(MAX(c.updated_at), p.updated_at, p.created_at) DESC
@@ -515,7 +516,7 @@ export function initializeStatements() {
 
     // Conversations
     createConversation: db.prepare(
-      'INSERT INTO conversations (user_id, title, model_name, project_id) VALUES (?, ?, ?, ?)'
+      'INSERT INTO conversations (id, user_id, title, model_name, project_id) VALUES (?, ?, ?, ?, ?)'
     ),
     getConversationsByUser: db.prepare('SELECT * FROM conversations WHERE user_id = ? ORDER BY updated_at DESC'),
     // Get recent conversations for a user limited by count
@@ -541,7 +542,7 @@ export function initializeStatements() {
 
     // Messages - Core operations
     createMessage: db.prepare(
-      'INSERT INTO messages (conversation_id, parent_id, role, content, thinking_block, tool_calls, children_ids, model_name, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO messages (id, conversation_id, parent_id, role, content, thinking_block, tool_calls, children_ids, model_name, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ),
     getMessageById: db.prepare(`
       SELECT 
@@ -579,7 +580,7 @@ export function initializeStatements() {
       WHERE m.conversation_id = ? 
       ORDER BY m.created_at ASC
     `),
-    getLastMessage: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1'),
+    getLastMessage: db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1'),
     deleteMessagesByConversation: db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
     updateMessage: db.prepare(
       'UPDATE messages SET content = ?, thinking_block = ?, tool_calls = ?, note = ? WHERE id = ?'
@@ -658,14 +659,14 @@ export function initializeStatements() {
     // Attachments
     createAttachment: db.prepare(
       `INSERT INTO message_attachments (
-         message_id, kind, mime_type, storage, url, file_path, width, height, size_bytes, sha256
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         id, message_id, kind, mime_type, storage, url, file_path, width, height, size_bytes, sha256
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ),
     // Legacy setter retained but no longer used in new code paths
     updateAttachmentMessageId: db.prepare('UPDATE message_attachments SET message_id = ? WHERE id = ?'),
     // Many-to-many operations via join table
     linkAttachmentToMessage: db.prepare(
-      'INSERT OR IGNORE INTO message_attachment_links (message_id, attachment_id) VALUES (?, ?)'
+      'INSERT OR IGNORE INTO message_attachment_links (id, message_id, attachment_id) VALUES (?, ?, ?)'
     ),
     deleteLinksByMessage: db.prepare('DELETE FROM message_attachment_links WHERE message_id = ?'),
     unlinkAttachmentFromMessage: db.prepare(
@@ -716,11 +717,11 @@ export function initializeStatements() {
     // File Content operations
     createFileContent: db.prepare(
       `INSERT INTO message_file_content (
-         file_name, absolute_path, relative_path, file_content, size_bytes
-       ) VALUES (?, ?, ?, ?, ?)`
+         id, file_name, absolute_path, relative_path, file_content, size_bytes
+       ) VALUES (?, ?, ?, ?, ?, ?)`
     ),
     linkFileContentToMessage: db.prepare(
-      'INSERT OR IGNORE INTO message_file_content_links (message_id, file_content_id) VALUES (?, ?)'
+      'INSERT OR IGNORE INTO message_file_content_links (id, message_id, file_content_id) VALUES (?, ?, ?)'
     ),
     unlinkFileContentFromMessage: db.prepare(
       'DELETE FROM message_file_content_links WHERE message_id = ? AND file_content_id = ?'
@@ -746,7 +747,7 @@ export function initializeStatements() {
 
     // Provider Cost operations
     createProviderCost: db.prepare(
-      'INSERT INTO provider_cost (user_id, message_id, prompt_tokens, completion_tokens, reasoning_tokens, approx_cost, api_credit_cost) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO provider_cost (id, user_id, message_id, prompt_tokens, completion_tokens, reasoning_tokens, approx_cost, api_credit_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ),
     getProviderCostByMessage: db.prepare('SELECT * FROM provider_cost WHERE message_id = ?'),
     getProviderCostsByUser: db.prepare(`

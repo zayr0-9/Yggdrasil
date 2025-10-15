@@ -342,7 +342,7 @@ export async function generateResponse(
   abortSignal?: AbortSignal,
   think: boolean = false,
   messageId?: MessageId,
-  userId?: number,
+  userId?: string,
   tool_detail: boolean = false
 ): Promise<void> {
   console.log(`🔴 [openrouter.ts] generateResponse called`)

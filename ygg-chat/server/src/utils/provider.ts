@@ -41,7 +41,7 @@ export async function generateResponse(
   conversationContext?: string | null,
   think?: boolean,
   messageId?: MessageId,
-  userId?: number
+  userId?: string
 ): Promise<void> {
   const providerModel = getProviderModel(provider, model)
 

@@ -10,13 +10,7 @@ import { MessageId } from '../../../../shared/types'
  * @returns Parsed ID appropriate for the current environment
  */
 export const parseId = (id: string | number): MessageId => {
-  const environment = import.meta.env.VITE_ENVIRONMENT || 'local'
-
-  if (environment === 'local') {
-    // SQLite mode - convert to integer
-    return typeof id === 'string' ? parseInt(id, 10) : id
-  } else {
-    // Supabase/Web mode - keep as string (UUID)
-    return typeof id === 'string' ? id : String(id)
-  }
+  // After UUID migration, all IDs are strings
+  // Convert numbers to strings for backward compatibility
+  return typeof id === 'string' ? id : String(id)
 }

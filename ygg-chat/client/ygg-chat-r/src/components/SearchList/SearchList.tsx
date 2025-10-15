@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { TextField } from '..'
+import { ConversationId } from '../../../../../shared/types'
 
 export type SearchResultItem = {
-  conversationId: number
+  conversationId: ConversationId
   messageId: string
   content: string
   conversationTitle?: string
@@ -18,7 +19,7 @@ export interface SearchListProps {
   onSubmit: () => void
   results: SearchResultItem[]
   loading?: boolean
-  onResultClick: (conversationId: number, messageId: string) => void
+  onResultClick: (conversationId: ConversationId, messageId: string) => void
   placeholder?: string
   className?: string
   dropdownVariant?: Variant

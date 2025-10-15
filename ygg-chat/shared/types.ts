@@ -1,11 +1,9 @@
 // This file contains types shared between client and server
 
-// Environment-aware ID type
-// In local mode (SQLite): number
-// In web mode (Supabase): string (UUID)
-export type MessageId = number | string
-export type ConversationId = number | string
-export type ProjectId = number | string
+// UUID-based ID types for Supabase compatibility
+export type MessageId = string
+export type ConversationId = string
+export type ProjectId = string
 
 export interface BaseMessage {
   id: MessageId

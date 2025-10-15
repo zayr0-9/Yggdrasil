@@ -64,10 +64,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [])
 
   useEffect(() => {
+    // Check if we're in local mode
+    const isLocal = import.meta.env.VITE_ENVIRONMENT === 'local'
+
     // STEP 1: Read initial session from localStorage ONLY (ZERO network calls)
     const initializeAuth = async () => {
       try {
         console.log('[AuthContext] Initializing - reading from localStorage...')
+
+        // In local mode, bypass Supabase and use hardcoded local user
+        if (isLocal) {
+          console.log('[AuthContext] Local mode detected - using hardcoded local user')
+          setAuthState({
+            user: { id: 'a7c485cb-99e7-4cf2-82a9-6e23b55cdfc3' } as any,
+            session: null,
+            accessToken: 'local-mode-token',
+            userId: 'a7c485cb-99e7-4cf2-82a9-6e23b55cdfc3',
+            loading: false,
+          })
+          updateThunkExtraAuth('local-mode-token', 'a7c485cb-99e7-4cf2-82a9-6e23b55cdfc3')
+          return
+        }
+
         const initialSession = getSessionFromStorage()
 
         if (initialSession) {
