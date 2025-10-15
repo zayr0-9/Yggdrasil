@@ -1,4 +1,4 @@
-import { BaseMessage, Project, ProjectWithLatestConversation, MessageId, ConversationId } from '../../../shared/types'
+import { BaseMessage, ConversationId, MessageId, Project, ProjectWithLatestConversation } from '../../../shared/types'
 import { stripMarkdownToText } from '../utils/markdownStripper'
 import { db, statements } from './db'
 import { generateId } from './idGenerator'
@@ -381,13 +381,11 @@ export class ProjectService {
 
   static getProjectContext(id: string): string | null {
     const row = statements.getProjectContext.get(id) as { context: string | null } | undefined
-    console.log(`row ${row}`)
     return row?.context ?? null
   }
 
   static getProjectIdFromConversation(conversationId: string): string | null {
     const row = statements.getConversationProjectId.get(conversationId) as { project_id: string | null } | undefined
-    console.log(`getProjectIdFromConversation - conversationId: ${conversationId}, row:`, row)
     return row?.project_id ?? null
   }
 
@@ -464,13 +462,7 @@ export class ConversationService {
     // Create new conversation with cloned title
     const cloneTitle = `${source.title || 'Conversation'} (Clone)`
     const newConvId = generateId()
-    statements.createConversation.run(
-      newConvId,
-      source.user_id,
-      cloneTitle,
-      source.model_name,
-      source.project_id
-    )
+    statements.createConversation.run(newConvId, source.user_id, cloneTitle, source.model_name, source.project_id)
 
     // Copy system prompt and context if they exist
     if (source.system_prompt) {

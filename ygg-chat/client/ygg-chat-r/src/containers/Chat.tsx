@@ -904,8 +904,6 @@ function Chat() {
           const parent: MessageId | null = lastUserMessage.parent_id || null
           const contentToRetrigger = lastUserMessage.content
 
-          console.log('Retriggering generation from last user message:', lastUserMessage.id)
-
           // Immediately scroll to bottom
           scrollToBottomNow('auto')
 
@@ -1012,7 +1010,6 @@ function Chat() {
 
           // Use processed content for immediate send
           const inputToSend = { content: processedContent }
-          console.log('input to send', inputToSend)
           // Clear local input immediately after sending
           setLocalInput('')
           // Immediately scroll to bottom so the user sees the outgoing message/stream start
@@ -1178,7 +1175,6 @@ function Chat() {
   const handleNodeSelect = (nodeId: string, path: string[]) => {
     if (!nodeId || !path || path.length === 0) return // ignore clicks on empty space
     // console.log('Node selected:', nodeId, 'Path:', path)
-    console.log('selected path', path)
     // Mark this selection as user-initiated so the scroll-to-selection effect may run
     selectionScrollCauseRef.current = 'user'
     // Treat user selection during streaming as an override to bottom pinning
@@ -1188,7 +1184,6 @@ function Chat() {
     dispatch(chatSliceActions.conversationPathSet(path.map(id => parseId(id))))
     dispatch(chatSliceActions.selectedNodePathSet(path))
 
-    console.log('selected node', nodeId)
     dispatch(chatSliceActions.focusedChatMessageSet(parseId(nodeId)))
   }
 

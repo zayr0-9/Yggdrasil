@@ -82,8 +82,6 @@ export function useConversations(enabled: boolean = true) {
   return useQuery({
     queryKey: ['conversations'],
     queryFn: async () => {
-      console.log('[useConversations] FETCHING /users/${userId}/conversations')
-      console.log('[useConversations] Stack trace:', new Error().stack)
       if (!userId) throw new Error('User not authenticated')
       return api.get<Conversation[]>(`/users/${userId}/conversations`, accessToken)
     },
@@ -114,8 +112,6 @@ export function useConversationsByProject(projectId: ProjectId | null) {
   return useQuery({
     queryKey: ['conversations', 'project', projectId],
     queryFn: async () => {
-      console.log(`[useConversationsByProject] FETCHING /conversations/project/${projectId}`)
-      console.log('[useConversationsByProject] Stack trace:', new Error().stack)
       if (!projectId) throw new Error('Project ID is required')
       return api.get<Conversation[]>(`/conversations/project/${projectId}`, accessToken)
     },
@@ -142,8 +138,6 @@ export function useRecentConversations(limit: number = 8) {
   return useQuery({
     queryKey: ['conversations', 'recent'],
     queryFn: async () => {
-      console.log(`[useRecentConversations] FETCHING /users/${userId}/conversations/recent?limit=${limit}`)
-      console.log('[useRecentConversations] Stack trace:', new Error().stack)
       if (!userId) throw new Error('User not authenticated')
       const query = new URLSearchParams({ limit: String(limit) }).toString()
       const response = await api.get<any[]>(`/users/${userId}/conversations/recent?${query}`, accessToken)
@@ -158,7 +152,6 @@ export function useRecentConversations(limit: number = 8) {
         project_id: conv.project_id ? String(conv.project_id) : null,
       }))
 
-      console.log('[useRecentConversations] Normalized conversations:', normalized.length)
       return normalized
     },
     enabled: !!userId && !!accessToken,

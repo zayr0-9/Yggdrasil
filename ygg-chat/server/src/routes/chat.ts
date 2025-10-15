@@ -577,7 +577,6 @@ router.get(
     const conversation = ConversationService.getById(conversationId)
 
     if (!conversation) {
-      console.log('Conversation not found')
       return res.status(404).json({ error: 'Conversation not found' })
     }
     const context = ConversationService.getConversationContext(conversationId)
@@ -997,7 +996,6 @@ router.post(
             assistantThinking,
             assistantToolCalls
           )
-          console.log(updatedMessage)
 
           const cleanedMessage = { ...updatedMessage, content: cleanedContent }
           res.write(`data: ${JSON.stringify({ type: 'complete', message: cleanedMessage, iteration: i })}\n\n`)
@@ -1120,7 +1118,6 @@ router.post(
     if (!content && !retrigger) {
       return res.status(400).json({ error: 'Message content required' })
     }
-    console.log('server | content', content)
 
     // If no selectedFiles provided, check database for existing file content from previous messages
     let filesToUse = selectedFiles || []
@@ -1180,7 +1177,6 @@ router.post(
           }
         }
         filesToUse = matchingFiles
-        console.log('server | using database file content:', filesToUse.length, 'files')
       }
     }
 
@@ -1237,11 +1233,8 @@ router.post(
         return res.status(400).json({ error: 'Cannot retrigger: last message is not from user' })
       }
       userMessage = lastMessage
-      console.log('server | retrigger | user message', messages)
-      console.log('server | retriggering from existing user message', userMessage.id)
     } else {
       userMessage = MessageService.create(conversationId, parentId, 'user', content, '', selectedModel)
-      console.log('server | user message', messages)
 
       // Store file content in database if selectedFiles were provided
       if (selectedFiles && selectedFiles.length > 0) {
@@ -1255,7 +1248,6 @@ router.post(
               sizeBytes: file.contentLength,
               messageId: userMessage.id,
             })
-            console.log('Stored file content:', fileContent.file_name)
           } catch (error) {
             console.error('Error storing file content:', error)
           }
@@ -1315,13 +1307,9 @@ router.post(
 
       // Stream AI response with manual abort control - use ASSISTANT message ID since that's what's being generated
       const { id: messageId, controller } = createGeneration(assistantMessage.id)
-      console.log(
-        `🔴 [chat.ts] Controller created for assistantMessage.id: ${assistantMessage.id}, signal.aborted: ${controller.signal.aborted}`
-      )
       res.write(`data: ${JSON.stringify({ type: 'generation_started', messageId: assistantMessage.id })}\n\n`)
       // Don't clear on close - let it complete naturally or be aborted manually
       // req.on('close', () => clearGeneration(messageId))
-      console.log(`🔴 [chat.ts] About to call generateResponse with provider: ${provider}`)
       try {
         await generateResponse(
           combinedMessages,
@@ -1421,12 +1409,10 @@ router.post(
           const matches = assistantContent.match(toolCallRegex)
           if (matches) {
             assistantToolCalls = JSON.stringify(matches)
-            console.log('Final extraction - found tool calls:', assistantToolCalls)
           }
         }
         // Always clean content regardless of whether we found new tool calls
         const cleanedContent = assistantContent.replace(toolCallRegex, '').trim()
-        console.log('Original content length:', assistantContent.length, 'Cleaned length:', cleanedContent.length)
 
         // Normal completion -> update assistant message with final content
         const updatedAssistantMessage = MessageService.update(
@@ -1437,8 +1423,6 @@ router.post(
           // TODO: Add lastChunkId as parameter once database field is added
           // lastChunkId
         )
-        console.log('Last chunk ID:', lastChunkId)
-        console.log(updatedAssistantMessage)
         // Send completion with cleaned content to override any streamed raw content
         const cleanedMessage = { ...updatedAssistantMessage, content: cleanedContent }
         res.write(
@@ -1450,9 +1434,6 @@ router.post(
 
         // Auto-generate title for new conversations (only if first message and no existing title)
         if (!conversation.title && parentId === null) {
-          console.log('Auto-generating title for new conversation', conversationId)
-          const title = content.slice(0, 100) + (content.length > 100 ? '...' : '')
-          ConversationService.updateTitle(conversationId, title)
         }
 
         // Decrement credits after successful generation (only if user has subscription)
@@ -1504,9 +1485,6 @@ router.post(
             res.write(`data: ${JSON.stringify({ type: 'complete', message: cleanedMessage, aborted: true })}\n\n`)
           } else {
             // Delete the placeholder message if no content was generated
-            console.log('deleted empty message ######################')
-            MessageService.delete(assistantMessage.id)
-            res.write(`data: ${JSON.stringify({ type: 'aborted' })}\n\n`)
           }
         } else {
           // Delete placeholder message on general error
@@ -1854,9 +1832,7 @@ router.post(
   '/messages/:id/abort',
   asyncHandler(async (req, res) => {
     const userMessageId = req.params.id
-    console.log(`🔴 [SERVER /abort] Abort endpoint called for messageId: ${userMessageId}`)
     const success = abortGeneration(userMessageId)
-    console.log(`🔴 [SERVER /abort] abortGeneration returned success: ${success}`)
 
     // Check if the aborted assistant message is empty and delete it
     let messageDeleted = false

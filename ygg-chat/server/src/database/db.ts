@@ -190,7 +190,6 @@ export function initializeDatabase() {
   // Migration for existing provider_cost table - add user_id column if it doesn't exist
   try {
     db.exec(`ALTER TABLE provider_cost ADD COLUMN user_id TEXT`)
-    console.log('Added user_id column to provider_cost table')
   } catch (error) {
     // Column already exists, ignore the error
   }
@@ -392,14 +391,18 @@ export function initializeDatabase() {
 
   // Add subscription tier column
   try {
-    db.exec(`ALTER TABLE users ADD COLUMN subscription_tier TEXT CHECK (subscription_tier IN ('high', 'mid', 'low', NULL))`)
+    db.exec(
+      `ALTER TABLE users ADD COLUMN subscription_tier TEXT CHECK (subscription_tier IN ('high', 'mid', 'low', NULL))`
+    )
   } catch (error) {
     // Column already exists, ignore the error
   }
 
   // Add subscription status column
   try {
-    db.exec(`ALTER TABLE users ADD COLUMN subscription_status TEXT CHECK (subscription_status IN ('active', 'canceled', 'past_due', NULL))`)
+    db.exec(
+      `ALTER TABLE users ADD COLUMN subscription_status TEXT CHECK (subscription_status IN ('active', 'canceled', 'past_due', NULL))`
+    )
   } catch (error) {
     // Column already exists, ignore the error
   }

@@ -11,10 +11,10 @@
 
 // main.tsx
 // import React from 'react'
-import { QueryClient } from '@tanstack/react-query'
-import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
+import { QueryClient } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import ReactDOM from 'react-dom/client'
 import { Provider } from 'react-redux'
 import App from './App'
@@ -22,25 +22,6 @@ import { AuthProvider } from './contexts/AuthContext'
 import './index.css'
 import { store } from './store/store'
 import { updateThunkExtraQueryClient } from './store/thunkExtra'
-
-// 🚨 GLOBAL FETCH INTERCEPTOR - Track all HTTP requests to identify mystery Supabase calls
-// This must be at the TOP of the file, before any other code runs
-const originalFetch = window.fetch
-window.fetch = function(...args: Parameters<typeof fetch>) {
-  const url = typeof args[0] === 'string' ? args[0] : (args[0] as Request)?.url
-
-  // Only log conversation-related requests (exclude messages to reduce noise)
-  if (url?.includes('/rest/v1/conversations') && !url?.includes('/messages')) {
-    console.log('\n🚨🚨🚨 MYSTERY FETCH DETECTED 🚨🚨🚨')
-    console.log('🚨 URL:', url)
-    console.log('🚨 Method:', args[1]?.method || 'GET')
-    console.log('🚨 Full args:', args)
-    console.log('🚨 Stack trace:', new Error().stack)
-    console.log('🚨🚨🚨 END MYSTERY FETCH 🚨🚨🚨\n')
-  }
-
-  return originalFetch.apply(this, args)
-}
 
 // Configure React Query
 const queryClient = new QueryClient({
@@ -149,7 +130,7 @@ root.render(
       maxAge: 24 * 60 * 60 * 1000, // Persist cache for 24 hours max
       dehydrateOptions: {
         // Only persist conversations and projects queries to avoid bloating localStorage
-        shouldDehydrateQuery: (query) => {
+        shouldDehydrateQuery: query => {
           const queryKey = query.queryKey[0]
           return queryKey === 'conversations' || queryKey === 'projects'
         },

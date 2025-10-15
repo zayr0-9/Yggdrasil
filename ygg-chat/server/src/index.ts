@@ -43,7 +43,6 @@ wss.on('connection', (ws, request) => {
   }
 
   clients.add(client)
-  console.log(`🔌 ${clientType} connected: ${clientId}`)
 
   ws.on('message', data => {
     try {
@@ -126,7 +125,6 @@ wss.on('connection', (ws, request) => {
 
   ws.on('close', () => {
     clients.delete(client)
-    console.log(`🔌 ${client.type} disconnected: ${client.id}`)
   })
 
   ws.on('error', error => {
@@ -218,20 +216,28 @@ function ensureDefaultLocalUser() {
   }
 
   try {
-    // Use a fixed UUID for the local user (matches Supabase-generated UUID)
+    // Use a fixed UUID for the local user (matches Supabase-generated UUID and migration script)
     const defaultUserId = 'a7c485cb-99e7-4cf2-82a9-6e23b55cdfc3'
     const defaultUsername = 'local-user'
 
     // Import statements from db module
     const { statements } = require('./database/db')
 
-    // Check if user already exists
+    // Check if user already exists with this ID
     const existingUser = statements.getUserById.get(defaultUserId)
 
     if (existingUser) {
-      console.log(`✅ Default local user already exists: ${existingUser.username} (${defaultUserId})`)
+      // User exists - ensure username is correct (fix migration artifacts)
+      if (existingUser.username !== defaultUsername) {
+        console.log(`⚠️  User exists with different username: ${existingUser.username}`)
+        console.log(`📝 Updating username to: ${defaultUsername}`)
+        statements.updateUser.run(defaultUserId, defaultUsername)
+        console.log(`✅ Updated user to: ${defaultUsername} (${defaultUserId})`)
+      } else {
+        console.log(`✅ Default local user already exists: ${existingUser.username} (${defaultUserId})`)
+      }
     } else {
-      // Create the default user
+      // No user with this ID - create new user
       statements.createUser.run(defaultUserId, defaultUsername)
       console.log(`✅ Created default local user: ${defaultUsername} (${defaultUserId})`)
     }

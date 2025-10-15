@@ -53,7 +53,6 @@ const Homepage: React.FC = () => {
 
   const handleSelectProject = (project: ProjectWithLatestConversation) => {
     dispatch(setSelectedProject(project))
-    console.log('set selectedProject', project)
     navigate(`/conversationPage?projectId=${project.id}`)
   }
 

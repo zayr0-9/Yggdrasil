@@ -86,11 +86,7 @@ const buildTreeFromMessages = (messages: Message[]): any | null => {
  * Recursively adds a new message to the tree structure at the correct parent location
  * Uses parent_id to find where to insert the new message as a child
  */
-const addMessageToTree = (
-  tree: any | null,
-  newMessage: Message,
-  parentId: MessageId | null
-): any | null => {
+const addMessageToTree = (tree: any | null, newMessage: Message, parentId: MessageId | null): any | null => {
   // No existing tree - create new root node
   if (!tree) {
     return {
@@ -234,11 +230,7 @@ const updateMessageInCache = (
  * Keeps React Query cache in sync with Redux state when messages are added via SSE stream
  * Updates both messages array AND tree structure incrementally
  */
-const updateMessageCache = (
-  queryClient: QueryClient | null,
-  conversationId: ConversationId,
-  newMessage: Message
-) => {
+const updateMessageCache = (queryClient: QueryClient | null, conversationId: ConversationId, newMessage: Message) => {
   if (!queryClient) return
 
   // Update the messages cache
@@ -477,7 +469,7 @@ export const fetchModelsForCurrentProvider = createAsyncThunk<
       return res
     }
     const res = await (dispatch as any)(fetchModels(force)).unwrap()
-    console.log('fetchModelsForCurrentProvider', res)
+    // console.log('fetchModelsForCurrentProvider', res)
     return res
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to fetch models for provider'
@@ -648,7 +640,7 @@ export const sendMessage = createAsyncThunk<
 
               if (chunk.type === 'user_message' && chunk.message) {
                 userMessage = chunk.message
-                console.log('we got userMessage', userMessage)
+                // console.log('we got userMessage', userMessage)
                 if (!chunk.message.timestamp) {
                   chunk.message.timestamp = new Date().toISOString()
                 }
@@ -725,7 +717,7 @@ export const sendMessage = createAsyncThunk<
 
       dispatch(chatSliceActions.sendingCompleted())
       dispatch(chatSliceActions.inputCleared())
-      console.log('returning messageId and userMessage', { messageId, userMessage })
+      // console.log('returning messageId and userMessage', { messageId, userMessage })
       return { messageId, userMessage }
     } catch (error) {
       dispatch(chatSliceActions.sendingCompleted())
@@ -1239,7 +1231,7 @@ export const fetchMessageTree = createAsyncThunk<any, ConversationId, { state: R
         }
       }
 
-      console.log('treeData', treeData)
+      // console.log('treeData', treeData)
       dispatch(chatSliceActions.heimdallDataLoaded({ treeData }))
       return response
     } catch (error) {
@@ -1565,9 +1557,7 @@ export const abortStreaming = createAsyncThunk<
   { state: RootState; extra: ThunkExtraArgument }
 >('chat/abortStreaming', async ({ messageId }, { dispatch, getState, extra, rejectWithValue }) => {
   const { auth } = extra
-  console.log(`🔴 [CLIENT] abortStreaming called for messageId: ${messageId}`)
   try {
-    console.log(`🔴 [CLIENT] Sending abort request to /messages/${messageId}/abort`)
     const response = await apiCall<{ success: boolean; messageDeleted?: boolean }>(
       `/messages/${messageId}/abort`,
       auth.accessToken,
@@ -1575,7 +1565,6 @@ export const abortStreaming = createAsyncThunk<
         method: 'POST',
       }
     )
-    console.log(`🔴 [CLIENT] Abort response received:`, response)
 
     if (response.success) {
       dispatch(chatSliceActions.streamingAborted())

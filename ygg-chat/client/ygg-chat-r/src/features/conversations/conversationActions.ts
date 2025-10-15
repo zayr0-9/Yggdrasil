@@ -1,18 +1,18 @@
 import { createAsyncThunk } from '@reduxjs/toolkit'
+import type { BaseModel, ConversationId, ProjectId } from '../../../../../shared/types'
 import { RootState } from '../../store/store'
+import { ThunkExtraArgument } from '../../store/thunkExtra'
 import {
   api,
+  environment,
   getConversationContext,
   getConversationSystemPrompt,
   patchConversationContext,
   patchConversationSystemPrompt,
   type SystemPromptPatchResponse,
-  environment,
 } from '../../utils/api'
-import { ThunkExtraArgument } from '../../store/thunkExtra'
 import { convContextSet, systemPromptSet } from './conversationSlice'
 import { Conversation } from './conversationTypes'
-import type { BaseModel, ConversationId, ProjectId } from '../../../../../shared/types'
 
 // Helper for local mode only - gets/creates demo user
 const getDemoUserId = async (state: RootState, accessToken: string | null): Promise<number> => {
@@ -60,16 +60,11 @@ export const fetchConversations = createAsyncThunk<
   { state: RootState; extra: ThunkExtraArgument }
 >('conversations/fetchAll', async (_: void, { getState, extra, rejectWithValue }) => {
   try {
-    console.log('[fetchConversations] 🔴 REDUX ACTION CALLED')
-    console.log('[fetchConversations] Stack trace:', new Error().stack)
-
     const { auth } = extra
 
     // In web mode, use auth.userId from context
     // In local mode, get/create demo user
-    const userId = environment === 'web'
-      ? auth.userId
-      : await getDemoUserId(getState(), auth.accessToken)
+    const userId = environment === 'web' ? auth.userId : await getDemoUserId(getState(), auth.accessToken)
 
     if (!userId) {
       throw new Error('User not authenticated')
@@ -88,14 +83,9 @@ export const fetchRecentConversations = createAsyncThunk<
   { state: RootState; extra: ThunkExtraArgument }
 >('conversations/fetchRecent', async ({ limit = 10 } = {}, { getState, extra, rejectWithValue }) => {
   try {
-    console.log('[fetchRecentConversations] 🔴 REDUX ACTION CALLED')
-    console.log('[fetchRecentConversations] Stack trace:', new Error().stack)
-
     const { auth } = extra
 
-    const userId = environment === 'web'
-      ? auth.userId
-      : await getDemoUserId(getState(), auth.accessToken)
+    const userId = environment === 'web' ? auth.userId : await getDemoUserId(getState(), auth.accessToken)
 
     if (!userId) {
       throw new Error('User not authenticated')
@@ -109,21 +99,17 @@ export const fetchRecentConversations = createAsyncThunk<
 })
 
 // Fetch conversations by project ID
-export const fetchConversationsByProjectId = createAsyncThunk<
-  Conversation[],
-  ProjectId,
-  { extra: ThunkExtraArgument }
->('conversations/fetchByProjectId', async (projectId: ProjectId, { extra, rejectWithValue }) => {
-  try {
-    console.log('[fetchConversationsByProjectId] 🔴 REDUX ACTION CALLED, projectId:', projectId)
-    console.log('[fetchConversationsByProjectId] Stack trace:', new Error().stack)
-
-    const { auth } = extra
-    return await api.get<Conversation[]>(`/conversations/project/${projectId}`, auth.accessToken)
-  } catch (err) {
-    return rejectWithValue(err instanceof Error ? err.message : 'Failed to fetch conversations by project')
+export const fetchConversationsByProjectId = createAsyncThunk<Conversation[], ProjectId, { extra: ThunkExtraArgument }>(
+  'conversations/fetchByProjectId',
+  async (projectId: ProjectId, { extra, rejectWithValue }) => {
+    try {
+      const { auth } = extra
+      return await api.get<Conversation[]>(`/conversations/project/${projectId}`, auth.accessToken)
+    } catch (err) {
+      return rejectWithValue(err instanceof Error ? err.message : 'Failed to fetch conversations by project')
+    }
   }
-})
+)
 
 // Create new conversation for current user
 export const createConversation = createAsyncThunk<
@@ -134,9 +120,7 @@ export const createConversation = createAsyncThunk<
   try {
     const { auth } = extra
 
-    const userId = environment === 'web'
-      ? auth.userId
-      : await getDemoUserId(getState(), auth.accessToken)
+    const userId = environment === 'web' ? auth.userId : await getDemoUserId(getState(), auth.accessToken)
 
     if (!userId) {
       throw new Error('User not authenticated')
@@ -186,41 +170,39 @@ export const deleteConversation = createAsyncThunk<
 })
 
 // Fetch the conversation system prompt and store in state.chat.systemPrompt
-export const fetchSystemPrompt = createAsyncThunk<
-  string | null,
-  ConversationId,
-  { extra: ThunkExtraArgument }
->('chat/fetchSystemPrompt', async (conversationId, { dispatch, extra, rejectWithValue }) => {
-  try {
-    const { auth } = extra
-    const res = await getConversationSystemPrompt(conversationId, auth.accessToken)
-    const value = typeof res.systemPrompt === 'string' ? res.systemPrompt : null
-    dispatch(systemPromptSet(value))
-    return value
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch system prompt'
-    return rejectWithValue(message) as any
+export const fetchSystemPrompt = createAsyncThunk<string | null, ConversationId, { extra: ThunkExtraArgument }>(
+  'chat/fetchSystemPrompt',
+  async (conversationId, { dispatch, extra, rejectWithValue }) => {
+    try {
+      const { auth } = extra
+      const res = await getConversationSystemPrompt(conversationId, auth.accessToken)
+      const value = typeof res.systemPrompt === 'string' ? res.systemPrompt : null
+      dispatch(systemPromptSet(value))
+      return value
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch system prompt'
+      return rejectWithValue(message) as any
+    }
   }
-})
+)
 
 // Fetch conversation context
-export const fetchContext = createAsyncThunk<
-  string | null,
-  ConversationId,
-  { extra: ThunkExtraArgument }
->('chat/fetchContext', async (conversationId, { dispatch, extra, rejectWithValue }) => {
-  try {
-    const { auth } = extra
-    const res = await getConversationContext(conversationId, auth.accessToken)
-    const value = res.context
-    // console.log('dispatching convContext ', res)
-    dispatch(convContextSet(value))
-    return value
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch context'
-    return rejectWithValue(message) as any
+export const fetchContext = createAsyncThunk<string | null, ConversationId, { extra: ThunkExtraArgument }>(
+  'chat/fetchContext',
+  async (conversationId, { dispatch, extra, rejectWithValue }) => {
+    try {
+      const { auth } = extra
+      const res = await getConversationContext(conversationId, auth.accessToken)
+      const value = res.context
+      // console.log('dispatching convContext ', res)
+      dispatch(convContextSet(value))
+      return value
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch context'
+      return rejectWithValue(message) as any
+    }
   }
-})
+)
 // Update the conversation system prompt on the server and reflect in state
 export const updateSystemPrompt = createAsyncThunk<
   SystemPromptPatchResponse,

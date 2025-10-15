@@ -170,7 +170,6 @@ async function getOpenRouterClient() {
 // Fetch all models pricing from OpenRouter and cache them
 async function fetchAllModelsPricing(): Promise<void> {
   try {
-    console.log('Fetching all models pricing from OpenRouter...')
     const client = await getOpenRouterClient()
 
     // Fetch all models from OpenRouter
@@ -181,8 +180,6 @@ async function fetchAllModelsPricing(): Promise<void> {
         'X-Title': process.env.OPENROUTER_TITLE || 'Yggdrasil Chat',
       },
     })
-
-    console.log(`OpenRouter API response status: ${response.status}`)
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -345,11 +342,6 @@ export async function generateResponse(
   userId?: string,
   tool_detail: boolean = false
 ): Promise<void> {
-  console.log(`🔴 [openrouter.ts] generateResponse called`)
-  console.log(`🔴 [openrouter.ts] model: ${model}, messageId: ${messageId}`)
-  console.log(`🔴 [openrouter.ts] abortSignal present: ${!!abortSignal}, aborted: ${abortSignal?.aborted}`)
-  console.log(`🔴 [openrouter.ts] think: ${think}, userId: ${userId}`)
-
   const MAX_STEPS = 400 // Reduced to prevent infinite loops with problematic models
   let stepCount = 0
   let conversationMessages = [...messages]
@@ -405,7 +397,6 @@ export async function generateResponse(
     assistantContent = ''
 
     if (abortSignal?.aborted) {
-      console.log(`🛑 Generation aborted detected at start of step ${stepCount}. Signal aborted: ${abortSignal.aborted}`)
       // Log partial usage if available before returning (only if not already logged)
       if (finalUsage && !costAlreadyLogged) {
         try {
@@ -447,16 +438,12 @@ export async function generateResponse(
     // Listen for abort event to set flag synchronously
     if (abortSignal) {
       abortSignal.addEventListener('abort', () => {
-        console.log(`🔴 [openrouter.ts] Abort event fired, setting abortRequested flag`)
         abortRequested = true
       })
     }
 
     try {
       const openrouterClient = await getOpenRouterClient()
-
-      console.log(`🔴 [openrouter.ts] Step ${stepCount}: About to create stream`)
-      console.log(`🔴 [openrouter.ts] abortSignal before stream create: present=${!!abortSignal}, aborted=${abortSignal?.aborted}`)
 
       const stream: any = await openrouterClient.chat.completions.create(
         {
@@ -473,8 +460,6 @@ export async function generateResponse(
         }
       )
 
-      console.log(`🔴 [openrouter.ts] Stream created, entering stream loop`)
-
       let toolCalls: Array<{ id: string; name: string; arguments: string }> = []
       let currentToolCall: any = null
       let toolCallBuffer = ''
@@ -483,7 +468,6 @@ export async function generateResponse(
       for await (const chunk of stream) {
         // Check for abort FIRST - throw immediately to force exit the for-await loop
         if (abortRequested) {
-          console.log(`🛑 Generation aborted detected via flag, throwing to exit loop`)
           const error: any = new Error('Generation aborted by user')
           error.name = 'AbortError'
           throw error
@@ -496,7 +480,6 @@ export async function generateResponse(
           if (chunk.usage.cost !== undefined) {
             openrouterCreditsUsed = parseFloat(chunk.usage.cost) || 0
             console.log(`💰 OpenRouter cost found in chunk: ${chunk.usage.cost} credits`)
-            console.log(`📊 Full usage object:`, JSON.stringify(chunk.usage, null, 2))
           }
         }
 
@@ -669,7 +652,6 @@ export async function generateResponse(
           .includes('abort')
 
       if (isAbort) {
-        console.log(`🛑 Generation aborted detected in catch block. Flag: ${abortRequested}, Error: ${error?.name || error?.message || error}`)
         // Log partial usage or estimate before returning on abort
         if (!finalUsage) {
           finalUsage = createEstimatedUsage(formattedMessages, assistantContent)
@@ -732,7 +714,6 @@ export async function generateResponse(
 
             if (chunk.usage) {
               finalUsage = chunk.usage // Store/update usage incrementally
-              console.log('------------- chunk usage without tool ', chunk.usage.cost)
 
               // Capture cost from retry attempt as well
               if (chunk.usage.cost !== undefined) {
@@ -743,13 +724,10 @@ export async function generateResponse(
 
             // Check for abort after capturing usage
             if (abortSignal?.aborted) {
-              console.log(`🛑 Abort signal detected in retry stream loop`)
               // Log partial usage before breaking, or estimate if no usage received
               if (!finalUsage) {
                 finalUsage = createEstimatedUsage(formattedMessages, assistantContent)
-                console.log('⚠️ Generation aborted (retry) - using estimated usage for cost calculation')
               } else {
-                console.log('✓ Partial usage data captured before abort (retry)')
               }
               try {
                 const totals = {
@@ -855,22 +833,22 @@ export async function generateResponse(
   }
 
   // Log final total cost summary
-  console.log('\n' + '='.repeat(50))
-  console.log('🎯 TOTAL GENERATION SUMMARY')
-  console.log('='.repeat(50))
-  console.log(`Model: ${model}`)
-  console.log(`Total Steps: ${stepCount}`)
-  console.log(`Total Tokens: ${totalPromptTokens + totalCompletionTokens + totalReasoningTokens}`)
-  console.log(`  • Prompt Tokens: ${totalPromptTokens}`)
-  console.log(`  • Completion Tokens: ${totalCompletionTokens}`)
-  if (totalReasoningTokens > 0) {
-    console.log(`  • Reasoning Tokens: ${totalReasoningTokens}`)
-  }
-  console.log(`Total Cost: $${totalCostUSD.toFixed(6)} USD`)
-  if (totalOpenRouterCredits > 0) {
-    console.log(`Total OpenRouter Credits: ${totalOpenRouterCredits.toFixed(6)}`)
-  }
-  console.log('='.repeat(50))
+  // console.log('\n' + '='.repeat(50))
+  // console.log('🎯 TOTAL GENERATION SUMMARY')
+  // console.log('='.repeat(50))
+  // console.log(`Model: ${model}`)
+  // console.log(`Total Steps: ${stepCount}`)
+  // console.log(`Total Tokens: ${totalPromptTokens + totalCompletionTokens + totalReasoningTokens}`)
+  // console.log(`  • Prompt Tokens: ${totalPromptTokens}`)
+  // console.log(`  • Completion Tokens: ${totalCompletionTokens}`)
+  // if (totalReasoningTokens > 0) {
+  //   console.log(`  • Reasoning Tokens: ${totalReasoningTokens}`)
+  // }
+  // console.log(`Total Cost: $${totalCostUSD.toFixed(6)} USD`)
+  // if (totalOpenRouterCredits > 0) {
+  //   console.log(`Total OpenRouter Credits: ${totalOpenRouterCredits.toFixed(6)}`)
+  // }
+  // console.log('='.repeat(50))
 
   // Save final aggregated cost data to database if messageId and userId are provided
   if (messageId && userId && (totalPromptTokens > 0 || totalCompletionTokens > 0 || totalReasoningTokens > 0)) {
@@ -935,37 +913,6 @@ async function logGenerationCost(
     if (pricing) {
       const costs = calculateTokenCosts(usage, pricing)
       totals.totalCostUSD += costs.totalCost
-
-      console.log(`\n🔹 Step ${stepCount} Generation Summary:`)
-      console.log(`Model: ${model}`)
-      console.log(
-        `Tokens: ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion = ${usage.total_tokens} total`
-      )
-      if (usage.reasoning_tokens) {
-        console.log(`Reasoning Tokens: ${usage.reasoning_tokens}`)
-      }
-      console.log(`Cost: $${costs.totalCost.toFixed(6)} USD`)
-      console.log(`  • Prompt Cost: $${costs.promptCost.toFixed(6)} USD`)
-      console.log(`  • Completion Cost: $${costs.completionCost.toFixed(6)} USD`)
-      if (costs.reasoningCost > 0) {
-        console.log(`  • Reasoning Cost: $${costs.reasoningCost.toFixed(6)} USD`)
-      }
-
-      // Display credits info
-      if (creditsFromUsage > 0) {
-        console.log(`OpenRouter Credits: ${creditsFromUsage}`)
-      } else {
-        console.log(`OpenRouter Credits: Not available (estimated usage)`)
-      }
-      console.log()
-    } else {
-      console.log(`\n🔹 Step ${stepCount} Generation Summary:`)
-      console.log(`Model: ${model}`)
-      console.log(
-        `Tokens: ${usage.prompt_tokens} prompt + ${usage.completion_tokens} completion = ${usage.total_tokens} total`
-      )
-      console.log('Cost: Unable to calculate (pricing not available)')
-      console.log()
     }
   } catch (error) {
     console.log(`\n🔹 Step ${stepCount} Generation Summary:`)

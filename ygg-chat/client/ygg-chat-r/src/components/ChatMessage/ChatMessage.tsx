@@ -272,7 +272,6 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(
 
     const handleSaveBranch = () => {
       if (onBranch) {
-        console.log('Saving branch for message', id)
         onBranch(id, editContent.trim())
       }
       dispatch(chatSliceActions.editingBranchSet(false))

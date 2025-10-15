@@ -1,7 +1,7 @@
 // server/src/utils/heimdallConverter.ts
 
-import { Message } from '../database/models'
 import { MessageId } from '../../../shared/types'
+import { Message } from '../database/models'
 
 // Types matching Heimdall component expectations
 interface ChatNode {
@@ -102,13 +102,7 @@ export function convertMessagesToHeimdallMultiRoot(messages: Message[]): ChatNod
  * Useful for development and troubleshooting
  */
 export function debugMessageTree(messages: Message[]): void {
-  console.log('=== Debug Message Tree ===')
-
   const roots = messages.filter(msg => msg.parent_id === null)
-  console.log(
-    `Found ${roots.length} root message(s):`,
-    roots.map(r => r.id)
-  )
 
   const childCounts = new Map<MessageId, number>()
   messages.forEach(msg => {
@@ -119,13 +113,6 @@ export function debugMessageTree(messages: Message[]): void {
       childCounts.set(parentId, count + 1)
     }
   })
-
-  console.log('Parent → Child counts:')
-  Array.from(childCounts.entries())
-    .sort(([a], [b]) => Number(a) - Number(b))
-    .forEach(([parentId, count]) => {
-      console.log(`  ${parentId} → ${count} children`)
-    })
 
   // Check for orphaned messages
   const orphans = messages.filter(msg => msg.parent_id !== null && !messages.some(m => m.id === msg.parent_id))
@@ -140,11 +127,8 @@ export function debugMessageTree(messages: Message[]): void {
   // Display tree structure
   const tree = convertMessagesToHeimdall(messages)
   if (tree) {
-    console.log('Tree structure:')
     logTreeStructure(tree, 0)
   }
-
-  console.log('==========================')
 }
 
 /**
@@ -153,7 +137,6 @@ export function debugMessageTree(messages: Message[]): void {
 function logTreeStructure(node: ChatNode, depth: number): void {
   const indent = '  '.repeat(depth)
   const truncatedMessage = node.message.slice(0, 50) + (node.message.length > 50 ? '...' : '')
-  console.log(`${indent}├─ ${node.id} (${node.sender}): ${truncatedMessage}`)
 
   node.children.forEach(child => {
     logTreeStructure(child, depth + 1)

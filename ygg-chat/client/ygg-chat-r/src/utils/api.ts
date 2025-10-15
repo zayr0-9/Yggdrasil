@@ -5,8 +5,6 @@ import { ConversationId } from '../../../../shared/types'
 export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 export const environment = import.meta.env.VITE_ENVIRONMENT || 'local'
 
-console.log('[api.ts] Module loaded - environment:', environment)
-
 // Core API utility function - now accepts accessToken as parameter
 export const apiCall = async <T>(endpoint: string, accessToken: string | null, options?: RequestInit): Promise<T> => {
   const isFormData = options?.body && typeof FormData !== 'undefined' && options.body instanceof FormData
@@ -15,11 +13,11 @@ export const apiCall = async <T>(endpoint: string, accessToken: string | null, o
   const { headers: optionsHeaders, ...restOptions } = options || {}
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...restOptions,  // Spread everything EXCEPT headers
+    ...restOptions, // Spread everything EXCEPT headers
     headers: {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-      ...optionsHeaders,  // Spread headers from options
-      ...(accessToken && environment === 'web' ? { 'Authorization': `Bearer ${accessToken}` } : {}),  // Add Authorization header with JWT in web mode
+      ...optionsHeaders, // Spread headers from options
+      ...(accessToken && environment === 'web' ? { Authorization: `Bearer ${accessToken}` } : {}), // Add Authorization header with JWT in web mode
     },
   })
 
@@ -36,8 +34,6 @@ export const api = {
   get: <T>(endpoint: string, accessToken: string | null, options?: RequestInit) => {
     // Log all conversation endpoint calls to track duplicate requests
     if (endpoint.includes('/conversations') && !endpoint.includes('/messages')) {
-      console.log(`[api.get] 🔴 CONVERSATION API CALL: ${endpoint}`)
-      console.log('[api.get] Stack trace:', new Error().stack)
     }
     return apiCall<T>(endpoint, accessToken, { ...options, method: 'GET' })
   },
@@ -68,7 +64,11 @@ export const api = {
 }
 
 // Helper for streaming requests
-export const createStreamingRequest = async (endpoint: string, accessToken: string | null, options?: RequestInit): Promise<Response> => {
+export const createStreamingRequest = async (
+  endpoint: string,
+  accessToken: string | null,
+  options?: RequestInit
+): Promise<Response> => {
   const isFormData = options?.body && typeof FormData !== 'undefined' && options.body instanceof FormData
 
   // Destructure to separate headers from other options
@@ -76,13 +76,13 @@ export const createStreamingRequest = async (endpoint: string, accessToken: stri
 
   const headers = {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-    ...optionsHeaders,  // Spread the headers from options
-    ...(accessToken && environment === 'web' ? { 'Authorization': `Bearer ${accessToken}` } : {}),  // Add Authorization header with JWT in web mode
+    ...optionsHeaders, // Spread the headers from options
+    ...(accessToken && environment === 'web' ? { Authorization: `Bearer ${accessToken}` } : {}), // Add Authorization header with JWT in web mode
   }
 
   return fetch(`${API_BASE}${endpoint}`, {
-    ...restOptions,  // Spread everything EXCEPT headers
-    headers,         // Set headers separately
+    ...restOptions, // Spread everything EXCEPT headers
+    headers, // Set headers separately
   })
 }
 
@@ -102,14 +102,24 @@ export const getConversationSystemPrompt = (conversationId: ConversationId, acce
 export const getConversationContext = (conversationId: ConversationId, accessToken: string | null) =>
   api.get<ConversationContextGetResponse>(`/conversations/${conversationId}/context`, accessToken)
 
-export const patchConversationSystemPrompt = (conversationId: ConversationId, systemPrompt: string | null, accessToken: string | null) =>
+export const patchConversationSystemPrompt = (
+  conversationId: ConversationId,
+  systemPrompt: string | null,
+  accessToken: string | null
+) =>
   api.patch<SystemPromptPatchResponse>(`/conversations/${conversationId}/system-prompt`, accessToken, { systemPrompt })
 
-export const patchConversationContext = (conversationId: ConversationId, context: string | null, accessToken: string | null) =>
-  api.patch<ConversationPatchResponse>(`/conversations/${conversationId}/context`, accessToken, { context })
+export const patchConversationContext = (
+  conversationId: ConversationId,
+  context: string | null,
+  accessToken: string | null
+) => api.patch<ConversationPatchResponse>(`/conversations/${conversationId}/context`, accessToken, { context })
 
 export const cloneConversation = (conversationId: ConversationId, accessToken: string | null) =>
-  api.post<{ id: ConversationId; title: string; project_id: ConversationId | null }>(`/conversations/${conversationId}/clone`, accessToken)
+  api.post<{ id: ConversationId; title: string; project_id: ConversationId | null }>(
+    `/conversations/${conversationId}/clone`,
+    accessToken
+  )
 
 // Stripe Payment API functions
 export interface SubscriptionStatus {

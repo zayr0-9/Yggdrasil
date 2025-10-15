@@ -1,5 +1,5 @@
-import { supabase } from './supabase'
 import type { Session } from '@supabase/supabase-js'
+import { supabase } from './supabase'
 
 interface CachedClaims {
   claims: Record<string, unknown>
@@ -21,7 +21,6 @@ export function getSessionFromStorage(): Session | null {
     const stored = localStorage.getItem(storageKey)
 
     if (!stored) {
-      console.log('[jwtUtils] No session in localStorage')
       return null
     }
 
@@ -33,7 +32,6 @@ export function getSessionFromStorage(): Session | null {
     const session = parsed?.currentSession || parsed?.session || parsed
 
     if (!session?.access_token) {
-      console.log('[jwtUtils] Invalid session structure in localStorage')
       return null
     }
 
@@ -90,22 +88,17 @@ export async function getCachedClaims(): Promise<Record<string, unknown> | null>
 
   // Return cached claims if still valid
   if (claimsCache && claimsCache.expiresAt > now) {
-    console.log('[jwtUtils] 🎯 Cache hit! Using cached claims (expires:', new Date(claimsCache.expiresAt).toISOString(), ')')
     return claimsCache.claims
   }
 
   if (claimsCache) {
-    console.log('[jwtUtils] ⏱️  Cache expired, decoding fresh JWT...')
   }
 
   try {
-    console.log('[jwtUtils] getCachedClaims called - reading from localStorage...')
-
     // Read session from localStorage ONLY (NO network call - bypasses Supabase SDK)
     const session = getSessionFromStorage()
 
     if (!session || !session.access_token) {
-      console.log('[jwtUtils] ⚠️  No session or access token found')
       claimsCache = null
       return null
     }
@@ -118,8 +111,6 @@ export async function getCachedClaims(): Promise<Record<string, unknown> | null>
       claimsCache = null
       return null
     }
-
-    console.log('[jwtUtils] ✅ JWT decoded locally (ZERO network calls)')
 
     // Check if token is expired
     const exp = claims.exp as number
@@ -141,8 +132,6 @@ export async function getCachedClaims(): Promise<Record<string, unknown> | null>
       claims,
       expiresAt,
     }
-
-    console.log('[jwtUtils] 📦 Claims cached until:', new Date(expiresAt).toISOString())
 
     return claims
   } catch (err) {
@@ -167,7 +156,6 @@ export async function isTokenValid(): Promise<boolean> {
  * Clears the claims cache. Call this on sign out or auth state changes.
  */
 export function clearClaimsCache(): void {
-  console.log('[jwtUtils] 🗑️  Clearing claims cache')
   claimsCache = null
 }
 
@@ -193,7 +181,6 @@ export async function refreshTokenIfNeeded(): Promise<boolean> {
     const session = getSessionFromStorage()
 
     if (!session) {
-      console.log('[jwtUtils] No session to refresh')
       return false
     }
 
@@ -209,8 +196,6 @@ export async function refreshTokenIfNeeded(): Promise<boolean> {
 
     // Refresh if token expires in less than 5 minutes
     if (expiresIn < 300) {
-      console.log('[jwtUtils] 🔄 Refreshing token (expires soon)...')
-
       // Check if supabase client is available
       if (!supabase) {
         console.warn('[jwtUtils] ⚠️  Supabase client not available - cannot refresh token')
@@ -226,7 +211,6 @@ export async function refreshTokenIfNeeded(): Promise<boolean> {
       }
 
       if (data.session) {
-        console.log('[jwtUtils] ✅ Token refreshed successfully')
         // Clear claims cache since we have a new token
         clearClaimsCache()
         return true
