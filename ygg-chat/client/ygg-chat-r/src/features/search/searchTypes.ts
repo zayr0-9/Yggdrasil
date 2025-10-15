@@ -1,7 +1,7 @@
 // searchTypes.ts
 // Define types for the search feature
 
-// import { Message } from '../chats'
+import { ConversationId } from '../../../../../shared/types'
 
 export interface SearchHistoryItem {
   id: string // uuid timestamp or similar
@@ -10,7 +10,7 @@ export interface SearchHistoryItem {
 }
 
 export interface SearchResult {
-  conversationId: number
+  conversationId: ConversationId
   messageId: string
   content: string
   createdAt: string
@@ -26,5 +26,5 @@ export interface SearchState {
   error: string | null
   // When user selects a result we store it so chat screen can scroll/focus
   focusedMessageId: string | null
-  focusedConversationId: number | null
+  focusedConversationId: ConversationId | null
 }

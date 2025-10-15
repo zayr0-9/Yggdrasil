@@ -34,11 +34,11 @@ export const TextArea: React.FC<TextAreaProps> = ({
   onKeyDown,
   state = 'default',
   errorMessage,
-  maxLength = 20000,
+  maxLength = 2000000,
   width = 'max-w-3xl',
   className = '',
   minRows = 1,
-  maxRows = 10,
+  maxRows = 25,
   autoFocus = false,
   showCharCount = false,
   ...rest
@@ -365,7 +365,6 @@ export const TextArea: React.FC<TextAreaProps> = ({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           disabled={state === 'disabled'}
-          maxLength={maxLength}
           className={`${stateStyles[state]} ${dragOver ? 'border-blue-500 ring-2 ring-blue-500' : ''} ${className}`}
           aria-invalid={state === 'error'}
           aria-describedby={state === 'error' && errorMessage ? errorId : undefined}

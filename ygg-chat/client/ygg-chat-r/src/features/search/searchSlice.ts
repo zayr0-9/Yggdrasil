@@ -24,7 +24,7 @@ export const searchSlice = createSlice({
       state.results = []
       state.error = null
     },
-    focusSet: (state, action: PayloadAction<{ conversationId: number; messageId: string } | null>) => {
+    focusSet: (state, action: PayloadAction<{ conversationId: string; messageId: string } | null>) => {
       state.focusedConversationId = action.payload?.conversationId ?? null
       state.focusedMessageId = action.payload?.messageId ?? null
     },

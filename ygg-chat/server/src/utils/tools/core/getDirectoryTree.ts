@@ -153,7 +153,7 @@ export async function extractDirectoryStructure(rootDir: string, options: Direct
   const result: string[] = []
 
   async function walkDirectory(currentPath: string, indent = '', depth = 0): Promise<void> {
-    if (maxDepth !== undefined && depth > maxDepth) {
+    if (maxDepth !== undefined && depth > 50) {
       return
     }
 

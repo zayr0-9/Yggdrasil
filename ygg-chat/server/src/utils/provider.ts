@@ -1,5 +1,7 @@
 // server/src/utils/provider.ts
 import { Message } from '../database/models'
+import { MessageId } from '../../../shared/types'
+
 import { generateResponse as anthropicGenerate } from './anthropic'
 import { generateResponse as geminiGenerate } from './gemini'
 import { generateResponse as lmstudioGenerate } from './lmstudio'
@@ -12,7 +14,7 @@ export type ProviderType = 'ollama' | 'gemini' | 'anthropic' | 'openai' | 'openr
 function getProviderModel(provider: ProviderType, model?: string): string {
   switch (provider) {
     case 'ollama':
-      return model || 'gpt-oss:20b' // Use ollama model as-is
+      return model || 'llama3.1:8b' // Use ollama model as-is
     case 'gemini':
       return model || 'gemini-2.5-flash' // Respect client-selected Gemini model, default to gemini-2.5-flash
     case 'anthropic':
@@ -37,7 +39,9 @@ export async function generateResponse(
   systemPrompt?: string,
   abortSignal?: AbortSignal,
   conversationContext?: string | null,
-  think?: boolean
+  think?: boolean,
+  messageId?: MessageId,
+  userId?: string
 ): Promise<void> {
   const providerModel = getProviderModel(provider, model)
 
@@ -114,7 +118,7 @@ export async function generateResponse(
 
   switch (provider) {
     case 'ollama':
-      return ollamaGenerate(ollamaMessagesWithNote, onChunk, providerModel, systemPrompt)
+      return ollamaGenerate(ollamaMessagesWithNote, onChunk, providerModel, systemPrompt, true)
     case 'gemini': {
       // Forward attachments so Gemini can inline images
       const geminiAttachments = (attachments || []).map(a => ({ mimeType: a.mimeType, filePath: a.filePath }))
@@ -132,9 +136,21 @@ export async function generateResponse(
     case 'openai':
       return openaiGenerate(aiSdkForOpenAI, onChunk, providerModel)
     case 'openrouter': {
+      console.log(`🔴 [provider.ts] Calling openrouterGenerate with model: ${providerModel}`)
+      console.log(`🔴 [provider.ts] abortSignal present: ${!!abortSignal}, aborted: ${abortSignal?.aborted}`)
+      console.log(`🔴 [provider.ts] messageId: ${messageId}`)
       // Forward attachments for OpenRouter (AI SDK OpenAI adapter will translate file parts)
       const orAttachments = (attachments || []).map(a => ({ mimeType: a.mimeType, filePath: a.filePath }))
-      return openrouterGenerate(aiSdkForOpenAI, onChunk, providerModel, orAttachments, abortSignal, think)
+      return openrouterGenerate(
+        aiSdkForOpenAI,
+        onChunk,
+        providerModel,
+        orAttachments,
+        abortSignal,
+        think,
+        messageId,
+        userId
+      )
     }
     case 'lmstudio': {
       // Forward attachments for LM Studio (AI SDK OpenAI-compatible adapter will translate file parts)

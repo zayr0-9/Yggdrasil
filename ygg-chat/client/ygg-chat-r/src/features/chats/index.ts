@@ -75,6 +75,7 @@ export {
 export {
   fetchConversationMessages,
   fetchMessageTree,
+  initializeConversationData,
   initializeUserAndConversation,
   updateConversationTitle,
 } from './chatActions'

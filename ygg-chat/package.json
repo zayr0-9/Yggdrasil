@@ -9,6 +9,7 @@
     "shared"
   ],
   "scripts": {
+    "migrate": "npm --prefix server run migrate",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "format:client": "prettier --write 'ygg-chat/client/**/*.{js,jsx,ts,tsx,json,css,md}'",
@@ -16,6 +17,7 @@
     "format:shared": "prettier --write 'ygg-chat/shared/**/*.{js,jsx,ts,tsx,json,css,md}'",
     "format:chat": "prettier --write 'ygg-chat/**/*.{js,jsx,ts,tsx,json,css,md}'",
     "dev": "concurrently -n server,client -c yellow,cyan \"npm --prefix server run dev\" \"npm --prefix client/ygg-chat-r run dev\"",
+    "dev:migrate": "npm run migrate && npm run dev",
     "dev:client": "cd client/ygg-chat-r && npm run dev",
     "dev:serverold": "cd server && npm run dev",
     "dev:server": "nodemon server/src/index.ts --ignore src/**/*",

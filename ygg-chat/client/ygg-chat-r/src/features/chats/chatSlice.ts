@@ -1,5 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import providersList from '../../../../../shared/providers.json'
+import { ConversationId, MessageId } from '../../../../../shared/types'
+import { parseId } from '../../utils/helpers'
 
 import {
   Attachment,
@@ -54,6 +56,8 @@ const makeInitialState = (): ChatState => ({
     multiReplyCount: 1,
     imageDrafts: [],
     editingBranch: false,
+    optimisticMessage: null,
+    optimisticBranchMessage: null,
   },
   // activeChat:{},
   streaming: {
@@ -176,6 +180,12 @@ export const chatSlice = createSlice({
     imageDraftsCleared: state => {
       state.composition.imageDrafts = []
     },
+    imageDraftRemoved: (state, action: PayloadAction<number>) => {
+      const index = action.payload
+      if (index >= 0 && index < state.composition.imageDrafts.length) {
+        state.composition.imageDrafts.splice(index, 1)
+      }
+    },
 
     // Branch editing flag
     editingBranchSet: (state, action: PayloadAction<boolean>) => {
@@ -248,7 +258,7 @@ export const chatSlice = createSlice({
       }
     },
 
-    streamCompleted: (state, action: PayloadAction<{ messageId: number }>) => {
+    streamCompleted: (state, action: PayloadAction<{ messageId: MessageId }>) => {
       state.streaming.active = false
       state.streaming.finished = true
       state.streaming.messageId = action.payload.messageId
@@ -256,9 +266,9 @@ export const chatSlice = createSlice({
       const targetId = action.payload.messageId
       const exists = state.conversation.messages.some(m => m.id === targetId)
       if (exists) {
-        const buildPathToMessage = (messageId: number): number[] => {
-          const path: number[] = []
-          let currentId: number | null = messageId
+        const buildPathToMessage = (messageId: MessageId): MessageId[] => {
+          const path: MessageId[] = []
+          let currentId: MessageId | null = messageId
           while (currentId !== null) {
             path.unshift(currentId)
             const message = state.conversation.messages.find(m => m.id === currentId)
@@ -275,7 +285,7 @@ export const chatSlice = createSlice({
       state.ui.modelSelectorOpen = !state.ui.modelSelectorOpen
     },
 
-    conversationSet: (state, action: PayloadAction<number>) => {
+    conversationSet: (state, action: PayloadAction<ConversationId>) => {
       state.conversation.currentConversationId = action.payload
     },
 
@@ -285,11 +295,11 @@ export const chatSlice = createSlice({
       state.conversation.currentPath = []
     },
 
-    nodesSelected: (state, action: PayloadAction<number[]>) => {
+    nodesSelected: (state, action: PayloadAction<MessageId[]>) => {
       state.selectedNodes = action.payload
     },
 
-    focusedChatMessageSet: (state, action: PayloadAction<number>) => {
+    focusedChatMessageSet: (state, action: PayloadAction<MessageId>) => {
       state.conversation.focusedChatMessageId = action.payload
     },
 
@@ -307,7 +317,7 @@ export const chatSlice = createSlice({
       state.conversation.messages = []
     },
 
-    messageUpdated: (state, action: PayloadAction<{ id: number; content: string; note?: string }>) => {
+    messageUpdated: (state, action: PayloadAction<{ id: MessageId; content: string; note?: string }>) => {
       const { id, content, note } = action.payload
       const msg = state.conversation.messages.find(m => m.id === id)
       if (msg) {
@@ -316,16 +326,25 @@ export const chatSlice = createSlice({
       }
     },
 
-    messageDeleted: (state, action: PayloadAction<number>) => {
+    messageDeleted: (state, action: PayloadAction<MessageId>) => {
       const id = action.payload
       state.conversation.messages = state.conversation.messages.filter(m => m.id !== id)
     },
 
     messagesLoaded: (state, action: PayloadAction<Message[]>) => {
       state.conversation.messages = action.payload
+
       // If the conversation becomes empty, clear the currentPath to avoid stale selection
       if (!state.conversation.messages || state.conversation.messages.length === 0) {
         state.conversation.currentPath = []
+      } else {
+        const validIds = new Set(state.conversation.messages.map(m => m.id))
+        const cleanedPath = state.conversation.currentPath.filter(id => validIds.has(id))
+
+        // Only update if the path actually changed (to avoid unnecessary re-renders)
+        if (cleanedPath.length !== state.conversation.currentPath.length) {
+          state.conversation.currentPath = cleanedPath
+        }
       }
     },
 
@@ -333,9 +352,9 @@ export const chatSlice = createSlice({
     messageBranchCreated: (state, action: PayloadAction<{ newMessage: Message }>) => {
       const { newMessage } = action.payload
 
-      const normalizeIds = (ids: any): number[] => {
-        if (Array.isArray(ids)) return ids as number[]
-        if (typeof ids === 'string') return ids.split(',').map(Number)
+      const normalizeIds = (ids: any): MessageId[] => {
+        if (Array.isArray(ids)) return ids as MessageId[]
+        if (typeof ids === 'string') return ids.split(',').map(id => parseId(id))
         return []
       }
 
@@ -349,9 +368,9 @@ export const chatSlice = createSlice({
 
       // Auto-navigate current path to new branch by building complete path from root
       // This ensures we switch cleanly to the new branch without leftover messages
-      const buildPathToMessage = (messageId: number): number[] => {
-        const path: number[] = []
-        let currentId: number | null = messageId
+      const buildPathToMessage = (messageId: MessageId): MessageId[] => {
+        const path: MessageId[] = []
+        let currentId: MessageId | null = messageId
 
         // Walk up the parent chain to build the complete path
         while (currentId !== null) {
@@ -367,18 +386,18 @@ export const chatSlice = createSlice({
     },
 
     // Set current path for navigation through branches
-    conversationPathSet: (state, action: PayloadAction<number[]>) => {
+    conversationPathSet: (state, action: PayloadAction<MessageId[]>) => {
       state.conversation.currentPath = action.payload
     },
 
     // Set selected node path (string IDs from Heimdall)
     selectedNodePathSet: (state, action: PayloadAction<string[]>) => {
-      // Convert string IDs to numbers for consistency with message IDs
-      const numericPath = action.payload
+      // Convert string IDs to proper format based on environment
+      const parsedPath = action.payload
         .filter(id => id !== 'empty' && id !== '') // Filter out empty/default nodes
-        .map(id => parseInt(id))
-        .filter(id => !isNaN(id)) // Filter out invalid numbers
-      state.conversation.currentPath = numericPath
+        .map(id => parseId(id))
+        .filter(id => (typeof id === 'number' && !isNaN(id)) || typeof id === 'string') // Filter out invalid IDs
+      state.conversation.currentPath = parsedPath
     },
 
     /* Heimdall tree reducers */
@@ -404,7 +423,7 @@ export const chatSlice = createSlice({
       state.initialization.loading = true
       state.initialization.error = null
     },
-    initializationCompleted: (state, action: PayloadAction<{ userId: number; conversationId: number }>) => {
+    initializationCompleted: (state, action: PayloadAction<{ userId: string; conversationId: ConversationId }>) => {
       state.initialization.loading = false
       state.initialization.userId = action.payload.userId
       state.conversation.currentConversationId = action.payload.conversationId
@@ -417,55 +436,72 @@ export const chatSlice = createSlice({
       state.composition.multiReplyCount = action.payload
     },
 
-    /* Attachment reducers */
-    attachmentsSetForMessage: (state, action: PayloadAction<{ messageId: number; attachments: Attachment[] }>) => {
-      const { messageId, attachments } = action.payload
-      state.attachments.byMessage[messageId] = attachments
+    /* Optimistic message reducers (web mode only) */
+    optimisticMessageSet: (state, action: PayloadAction<Message>) => {
+      state.composition.optimisticMessage = action.payload
     },
-    attachmentUpsertedForMessage: (state, action: PayloadAction<{ messageId: number; attachment: Attachment }>) => {
+    optimisticMessageCleared: state => {
+      state.composition.optimisticMessage = null
+    },
+    optimisticBranchMessageSet: (state, action: PayloadAction<Message>) => {
+      state.composition.optimisticBranchMessage = action.payload
+    },
+    optimisticBranchMessageCleared: state => {
+      state.composition.optimisticBranchMessage = null
+    },
+
+    /* Attachment reducers */
+    attachmentsSetForMessage: (state, action: PayloadAction<{ messageId: MessageId; attachments: Attachment[] }>) => {
+      const { messageId, attachments } = action.payload
+      state.attachments.byMessage[String(messageId)] = attachments
+    },
+    attachmentUpsertedForMessage: (state, action: PayloadAction<{ messageId: MessageId; attachment: Attachment }>) => {
       const { messageId, attachment } = action.payload
-      const arr = state.attachments.byMessage[messageId] || []
+      const key = String(messageId)
+      const arr = state.attachments.byMessage[key] || []
       const idx = arr.findIndex(a => a.id === attachment.id)
       if (idx >= 0) {
         arr[idx] = attachment
       } else {
         arr.push(attachment)
       }
-      state.attachments.byMessage[messageId] = arr
+      state.attachments.byMessage[key] = arr
     },
-    attachmentsClearedForMessage: (state, action: PayloadAction<number>) => {
+    attachmentsClearedForMessage: (state, action: PayloadAction<MessageId>) => {
       const messageId = action.payload
-      state.attachments.byMessage[messageId] = []
+      state.attachments.byMessage[String(messageId)] = []
     },
     // When editing a branch, allow removing an artifact image while backing it up for potential restore
-    messageArtifactDeleted: (state, action: PayloadAction<{ messageId: number; index: number }>) => {
+    messageArtifactDeleted: (state, action: PayloadAction<{ messageId: MessageId; index: number }>) => {
       const { messageId, index } = action.payload
       const msg = state.conversation.messages.find(m => m.id === messageId)
       if (!msg || !Array.isArray(msg.artifacts)) return
       if (index < 0 || index >= msg.artifacts.length) return
       const removed = msg.artifacts.splice(index, 1)[0]
-      if (!state.attachments.backup[messageId]) state.attachments.backup[messageId] = []
+      const key = String(messageId)
+      if (!state.attachments.backup[key]) state.attachments.backup[key] = []
       // Store removed artifact (base64) in backup bucket for this message
-      state.attachments.backup[messageId].push(removed)
+      state.attachments.backup[key].push(removed)
     },
     // Restore backed up artifacts to the message (used on cancel)
-    messageArtifactsRestoreFromBackup: (state, action: PayloadAction<{ messageId: number }>) => {
+    messageArtifactsRestoreFromBackup: (state, action: PayloadAction<{ messageId: MessageId }>) => {
       const { messageId } = action.payload
-      const backup = state.attachments.backup[messageId]
+      const key = String(messageId)
+      const backup = state.attachments.backup[key]
       if (!backup || backup.length === 0) return
       const msg = state.conversation.messages.find(m => m.id === messageId)
       if (!msg) return
       const current = Array.isArray(msg.artifacts) ? msg.artifacts : []
       msg.artifacts = [...current, ...backup]
-      state.attachments.backup[messageId] = []
+      state.attachments.backup[key] = []
     },
     // Clear backup explicitly (used after creating branch)
-    messageArtifactsBackupCleared: (state, action: PayloadAction<{ messageId: number }>) => {
+    messageArtifactsBackupCleared: (state, action: PayloadAction<{ messageId: MessageId }>) => {
       const { messageId } = action.payload
-      state.attachments.backup[messageId] = []
+      state.attachments.backup[String(messageId)] = []
     },
     // Update a message's artifacts (e.g., after fetching attachments)
-    messageArtifactsSet: (state, action: PayloadAction<{ messageId: number; artifacts: string[] }>) => {
+    messageArtifactsSet: (state, action: PayloadAction<{ messageId: MessageId; artifacts: string[] }>) => {
       const { messageId, artifacts } = action.payload
       const msg = state.conversation.messages.find(m => m.id === messageId)
       if (msg) {
@@ -473,7 +509,7 @@ export const chatSlice = createSlice({
       }
     },
     // Append artifacts to a message (e.g., when user adds image drafts)
-    messageArtifactsAppended: (state, action: PayloadAction<{ messageId: number; artifacts: string[] }>) => {
+    messageArtifactsAppended: (state, action: PayloadAction<{ messageId: MessageId; artifacts: string[] }>) => {
       const { messageId, artifacts } = action.payload
       const msg = state.conversation.messages.find(m => m.id === messageId)
       if (msg) {

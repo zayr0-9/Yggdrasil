@@ -14,7 +14,7 @@ router.get(
       return res.status(400).json({ error: 'Query parameter q required' })
     }
 
-    const results = MessageService.searchAllUserMessages(query, 50)
+    const results = MessageService.searchAllUserMessages(query, '1', 50)
     res.json(results)
   })
 )

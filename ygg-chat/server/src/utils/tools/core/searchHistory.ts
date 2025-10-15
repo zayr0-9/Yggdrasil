@@ -3,9 +3,9 @@ import { MessageService } from '../../../database/models'
 
 export interface SearchHistoryParams {
   query: string
-  userId?: number | null
-  projectId?: number | null
-  conversationId?: number | null
+  userId?: string | null
+  projectId?: string | null
+  conversationId?: string | null
   limit?: number
 }
 
@@ -31,15 +31,15 @@ export async function searchHistory(params: SearchHistoryParams) {
   try {
     if (conversationId != null) {
       // search within a single conversation
-      return MessageService.searchInConversation(String(query), Number(conversationId))
+      return MessageService.searchInConversation(String(query), String(conversationId))
     }
 
     if (projectId != null) {
-      return MessageService.searchMessagesByProject(String(query), Number(projectId))
+      return MessageService.searchMessagesByProject(String(query), String(projectId))
     }
 
     if (userId != null) {
-      return MessageService.searchAllUserMessages(String(query), Number(userId), Number(limit || 10))
+      return MessageService.searchAllUserMessages(String(query), String(userId), Number(limit || 10))
     }
 
     // Fallback: perform a global FTS search across all messages

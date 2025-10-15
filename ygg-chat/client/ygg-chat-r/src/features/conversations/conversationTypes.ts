@@ -1,20 +1,21 @@
-import { BaseModel } from '../../../../../shared/types'
+import { BaseModel, ConversationId, ProjectId } from '../../../../../shared/types'
 
 export interface Conversation {
-  id: number
-  user_id: number
+  id: ConversationId
+  user_id: string
   title: string | null
-  project_id?: number | null
+  project_id?: ProjectId | null
   created_at: string
   updated_at: string
-  systemPrompt: string | null
+  system_prompt: string | null
+  conversation_context: string | null
 }
 
 export interface ConversationsState {
   items: Conversation[]
   loading: boolean
   error: string | null
-  activeConversationId: number | null
+  activeConversationId: ConversationId | null
   systemPrompt: string | null
   convContext: string | null
   // Recently updated conversations for quick access

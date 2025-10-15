@@ -78,6 +78,9 @@ export async function braveSearch(
   }
 
   try {
+    // Add 2 second delay to avoid rate limits
+    await new Promise(resolve => setTimeout(resolve, 2000))
+
     const baseUrl = 'https://api.search.brave.com/res/v1/web/search'
     const searchParams = new URLSearchParams({
       q: query.trim(),
