@@ -234,7 +234,7 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
             aria-hidden='true'
           ></i>
         </Button>
-        <div className='flex flex-4 items-center justify-start text-lg dark:text-stone-300'>{themeMode}</div>
+        {!isCollapsed && <div className='flex flex-4 items-center justify-start text-lg dark:text-stone-300'>{themeMode}</div>}
       </div>
       <div className='flex items-center justify-start py-2 px-2'>
         {/* <div className='flex items-center justify-center gap-2'>
