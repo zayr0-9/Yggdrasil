@@ -1718,7 +1718,11 @@ function Chat() {
           visibleMessageId={visibleMessageId}
         />
       </div>
-      <SettingsPane open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsPane
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        projectId={projectIdFromUrl || selectedProject?.id || currentConversation?.project_id}
+      />
 
       {/* Centered custom delete confirmation modal */}
       {pendingDeleteId && confirmDel && (

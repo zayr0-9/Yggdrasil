@@ -860,6 +860,12 @@ export const editMessageWithBranching = createAsyncThunk<
       // Use project system prompt as fallback if conversation system prompt is empty
       const selectedProject = selectSelectedProject(state)
       const systemPrompt = state.conversations.systemPrompt || selectedProject?.system_prompt || ''
+
+      // Send conversation and project context to eliminate server DB call
+      // Client already fetched these via RLS-protected endpoints, so sending them is safe
+      const conversationContext = state.conversations.convContext || null
+      const projectContext = selectedProject?.context || null
+
       const drafts = state.chat.composition.imageDrafts || []
       // Build attachments: existing artifacts minus deleted (backup) + current drafts
       const artifactsExisting: string[] = Array.isArray(originalMessage.artifacts)
@@ -906,6 +912,8 @@ export const editMessageWithBranching = createAsyncThunk<
           modelName,
           parentId: parentId, // Branch from the same parent as original
           systemPrompt: systemPrompt,
+          conversationContext,
+          projectContext,
           provider: serverProvider,
           attachmentsBase64,
           selectedFiles: selectedFilesForChat,

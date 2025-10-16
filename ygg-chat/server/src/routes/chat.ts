@@ -624,16 +624,14 @@ router.patch(
       return res.status(404).json({ error: 'Conversation not found' })
     }
 
+    // Validate payload: allow string or null to clear; undefined is invalid
     if (typeof context === 'undefined') {
       return res.status(400).json({ error: 'context is required (string or null)' })
     }
-    if (context) {
-      const updated = ConversationService.updateContext(conversationId, context)
-      res.json(updated)
-    } else {
-      // return error if no context sent
-      return res.status(400).json({ error: 'context is required (string or null)' })
-    }
+
+    // Accept both non-empty strings and null (to clear context)
+    const updated = ConversationService.updateContext(conversationId, context ?? null)
+    res.json(updated)
   })
 )
 // Clone conversation

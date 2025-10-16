@@ -4,6 +4,9 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      screens: {
+        '1080p': '1920px',
+      },
       fontFamily: {
         // optional: keep Inter alias
         inter: ['Inter', 'sans-serif'],
