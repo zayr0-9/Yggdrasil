@@ -72,9 +72,10 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
   }
 
   const handleSelect = (id: ConversationId) => {
+    const conversation = conversations.find(c => c.id === id)
     dispatch(chatSliceActions.conversationSet(id))
     dispatch(activeConversationIdSet(id))
-    navigate(`/chat/${id}`)
+    navigate(`/chat/${conversation?.project_id || 'unknown'}/${id}`)
   }
 
   const toggleCollapse = () => {
@@ -92,8 +93,9 @@ const SideBar: React.FC<SideBarProps> = ({ limit = 8, className = '', projects =
   }
 
   const handleResultClick = (conversationId: string, messageId: string) => {
+    const conversation = conversations.find(c => c.id === conversationId)
     dispatch(chatSliceActions.conversationSet(conversationId))
-    navigate(`/chat/${conversationId}#${messageId}`)
+    navigate(`/chat/${conversation?.project_id || 'unknown'}/${conversationId}#${messageId}`)
   }
 
   return (

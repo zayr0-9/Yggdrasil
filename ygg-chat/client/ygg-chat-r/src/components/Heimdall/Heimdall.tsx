@@ -1190,7 +1190,7 @@ export const Heimdall: React.FC<HeimdallProps> = ({
       await (dispatch as any)(fetchMessageTree(newConversation.id)).unwrap()
 
       // Navigate to the new chat
-      navigate(`/chat/${newConversation.id}`)
+      navigate(`/chat/${newConversation.project_id || 'unknown'}/${newConversation.id}`)
     } catch (error) {
       console.error('Failed to create new chat from selection:', error)
     } finally {

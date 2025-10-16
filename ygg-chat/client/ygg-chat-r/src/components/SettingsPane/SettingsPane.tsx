@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { selectCurrentConversationId } from '../../features/chats'
 import { convContextSet, systemPromptSet, updateContext, updateSystemPrompt } from '../../features/conversations'
+import { selectSelectedProject } from '../../features/projects'
 import { useAppDispatch, useAppSelector } from '../../hooks/redux'
 import { InputTextArea } from '../InputTextArea/InputTextArea'
 import { ToolsSettings } from './ToolsSettings'
+import type { Conversation } from '../../features/conversations/conversationTypes'
 
 type SettingsPaneProps = {
   open: boolean
@@ -12,37 +15,111 @@ type SettingsPaneProps = {
 
 export const SettingsPane: React.FC<SettingsPaneProps> = ({ open, onClose }) => {
   const dispatch = useAppDispatch()
+  const queryClient = useQueryClient()
   const systemPrompt = useAppSelector(state => state.conversations.systemPrompt ?? '')
   const context = useAppSelector(state => state.conversations.convContext ?? '')
   const conversationId = useAppSelector(selectCurrentConversationId)
+  const selectedProject = useAppSelector(selectSelectedProject)
   const tools = useAppSelector(state => state.chat.tools ?? [])
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Track initial values when modal opens to detect changes
+  const initialSystemPromptRef = useRef<string | null>(null)
+  const initialContextRef = useRef<string | null>(null)
 
   const handleChange = useCallback(
     (value: string) => {
+      // Only update Redux state for instant UI feedback
       dispatch(systemPromptSet(value))
-      if (!conversationId) return
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      const persisted = value.trim() === '' ? null : value
-      debounceRef.current = setTimeout(() => {
-        dispatch(updateSystemPrompt({ id: conversationId, systemPrompt: persisted }))
-      }, 500)
     },
-    [dispatch, conversationId]
+    [dispatch]
   )
 
   const handleContextChange = useCallback(
     (value: string) => {
+      // Only update Redux state for instant UI feedback
       dispatch(convContextSet(value))
-      if (!conversationId) return
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      const persisted = value.trim() === '' ? null : value
-      debounceRef.current = setTimeout(() => {
-        dispatch(updateContext({ id: conversationId, context: persisted }))
-      }, 500)
     },
-    [dispatch, conversationId]
+    [dispatch]
   )
+
+  // Capture initial values when modal opens and save changes when it closes
+  useEffect(() => {
+    if (open) {
+      // Store initial values when modal opens
+      initialSystemPromptRef.current = systemPrompt
+      initialContextRef.current = context
+    } else {
+      // When modal closes, save changes if values have changed
+      if (!conversationId) return
+
+      const currentSystemPrompt = systemPrompt.trim() === '' ? null : systemPrompt
+      const currentContext = context.trim() === '' ? null : context
+      const initialSystemPrompt = initialSystemPromptRef.current?.trim() === '' ? null : initialSystemPromptRef.current
+      const initialContext = initialContextRef.current?.trim() === '' ? null : initialContextRef.current
+
+      const systemPromptChanged = currentSystemPrompt !== initialSystemPrompt
+      const contextChanged = currentContext !== initialContext
+
+      const projectId = selectedProject?.id
+
+      // Helper function to update conversation in cached array
+      const updateSystemPromptInCache = (conversations: Conversation[] | undefined) => {
+        if (!conversations) return conversations
+        return conversations.map(conv =>
+          conv.id === conversationId ? { ...conv, system_prompt: currentSystemPrompt } : conv
+        )
+      }
+
+      const updateContextInCache = (conversations: Conversation[] | undefined) => {
+        if (!conversations) return conversations
+        return conversations.map(conv =>
+          conv.id === conversationId ? { ...conv, conversation_context: currentContext } : conv
+        )
+      }
+
+      // Save system prompt if changed
+      if (systemPromptChanged) {
+        dispatch(updateSystemPrompt({ id: conversationId, systemPrompt: currentSystemPrompt }))
+          .unwrap()
+          .then(() => {
+            // Update all conversations cache
+            queryClient.setQueryData<Conversation[]>(['conversations'], updateSystemPromptInCache)
+
+            // Update project-specific conversations cache if projectId exists
+            if (projectId) {
+              queryClient.setQueryData<Conversation[]>(
+                ['conversations', 'project', projectId],
+                updateSystemPromptInCache
+              )
+            }
+          })
+          .catch(error => {
+            console.error('Failed to update system prompt:', error)
+          })
+      }
+
+      // Save context if changed
+      if (contextChanged) {
+        dispatch(updateContext({ id: conversationId, context: currentContext }))
+          .unwrap()
+          .then(() => {
+            // Update all conversations cache
+            queryClient.setQueryData<Conversation[]>(['conversations'], updateContextInCache)
+
+            // Update project-specific conversations cache if projectId exists
+            if (projectId) {
+              queryClient.setQueryData<Conversation[]>(
+                ['conversations', 'project', projectId],
+                updateContextInCache
+              )
+            }
+          })
+          .catch(error => {
+            console.error('Failed to update context:', error)
+          })
+      }
+    }
+  }, [open, conversationId, systemPrompt, context, dispatch, queryClient, selectedProject])
 
   useEffect(() => {
     if (!open) return
@@ -52,21 +129,6 @@ export const SettingsPane: React.FC<SettingsPaneProps> = ({ open, onClose }) => 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [open, onClose])
-
-  // Cleanup debounce on unmount/close
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [])
-
-  // Cancel any pending debounce when conversation changes to avoid patching old conversation
-  useEffect(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current)
-      debounceRef.current = null
-    }
-  }, [conversationId])
 
   if (!open) return null
 

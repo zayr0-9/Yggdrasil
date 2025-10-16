@@ -130,7 +130,7 @@ const ConversationPage: React.FC = () => {
 
   const handleSelect = (conv: Conversation) => {
     dispatch(chatSliceActions.conversationSet(conv.id))
-    navigate(`/chat/${conv.id}`)
+    navigate(`/chat/${conv.project_id}/${conv.id}`)
     dispatch(activeConversationIdSet(conv.id))
   }
 

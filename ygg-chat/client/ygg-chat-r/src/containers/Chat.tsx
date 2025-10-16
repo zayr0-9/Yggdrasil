@@ -66,9 +66,10 @@ function Chat() {
   // Local state for input to completely avoid Redux dispatches during typing
   const [localInput, setLocalInput] = useState('')
 
-  // Get conversation ID from URL params FIRST (before any hooks that depend on it)
-  const { id: conversationIdParam } = useParams<{ id?: string }>()
+  // Get conversation ID and project ID from URL params FIRST (before any hooks that depend on it)
+  const { id: conversationIdParam, projectId: projectIdParam } = useParams<{ id?: string; projectId?: string }>()
   const conversationIdFromUrl = conversationIdParam ? parseId(conversationIdParam) : null
+  const projectIdFromUrl = projectIdParam || null
 
   // Redux selectors
   const models = useAppSelector(selectModels)
@@ -258,8 +259,9 @@ function Chat() {
     currentConversationId ? makeSelectConversationById(currentConversationId) : () => null
   )
   // Fetch conversations for the current project using React Query
+  // Use projectId from URL first (ensures correct cache is active on page refresh)
   const { data: projectConversations = [] } = useConversationsByProject(
-    selectedProject?.id || currentConversation?.project_id || null
+    projectIdFromUrl || selectedProject?.id || currentConversation?.project_id || null
   )
   const [titleInput, setTitleInput] = useState(currentConversation?.title ?? '')
   const [editingTitle, setEditingTitle] = useState(false)
@@ -355,6 +357,14 @@ function Chat() {
     dispatch(chatSliceActions.heimdallDataLoaded({ treeData }))
   }, [treeData, dispatch])
 
+  // Sync React Query conversations to Redux to ensure system_prompt and conversation_context are available
+  // This fixes the issue where refreshing the page doesn't load context and system prompt from query cache
+  useEffect(() => {
+    if (projectConversations && projectConversations.length > 0) {
+      dispatch(conversationsLoaded(projectConversations))
+    }
+  }, [projectConversations, dispatch])
+
   // Conversations are now fetched via React Query in Homepage/ConversationPage/SideBar
   // No need to fetch here - React Query automatically shares cached data across all components
   // This eliminates duplicate requests and rate limiting issues
@@ -430,18 +440,20 @@ function Chat() {
   }, [isResizing])
 
   // Sync system prompt and context from current conversation
-  // Conversation data (including system_prompt and conversation_context) is already loaded via React Query
+  // Read directly from React Query projectConversations to avoid Redux sync race conditions
   useEffect(() => {
     if (currentConversationId) {
-      // Extract system_prompt and conversation_context from the already-loaded conversation object
-      dispatch(systemPromptSet(currentConversation?.system_prompt ?? null))
-      dispatch(convContextSet(currentConversation?.conversation_context ?? null))
+      // Find the current conversation in projectConversations (React Query cache)
+      const conversation = projectConversations.find(c => c.id === currentConversationId)
+      // Extract system_prompt and conversation_context from the found conversation
+      dispatch(systemPromptSet(conversation?.system_prompt ?? null))
+      dispatch(convContextSet(conversation?.conversation_context ?? null))
     } else {
       // If no conversation is selected, clear prompts and context
       dispatch(systemPromptSet(null))
       dispatch(convContextSet(null))
     }
-  }, [currentConversationId, currentConversation?.system_prompt, currentConversation?.conversation_context, dispatch])
+  }, [currentConversationId, projectConversations, dispatch])
 
   // Query invalidation is now handled directly in sendMessage and editMessageWithBranching success handlers
   // This prevents aggressive refetching and duplicate API requests
@@ -1265,7 +1277,7 @@ function Chat() {
       // This updates the dropdown and sidebar without duplicate API calls
       queryClient.invalidateQueries({ queryKey: ['conversations'] })
       // Navigate to the cloned conversation
-      navigate(`/chat/${result.id}`)
+      navigate(`/chat/${result.project_id || projectIdFromUrl || 'unknown'}/${result.id}`)
     } catch (error) {
       console.error('Failed to clone conversation:', error)
       // Could add error toast/notification here
@@ -1357,8 +1369,9 @@ function Chat() {
                   <Select
                     value={currentConversationId ? String(currentConversationId) : ''}
                     onChange={val => {
+                      const conv = sortedConversations.find(c => String(c.id) === val)
                       // Use setTimeout to defer navigation and allow Select to close properly
-                      setTimeout(() => navigate(`/chat/${val}`), 0)
+                      setTimeout(() => navigate(`/chat/${conv?.project_id || projectIdFromUrl || 'unknown'}/${val}`), 0)
                     }}
                     options={sortedConversations.map(conv => ({
                       value: String(conv.id),
